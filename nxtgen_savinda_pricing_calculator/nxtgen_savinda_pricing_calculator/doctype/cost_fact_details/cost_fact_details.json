@@ -1,0 +1,113 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-04-08 19:18:16.694389",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "cost_fact",
+  "column_break_vuap",
+  "cost_group",
+  "section_break_wevp",
+  "html_dlhm",
+  "section_break_pmcc",
+  "req_qty_column",
+  "req_qty",
+  "column_break_tvkl",
+  "rate",
+  "column_break_xaeq",
+  "amount",
+  "selected_item",
+  "attribute_json"
+ ],
+ "fields": [
+  {
+   "fieldname": "cost_fact",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Cost Fact",
+   "options": "Cost Fact"
+  },
+  {
+   "fieldname": "column_break_vuap",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "cost_fact.cost_group",
+   "fieldname": "cost_group",
+   "fieldtype": "Select",
+   "label": "Cost Group",
+   "options": "Preparation\nMaterial\nProduction"
+  },
+  {
+   "fieldname": "section_break_wevp",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "html_dlhm",
+   "fieldtype": "HTML"
+  },
+  {
+   "fieldname": "section_break_pmcc",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "req_qty_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_tvkl",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "rate",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Rate"
+  },
+  {
+   "fieldname": "column_break_xaeq",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount"
+  },
+  {
+   "fieldname": "req_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Req. Qty"
+  },
+  {
+   "fieldname": "selected_item",
+   "fieldtype": "Data",
+   "label": "Selected Item",
+   "hidden": 1
+  },
+  {
+   "fieldname": "attribute_json",
+   "fieldtype": "Small Text",
+   "label": "Attribute Values (JSON)",
+   "hidden": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-04-15 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "Cost Fact Details",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

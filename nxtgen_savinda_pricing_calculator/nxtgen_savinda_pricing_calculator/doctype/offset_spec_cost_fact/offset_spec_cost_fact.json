@@ -1,0 +1,42 @@
+{
+ "actions": [],
+ "creation": "2026-04-09 07:26:28.020055",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "cost_fact",
+  "is_primary"
+ ],
+ "fields": [
+  {
+   "columns": 8,
+   "fieldname": "cost_fact",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Cost Fact",
+   "options": "Cost Fact",
+   "reqd": 1
+  },
+  {
+   "columns": 4,
+   "default": "0",
+   "description": "If checked, this cost fact's attributes are rendered in the UI for user input",
+   "fieldname": "is_primary",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Has Attributes"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-04-09 07:33:20.185150",
+ "modified_by": "Administrator",
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "Offset Spec Cost Fact",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

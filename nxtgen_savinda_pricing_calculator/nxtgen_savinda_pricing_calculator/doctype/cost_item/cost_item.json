@@ -1,0 +1,171 @@
+{
+ "actions": [],
+ "autoname": "format:CI-{YY}-{MM}.{#####}",
+ "creation": "2026-04-11 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "cost_item_name",
+  "inquiry",
+  "column_break_1",
+  "subject",
+  "section_break_details",
+  "page_type",
+  "colour",
+  "column_break_2",
+  "material",
+  "no_of_pages",
+  "section_break_calc",
+  "item_qty",
+  "breakdown",
+  "column_break_3",
+  "is_selected",
+  "calculations",
+  "section_break_result",
+  "unit_cost",
+  "total_cost"
+ ],
+ "fields": [
+  {
+   "fieldname": "cost_item_name",
+   "fieldtype": "Data",
+   "label": "Cost Item Name",
+   "reqd": 1,
+   "in_list_view": 1,
+   "bold": 1
+  },
+  {
+   "fieldname": "inquiry",
+   "fieldtype": "Link",
+   "label": "Inquiry",
+   "options": "Opportunity",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "subject",
+   "fieldtype": "Data",
+   "label": "Subject",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "section_break_details",
+   "fieldtype": "Section Break",
+   "label": "Page Details"
+  },
+  {
+   "fieldname": "page_type",
+   "fieldtype": "Data",
+   "label": "Page Type",
+   "in_list_view": 1,
+   "description": "e.g. Cover Page, Inner Page"
+  },
+  {
+   "fieldname": "colour",
+   "fieldtype": "Int",
+   "label": "Colour",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "material",
+   "fieldtype": "Data",
+   "label": "Material"
+  },
+  {
+   "fieldname": "no_of_pages",
+   "fieldtype": "Float",
+   "label": "No of Pages"
+  },
+  {
+   "fieldname": "section_break_calc",
+   "fieldtype": "Section Break",
+   "label": "Calculation"
+  },
+  {
+   "fieldname": "item_qty",
+   "fieldtype": "Float",
+   "label": "Item Qty",
+   "description": "Total quantity for this component"
+  },
+  {
+   "fieldname": "breakdown",
+   "fieldtype": "Data",
+   "label": "Breakdown Description",
+   "description": "Breakdown row description (e.g. Black Cover Diary)"
+  },
+  {
+   "fieldname": "column_break_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "is_selected",
+   "fieldtype": "Check",
+   "label": "Is Selected (Per Breakdown)",
+   "description": "Ticked = cost item was created per breakdown row. Unticked = grouped per page."
+  },
+  {
+   "fieldname": "calculations",
+   "fieldtype": "Table",
+   "label": "Calculation Breakdowns",
+   "options": "Cost Item Calculation",
+   "description": "All Calculation Breakdowns linked to this Cost Item. unit_cost = sum of all breakdown unit_costs."
+  },
+  {
+   "fieldname": "section_break_result",
+   "fieldtype": "Section Break",
+   "label": "Calculation Result"
+  },
+  {
+   "fieldname": "unit_cost",
+   "fieldtype": "Currency",
+   "label": "Unit Cost (LKR)",
+   "read_only": 1,
+   "fetch_from": "calculation_breakdown.unit_cost",
+   "description": "Fetched from the linked Calculation Breakdown"
+  },
+  {
+   "fieldname": "total_cost",
+   "fieldtype": "Currency",
+   "label": "Total Cost (LKR)",
+   "read_only": 1,
+   "description": "unit_cost \u00d7 item_qty"
+  }
+ ],
+ "links": [],
+ "modified": "2026-04-11 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "cost Item",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "role": "Sales User"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

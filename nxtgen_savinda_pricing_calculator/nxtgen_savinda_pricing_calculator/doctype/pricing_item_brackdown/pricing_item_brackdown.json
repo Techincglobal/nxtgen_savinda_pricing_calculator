@@ -1,0 +1,67 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-04-11 14:40:50.866194",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "calculation_brakedown",
+  "qty",
+  "column_break_hewh",
+  "discription",
+  "unit__price",
+  "amount"
+ ],
+ "fields": [
+  {
+   "fieldname": "calculation_brakedown",
+   "fieldtype": "Link",
+   "label": "Calculation Brakedown",
+   "options": "Calculation Breakdown"
+  },
+  {
+   "fieldname": "qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "qty"
+  },
+  {
+   "fieldname": "column_break_hewh",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "discription",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Discription"
+  },
+  {
+   "fieldname": "unit__price",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Unit  Price "
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-04-11 14:47:15.008669",
+ "modified_by": "Administrator",
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "Pricing Item Brackdown",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

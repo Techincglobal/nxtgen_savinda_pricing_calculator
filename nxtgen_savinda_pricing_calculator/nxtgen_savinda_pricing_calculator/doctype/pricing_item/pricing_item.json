@@ -1,0 +1,160 @@
+{
+ "actions": [],
+ "autoname": "autoincrement",
+ "creation": "2026-04-11 14:10:36.475421",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "item_name",
+  "section_break_iefe",
+  "order_number",
+  "column_break_oiag",
+  "product_code",
+  "packing_date",
+  "column_break_tirb",
+  "batch_no",
+  "expiry_date",
+  "section_break_iwxk",
+  "cost_brackdown",
+  "section_break_byhw",
+  "qty",
+  "sscl",
+  "vat",
+  "column_break_fpia",
+  "unit_price",
+  "selling_unit_price",
+  "ammount",
+  "selling_ammount"
+ ],
+ "fields": [
+  {
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Item Name"
+  },
+  {
+   "fieldname": "section_break_iefe",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "order_number",
+   "fieldtype": "Data",
+   "label": "Order Number"
+  },
+  {
+   "fieldname": "column_break_oiag",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "product_code",
+   "fieldtype": "Data",
+   "label": "Product Code"
+  },
+  {
+   "fieldname": "packing_date",
+   "fieldtype": "Date",
+   "label": "Packing Date"
+  },
+  {
+   "fieldname": "column_break_tirb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "batch_no",
+   "fieldtype": "Data",
+   "label": "Batch No."
+  },
+  {
+   "fieldname": "expiry_date",
+   "fieldtype": "Date",
+   "label": "Expiry Date"
+  },
+  {
+   "fieldname": "section_break_byhw",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Qty"
+  },
+  {
+   "fieldname": "column_break_fpia",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "unit_price",
+   "fieldtype": "Currency",
+   "label": "Unit price"
+  },
+  {
+   "fieldname": "ammount",
+   "fieldtype": "Currency",
+   "label": "Ammount"
+  },
+  {
+   "fieldname": "selling_unit_price",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Selling Unit Price"
+  },
+  {
+   "default": "0",
+   "fieldname": "sscl",
+   "fieldtype": "Check",
+   "label": "SSCL"
+  },
+  {
+   "default": "0",
+   "fieldname": "vat",
+   "fieldtype": "Check",
+   "label": "VAT"
+  },
+  {
+   "fieldname": "selling_ammount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Selling Ammount"
+  },
+  {
+   "fieldname": "section_break_iwxk",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "cost_brackdown",
+   "fieldtype": "Table",
+   "label": "Cost Brackdown",
+   "options": "Pricing Item Brackdown"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-04-11 16:05:57.484507",
+ "modified_by": "Administrator",
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "Pricing Item",
+ "naming_rule": "Autoincrement",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

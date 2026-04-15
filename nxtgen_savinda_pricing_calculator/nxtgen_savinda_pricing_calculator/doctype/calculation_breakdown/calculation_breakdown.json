@@ -1,0 +1,352 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-04-08 16:53:17.245175",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "pricing_type",
+  "section_break_wxyj",
+  "customer_name",
+  "carton_size",
+  "column_break_howj",
+  "ref",
+  "price_list",
+  "section_break_cxhe",
+  "base_material",
+  "full_sheet_l",
+  "cut_sheet_l",
+  "column_break_dgmv",
+  "material_rate",
+  "full_sheet_w",
+  "cut_sheetw",
+  "section_break_nqdo",
+  "no_of_cuts",
+  "column_break_mcfx",
+  "no_of_ups",
+  "column_break_ysoh",
+  "no_of_colors",
+  "section_break_nnbr",
+  "item_qty",
+  "column_break_dgqi",
+  "section_break_yczn",
+  "cut_sheet_ups",
+  "column_break_dpxl",
+  "cut_sheet_qty",
+  "req_cut_sheets",
+  "column_break_mkee",
+  "wastage",
+  "full_sheet_qty",
+  "section_break_qsqa",
+  "cost_facts",
+  "section_break_udrq",
+  "profit_margin",
+  "column_break_vjaw",
+  "tax_sscl",
+  "tax_vat",
+  "column_break_eafs",
+  "unit_cost",
+  "selling_price",
+  "section_break_wnqe",
+  "pricing_summary",
+  "section_break_axio",
+  "ui_state",
+  "section_break_rwed",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_rwed",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Calculation Breakdown",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "Customer Name"
+  },
+  {
+   "fieldname": "carton_size",
+   "fieldtype": "Data",
+   "label": "Carton Size"
+  },
+  {
+   "fieldname": "column_break_howj",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "ref",
+   "fieldtype": "Data",
+   "label": "Ref"
+  },
+  {
+   "fieldname": "price_list",
+   "fieldtype": "Link",
+   "label": "Price List",
+   "options": "Price List"
+  },
+  {
+   "fieldname": "section_break_cxhe",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "base_material",
+   "fieldtype": "Link",
+   "label": "Base Material ",
+   "options": "Item"
+  },
+  {
+   "fieldname": "full_sheet_l",
+   "fieldtype": "Float",
+   "label": "Full Sheet (L)"
+  },
+  {
+   "fieldname": "cut_sheet_l",
+   "fieldtype": "Float",
+   "label": "Cut Sheet (L)"
+  },
+  {
+   "fieldname": "column_break_dgmv",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "material_rate",
+   "fieldtype": "Currency",
+   "label": "Material Rate"
+  },
+  {
+   "fieldname": "full_sheet_w",
+   "fieldtype": "Float",
+   "label": "Full Sheet (W)"
+  },
+  {
+   "fieldname": "cut_sheetw",
+   "fieldtype": "Float",
+   "label": "Cut Sheet(W)"
+  },
+  {
+   "fieldname": "section_break_nqdo",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "no_of_cuts",
+   "fieldtype": "Int",
+   "label": "No of Cuts"
+  },
+  {
+   "fieldname": "column_break_mcfx",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "no_of_ups",
+   "fieldtype": "Int",
+   "label": "No of Ups"
+  },
+  {
+   "fieldname": "column_break_ysoh",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "no_of_colors",
+   "fieldtype": "Int",
+   "label": "No of Colors"
+  },
+  {
+   "fieldname": "section_break_nnbr",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "item_qty",
+   "fieldtype": "Float",
+   "label": "Item Qty"
+  },
+  {
+   "fieldname": "column_break_dgqi",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_yczn",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "cut_sheet_ups",
+   "fieldtype": "Float",
+   "label": "Cut Sheet Ups"
+  },
+  {
+   "fieldname": "column_break_dpxl",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cut_sheet_qty",
+   "fieldtype": "Float",
+   "label": "Cut Sheet Qty"
+  },
+  {
+   "fieldname": "req_cut_sheets",
+   "fieldtype": "Float",
+   "label": "Req. Cut Sheets"
+  },
+  {
+   "fieldname": "column_break_mkee",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "wastage",
+   "fieldtype": "Float",
+   "label": "Wastage"
+  },
+  {
+   "fieldname": "full_sheet_qty",
+   "fieldtype": "Float",
+   "label": "Full Sheet Qty"
+  },
+  {
+   "fieldname": "pricing_type",
+   "fieldtype": "Select",
+   "label": "Pricing Type",
+   "options": "Offset\nFlexo"
+  },
+  {
+   "fieldname": "section_break_wxyj",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "section_break_qsqa",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "cost_facts",
+   "fieldtype": "Table",
+   "label": "Cost Facts",
+   "options": "Cost Fact Details"
+  },
+  {
+   "fieldname": "section_break_udrq",
+   "fieldtype": "Section Break"
+  },
+  {
+   "default": "15",
+   "fieldname": "profit_margin",
+   "fieldtype": "Float",
+   "label": "Profit Margin (%)"
+  },
+  {
+   "fieldname": "column_break_vjaw",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "tax_sscl",
+   "fieldtype": "Check",
+   "label": "Apply SSCL (2.5%)"
+  },
+  {
+   "default": "0",
+   "fieldname": "tax_vat",
+   "fieldtype": "Check",
+   "label": "Apply VAT (18%)"
+  },
+  {
+   "fieldname": "column_break_eafs",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "unit_cost",
+   "fieldtype": "Currency",
+   "label": "Unit Cost (LKR)"
+  },
+  {
+   "fieldname": "selling_price",
+   "fieldtype": "Currency",
+   "label": "Total Selling Price (LKR)"
+  },
+  {
+   "fieldname": "section_break_wnqe",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "pricing_summary",
+   "fieldtype": "HTML",
+   "label": "Pricing Summary"
+  },
+  {
+   "fieldname": "section_break_axio",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "ui_state",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "UI state"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-04-15 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "Calculation Breakdown",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales User",
+   "share": 1,
+   "write": 1,
+   "submit": 0,
+   "cancel": 0,
+   "amend": 0
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "write": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

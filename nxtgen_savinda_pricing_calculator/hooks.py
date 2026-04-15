@@ -26,7 +26,10 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/nxtgen_savinda_pricing_calculator/css/nxtgen_savinda_pricing_calculator.css"
-# app_include_js = "/assets/nxtgen_savinda_pricing_calculator/js/nxtgen_savinda_pricing_calculator.js"
+app_include_js = [
+	"https://unpkg.com/vue@3/dist/vue.global.prod.js",
+    "/assets/nxtgen_savinda_pricing_calculator/js/offset_calculator.js",
+	]
 
 # include js, css files in header of web template
 # web_include_css = "/assets/nxtgen_savinda_pricing_calculator/css/nxtgen_savinda_pricing_calculator.css"

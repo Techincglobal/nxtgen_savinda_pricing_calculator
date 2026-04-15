@@ -1,0 +1,114 @@
+{
+ "actions": [],
+ "autoname": "field:cost_fact_name",
+ "creation": "2026-04-08 18:08:23.302760",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "cost_fact_name",
+  "column_break_vily",
+  "cost_group",
+  "section_break_bltt",
+  "items",
+  "table_acwl",
+  "section_break_vfbs",
+  "qty_formula",
+  "rate_formula",
+  "calculation",
+  "column_break_vnho",
+  "min_qty"
+ ],
+ "fields": [
+  {
+   "fieldname": "cost_group",
+   "fieldtype": "Select",
+   "label": "Cost Group",
+   "options": "Preparation\nMaterial\nProduction"
+  },
+  {
+   "fieldname": "column_break_vily",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_bltt",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "Cost Fact Item"
+  },
+  {
+   "fieldname": "table_acwl",
+   "fieldtype": "Table",
+   "options": "Cost Fact  Attribute"
+  },
+  {
+   "fieldname": "section_break_vfbs",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "qty_formula",
+   "fieldtype": "Small Text",
+   "label": "Qty Formula",
+   "description": "Formula to calculate Required Qty. Available variables:\n  Attributes: attr.length  attr.width  attr.qty  (or any name from Attributes table)\n  Sheet:      full_sheet_qty  cut_sheet_qty  cut_sheet_area  cut_sheet_ups\n              no_of_colors  item_qty  no_of_cuts  no_of_ups\n  Math:       ceil()  floor()  max()  min()  abs()  round()\n\nExamples:\n  attr.qty                         \u2192 number of blocks\n  no_of_colors                     \u2192 one per color\n  cut_sheet_qty * no_of_colors     \u2192 cut sheets \u00d7 colors\n  item_qty                         \u2192 full order quantity\n  ceil(item_qty / attr.per_box)    \u2192 boxes needed (rounded up)\n  1                                \u2192 fixed qty\n\nLeave blank to use the legacy Calculation keyword or enter qty manually."
+  },
+  {
+   "fieldname": "rate_formula",
+   "fieldtype": "Small Text",
+   "label": "Rate Formula",
+   "description": "Formula to calculate the Rate (LKR). Available variables:\n  item_rate     \u2014 price list rate of the selected item\n  fix_rate      \u2014 fixed rate stored on the Cost Fact Item row\n  material_rate \u2014 base material rate from the order form\n  Attributes:   attr.length  attr.width  attr.qty  (same as above)\n  Sheet:        cut_sheet_area  no_of_colors  item_qty  etc.\n  Math:         ceil()  floor()  max()  min()  abs()\n\nExamples:\n  item_rate                              \u2192 standard price list rate\n  fix_rate                               \u2192 fixed rate on item row\n  attr.length * attr.width * item_rate   \u2192 area \u00d7 rate/sqin\n  item_rate * no_of_colors               \u2192 rate per color\n  max(item_rate, fix_rate)               \u2192 use the higher rate\n\nLeave blank to use standard rate logic (price list \u2192 valuation rate)."
+  },
+  {
+   "fieldname": "calculation",
+   "fieldtype": "Small Text",
+   "label": "Calculation",
+   "description": "LEGACY \u2014 only used when Qty Formula above is empty.\n\nKeyword options:\n  full_sheet_qty        \u2192 full sheet quantity\n  cut_sheet_qty         \u2192 cut sheet quantity\n  cut_sheet_area        \u2192 cut sheets \u00d7 cut sheet area\n  no_of_colors          \u2192 number of colors\n  cut_sheet_qty_colors  \u2192 cut sheets \u00d7 colors\n  order_qty             \u2192 item quantity ordered\n  fixed                 \u2192 always 1\n  block_area            \u2192 attr.length \u00d7 attr.width \u00d7 attr.qty\n\nRecommended: use Qty Formula instead."
+  },
+  {
+   "fieldname": "column_break_vnho",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "min_qty",
+   "fieldtype": "Float",
+   "label": "Min Qty",
+   "description": "Minimum LKR charge for this cost item.\n\nIf (req_qty \u00d7 rate) < Min Qty, the system uses Min Qty as the final amount.\n\nExamples:\n  Die Cutter: 3500  \u2192 minimum charge LKR 3,500\n  Sorting:    2000  \u2192 minimum charge LKR 2,000\n  Delivery:      0  \u2192 no minimum"
+  },
+  {
+   "fieldname": "cost_fact_name",
+   "fieldtype": "Data",
+   "label": "Name",
+   "unique": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-04-10 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "Cost Fact",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

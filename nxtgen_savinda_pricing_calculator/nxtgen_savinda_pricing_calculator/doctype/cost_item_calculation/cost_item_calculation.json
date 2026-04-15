@@ -1,0 +1,62 @@
+{
+ "actions": [],
+ "creation": "2026-04-11 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "calculation_breakdown",
+  "description",
+  "column_break_1",
+  "unit_cost",
+  "amount"
+ ],
+ "fields": [
+  {
+   "fieldname": "calculation_breakdown",
+   "fieldtype": "Link",
+   "label": "Calculation Breakdown",
+   "options": "Calculation Breakdown",
+   "in_list_view": 1,
+   "reqd": 1,
+   "columns": 4
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Data",
+   "label": "Description",
+   "in_list_view": 1,
+   "columns": 4
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "unit_cost",
+   "fieldtype": "Currency",
+   "label": "Unit Cost (LKR)",
+   "in_list_view": 1,
+   "read_only": 1,
+   "fetch_from": "calculation_breakdown.unit_cost",
+   "columns": 2
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount (LKR)",
+   "in_list_view": 1,
+   "read_only": 1,
+   "columns": 2
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-04-11 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "Cost Item Calculation",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

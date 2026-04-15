@@ -1,0 +1,157 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:COST-{YY}-{MM}.{#####}",
+ "creation": "2026-04-11 11:26:52.932491",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "inquiry",
+  "column_break_yjah",
+  "subject",
+  "section_break_ciss",
+  "customer_name",
+  "order_type",
+  "column_break_lcvc",
+  "sales_person",
+  "tiep",
+  "column_break_oudl",
+  "item_group",
+  "colour",
+  "section_break_gjtb",
+  "breakdown",
+  "pricing_list",
+  "section_break_m78s",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_m78s",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Cost Sheet",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "inquiry",
+   "fieldtype": "Link",
+   "label": "Inquiry",
+   "options": "Opportunity"
+  },
+  {
+   "fieldname": "column_break_yjah",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "inquiry.custom_subject",
+   "fieldname": "subject",
+   "fieldtype": "Data",
+   "label": "Subject"
+  },
+  {
+   "fieldname": "section_break_ciss",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fetch_from": "inquiry.customer_name",
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "Customer Name"
+  },
+  {
+   "fieldname": "column_break_lcvc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "inquiry.opportunity_owner",
+   "fieldname": "sales_person",
+   "fieldtype": "Link",
+   "label": "Sales Person",
+   "options": "User"
+  },
+  {
+   "fieldname": "column_break_oudl",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "inquiry.custom_item_group",
+   "fieldname": "item_group",
+   "fieldtype": "Link",
+   "label": "Item Group",
+   "link_filters": "[[\"Item Group\",\"parent_item_group\",\"=\",\"Finished Goods\"]]",
+   "options": "Item Group"
+  },
+  {
+   "fetch_from": "inquiry.opportunity_type",
+   "fieldname": "order_type",
+   "fieldtype": "Link",
+   "label": "Order Type",
+   "options": "Opportunity Type"
+  },
+  {
+   "fetch_from": "inquiry.custom_tiep",
+   "fieldname": "tiep",
+   "fieldtype": "Select",
+   "label": "TIEP",
+   "options": "TIEP\nNON TIEP"
+  },
+  {
+   "fetch_from": "inquiry.custom_colour",
+   "fieldname": "colour",
+   "fieldtype": "Int",
+   "label": "Colour"
+  },
+  {
+   "fieldname": "section_break_gjtb",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "pricing_list",
+   "fieldtype": "Table",
+   "label": "Pricing List",
+   "options": "Cost Sheet Items"
+  },
+  {
+   "fieldname": "breakdown",
+   "fieldtype": "Button",
+   "label": "Breakdown"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-04-11 14:49:50.519379",
+ "modified_by": "Administrator",
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "Cost Sheet",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
