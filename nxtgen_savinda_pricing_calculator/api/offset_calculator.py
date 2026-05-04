@@ -17,23 +17,35 @@ from frappe.utils import flt, cint
 
 
 @frappe.whitelist()
-def get_specs():
-    """Checkbox list — Specification + Finishing groups only, NOT Machine."""
+def get_specs(pricing_type="Offset"):
+    """
+    Checkbox list — Specification + Finishing groups only, NOT Machine.
+    Filters by pricing_type: returns specs where pricing_type matches
+    the current calculation type (Offset / Flexo) OR is set to Both.
+    """
     specs = frappe.get_all(
         "Offset Spec",
-        filters={"is_active": 1, "group": ["!=", "Machine"]},
+        filters={
+            "is_active": 1,
+            "group": ["!=", "Machine"],
+            "pricing_type": ["in", [pricing_type, "Both"]],
+        },
         fields=["name", "spec_name", "group"],
-        order_by="spec_name asc",
+        order_by="`group` asc, spec_name asc",
     )
     return [_enrich_spec(s) for s in specs]
 
 
 @frappe.whitelist()
-def get_machines():
-    """Dropdown — Machine group only."""
+def get_machines(pricing_type="Offset"):
+    """Dropdown — Machine group only, filtered by pricing_type."""
     specs = frappe.get_all(
         "Offset Spec",
-        filters={"is_active": 1, "group": "Machine"},
+        filters={
+            "is_active": 1,
+            "group": "Machine",
+            "pricing_type": ["in", [pricing_type, "Both"]],
+        },
         fields=["name", "spec_name", "group"],
         order_by="spec_name asc",
     )
@@ -66,28 +78,48 @@ def calculate(payload):
     machine_spec   = payload.get("machine_spec")
     selected_specs = payload.get("selected_specs", [])
 
+    pricing_type   = (form.get("pricing_type") or "Offset").strip()
     price_list     = _resolve_pl(form.get("price_list"), form.get("customer_name"))
-    sheet          = _calc_sheet(form)
     item_qty       = flt(form.get("item_qty") or 0)
     no_of_colors   = cint(form.get("no_of_colors") or 0)
     material_rate  = flt(form.get("material_rate") or 0)
-    full_sheet_qty = sheet.get("full_sheet_qty", 0)
-    cut_sheet_qty  = sheet.get("cut_sheet_qty",  0)
-    cut_sheet_area = flt(form.get("cut_sheet_l", 0)) * flt(form.get("cut_sheet_w", 0))
+
+    # Route sheet calculation by pricing type
+    if pricing_type == "Flexo":
+        sheet = _calc_flexo(form)
+        # Primary area variable for Flexo formulas
+        reel_area      = sheet.get("reel_area", 0)
+        reel_length    = sheet.get("reel_length", 0)
+        ups            = sheet.get("ups", 0)
+        # Offset variables set to 0 (not used in Flexo)
+        full_sheet_qty = 0
+        cut_sheet_qty  = 0
+        cut_sheet_area = 0
+    else:
+        sheet = _calc_sheet(form)
+        full_sheet_qty = sheet.get("full_sheet_qty", 0)
+        cut_sheet_qty  = sheet.get("cut_sheet_qty",  0)
+        cut_sheet_area = flt(form.get("cut_sheet_l", 0)) * flt(form.get("cut_sheet_w", 0))
+        # Flexo variables set to 0 (not used in Offset)
+        reel_area   = 0
+        reel_length = 0
+        ups         = 0
 
     cost_rows = []
     mat_total = prep_total = prod_total = 0.0
 
-    # 1. Material (auto)
-    if form.get("base_material") and material_rate and full_sheet_qty:
+    # 1. Material (auto) — works for both Offset (full_sheet_qty) and Flexo (reel_area)
+    auto_qty = reel_area if pricing_type == "Flexo" else full_sheet_qty
+    if form.get("base_material") and material_rate and auto_qty:
         iname = frappe.db.get_value("Item", form["base_material"], "item_name") or form["base_material"]
-        amt   = round(full_sheet_qty * material_rate, 2)
+        amt   = round(auto_qty * material_rate, 2)
         mat_total += amt
+        label = "Paper / Board" if pricing_type == "Offset" else "Reel Material"
         cost_rows.append({
             "section": "Material", "spec_name": "Base Material",
-            "cost_fact": "Paper / Board", "cost_group": "Material",
+            "cost_fact": label, "cost_group": "Material",
             "selected_item": form["base_material"], "selected_item_name": iname,
-            "attribute_values": {}, "req_qty": full_sheet_qty,
+            "attribute_values": {}, "req_qty": round(auto_qty, 4),
             "rate": material_rate, "amount": amt, "is_auto": True,
         })
 
@@ -96,7 +128,8 @@ def calculate(payload):
         rows, mt, pp, pr = _process_spec(
             machine_spec, form, sheet, item_qty, no_of_colors, material_rate,
             full_sheet_qty, cut_sheet_qty, cut_sheet_area, price_list,
-            section="Machine", is_auto=True
+            section="Machine", is_auto=True,
+            reel_area=reel_area, reel_length=reel_length, ups=ups,
         )
         cost_rows.extend(rows)
         mat_total += mt; prep_total += pp; prod_total += pr
@@ -106,7 +139,8 @@ def calculate(payload):
         rows, mt, pp, pr = _process_spec(
             spec, form, sheet, item_qty, no_of_colors, material_rate,
             full_sheet_qty, cut_sheet_qty, cut_sheet_area, price_list,
-            section="Spec", is_auto=False
+            section="Spec", is_auto=False,
+            reel_area=reel_area, reel_length=reel_length, ups=ups,
         )
         cost_rows.extend(rows)
         mat_total += mt; prep_total += pp; prod_total += pr
@@ -166,7 +200,7 @@ def save_costing(payload):
     doc.customer_name = form.get("customer_name", "")
     doc.ref           = form.get("ref", "")
     doc.price_list    = form.get("price_list", "")
-    doc.pricing_type  = "Offset"
+    doc.pricing_type  = form.get("pricing_type", "Offset")
     doc.base_material = form.get("base_material", "")
     doc.material_rate = flt(form.get("material_rate", 0))
     doc.carton_size   = form.get("carton_size", "")
@@ -183,6 +217,26 @@ def save_costing(payload):
     doc.wastage       = sheet.get("wastage",        0)
     doc.req_cut_sheets= sheet.get("req_cut_sheets", 0)
     doc.full_sheet_qty= sheet.get("full_sheet_qty", 0)
+
+    # Flexo-specific fields (only saved when pricing_type = Flexo)
+    if form.get("pricing_type") == "Flexo":
+        for field, key in [
+            ("reel_width_mm",     "reel_width_mm"),
+            ("product_width_mm",  "product_width_mm"),
+            ("product_length_mm", "product_length_mm"),
+            ("product_margin_mm", "product_margin_mm"),
+            ("product_gap_mm",    "product_gap_mm"),
+        ]:
+            if hasattr(doc, field):
+                setattr(doc, field, flt(form.get(key, 0)))
+        # Auto-calculated Flexo values
+        for field, key in [
+            ("flexo_ups",          "ups"),
+            ("flexo_reel_length",  "reel_length"),
+            ("flexo_reel_area",    "reel_area"),
+        ]:
+            if hasattr(doc, field):
+                setattr(doc, field, flt(sheet.get(key, 0)))
 
     for f, v in [
         ("profit_margin", flt(form.get("profit_margin", 0))),
@@ -344,15 +398,111 @@ def _calc_sheet(form):
             "req_cut_sheets": rqty, "full_sheet_qty": fqty}
 
 
+
+def _calc_flexo(form):
+    """
+    Flexo reel area calculation.
+
+    Inputs (from form):
+      reel_width_mm      — material reel width in mm
+      product_width_mm   — label width in mm
+      product_length_mm  — label length in mm
+      product_margin_mm  — margin on each side in mm  (default 4)
+      product_gap_mm     — gap between labels in mm   (default 3)
+      no_of_colors       — number of print colors
+      item_qty           — order quantity (number of stickers)
+
+    Reel Wastage lookup table (from Excel "Reel Wastage" sheet):
+      colors  setup_metrage(m)  wastage_%
+      0       5                 0.04
+      1       100               0.06
+      2       100               0.07
+      3       150               0.08
+      4       150               0.09
+      5       200               0.10
+      6       200               0.11
+      7+      250               0.12
+    """
+    reel_width    = flt(form.get("reel_width_mm", 0))
+    prod_w        = flt(form.get("product_width_mm", 0))
+    prod_l        = flt(form.get("product_length_mm", 0))
+    margin        = flt(form.get("product_margin_mm", 4))
+    gap           = flt(form.get("product_gap_mm", 3))
+    no_of_colors  = cint(form.get("no_of_colors", 0))
+    item_qty      = flt(form.get("item_qty", 0))
+
+    if not item_qty or not reel_width or not prod_w or not prod_l:
+        return {k: 0 for k in [
+            "ups", "stickers_per_reel", "reel_length", "reel_area",
+            "reel_area_net", "wastage_area", "printable_margin",
+            "material_wastage_width", "setup_metrage", "wastage_pct",
+        ]}
+
+    # Printable margin depends on whether any colors are used
+    printable_margin = 10 if no_of_colors == 0 else 24
+
+    # Number of label ups across the reel width
+    ups = max(int((reel_width - printable_margin) / (prod_w + margin)), 1)
+
+    # Material wastage width (unused material on sides)
+    material_wastage_width = reel_width - (ups * (prod_w + margin) + printable_margin)
+
+    # Stickers per reel and reel length
+    stickers_per_reel = item_qty / ups
+    label_pitch       = prod_l + gap          # mm per label
+    reel_length       = stickers_per_reel * (label_pitch / 1000)  # convert mm → m
+
+    # Net reel area (production only, no wastage yet)
+    reel_width_m      = reel_width / 1000
+    reel_area_net     = reel_length * reel_width_m  # m²
+
+    # Wastage lookup by no_of_colors
+    _wastage_table = [
+        (0,  5,   0.04),
+        (1,  100, 0.06),
+        (2,  100, 0.07),
+        (3,  150, 0.08),
+        (4,  150, 0.09),
+        (5,  200, 0.10),
+        (6,  200, 0.11),
+    ]
+    setup_m = 250; wastage_pct = 0.12  # default for 7+ colors
+    for colors, sm, wp in _wastage_table:
+        if no_of_colors <= colors:
+            setup_m = sm; wastage_pct = wp
+            break
+
+    # Wastage area: setup run + percentage of production run
+    wastage_area = setup_m * reel_width_m + reel_area_net * wastage_pct
+
+    # Total reel area including wastage
+    reel_area = reel_area_net + wastage_area
+
+    return {
+        "ups":                   ups,
+        "stickers_per_reel":     round(stickers_per_reel, 2),
+        "reel_length":           round(reel_length, 4),
+        "reel_area_net":         round(reel_area_net, 4),
+        "wastage_area":          round(wastage_area, 4),
+        "reel_area":             round(reel_area, 4),
+        "printable_margin":      printable_margin,
+        "material_wastage_width":round(material_wastage_width, 2),
+        "setup_metrage":         setup_m,
+        "wastage_pct":           wastage_pct,
+    }
+
+
 def _process_spec(spec, form, sheet, item_qty, no_of_colors, material_rate,
                   full_sheet_qty, cut_sheet_qty, cut_sheet_area, price_list,
-                  section="Spec", is_auto=False):
+                  section="Spec", is_auto=False,
+                  reel_area=0, reel_length=0, ups=0):
     all_rows = []; mat = prep = prod = 0.0
     for cf_row in spec.get("cost_facts", []):
         row, mt, pp, pr = _build_row(
             cf_row, spec.get("spec_name",""), form, sheet,
             item_qty, no_of_colors, material_rate,
-            full_sheet_qty, cut_sheet_qty, cut_sheet_area, price_list
+            full_sheet_qty, cut_sheet_qty, cut_sheet_area, price_list,
+            reel_area=reel_area, reel_length=reel_length, ups=ups,
         )
         row["section"] = section
         row["is_auto"] = is_auto
@@ -439,7 +589,8 @@ def _safe_eval(formula, ctx):
 
 def _build_row(cf_row, spec_name, form, sheet, item_qty, no_of_colors,
                material_rate, full_sheet_qty, cut_sheet_qty,
-               cut_sheet_area, price_list='Standard Selling'):
+               cut_sheet_area, price_list='Standard Selling',
+               reel_area=0, reel_length=0, ups=0):
     cf_name    = cf_row.get("cost_fact", "")
     is_primary = cint(cf_row.get("is_primary", 0))
     sel_item   = cf_row.get("selected_item", "")
@@ -492,22 +643,36 @@ def _build_row(cf_row, spec_name, form, sheet, item_qty, no_of_colors,
     # ─────────────────────────────────────────────────────────────────
 
     eval_ctx = {
-        # Sheet
+        # ── Offset sheet variables ─────────────────────────────────────────
         "full_sheet_qty":  full_sheet_qty,
         "cut_sheet_qty":   cut_sheet_qty,
         "cut_sheet_area":  cut_sheet_area,
-        "no_of_colors":    no_of_colors,
-        "item_qty":        item_qty,
         "no_of_cuts":      cint(form.get("no_of_cuts", 1)),
         "no_of_ups":       cint(form.get("no_of_ups",  1)),
         "cut_sheet_ups":   sheet.get("cut_sheet_ups",  1),
-        # Rates
+        # ── Flexo reel variables ───────────────────────────────────────────
+        # reel_area   = total reel area including wastage (m²) — KEY variable
+        # reel_length = total reel length in metres
+        # ups         = label ups per reel width
+        "reel_area":       reel_area,
+        "reel_length":     reel_length,
+        "ups":             ups,
+        # Flexo product dimensions (mm) — direct access in formulas
+        "reel_width_mm":     flt(form.get("reel_width_mm", 0)),
+        "product_width_mm":  flt(form.get("product_width_mm", 0)),
+        "product_length_mm": flt(form.get("product_length_mm", 0)),
+        "product_margin_mm": flt(form.get("product_margin_mm", 0)),
+        "product_gap_mm":    flt(form.get("product_gap_mm", 0)),
+        # ── Common variables ───────────────────────────────────────────────
+        "no_of_colors":    no_of_colors,
+        "item_qty":        item_qty,
+        # ── Rates ──────────────────────────────────────────────────────────
         "item_rate":       item_rate,
         "fix_rate":        fix_rate,
-        "min_rate":        min_rate,   # per-unit minimum from item row (min_rate field)
-        "min_qty":         min_amt,    # Cost Fact min_qty — usable in rate_formula (Case 3: max(item_rate, min_qty/cut_sheet_qty))
+        "min_rate":        min_rate,
+        "min_qty":         min_amt,
         "material_rate":   material_rate,
-        # Attributes via dot notation: attr.length, attr.width etc.
+        # ── Attributes via dot notation ────────────────────────────────────
         "attr":            _AttrDict(attr),
     }
     # Also expose each attribute as a plain variable for convenience
@@ -617,5 +782,89 @@ def sync_cost_item_unit_cost(calculation_breakdown):
         except Exception as e:
             frappe.log_error(title="sync_cost_item_unit_cost error", message=str(e))
 
+    # Also update Cost Sheet Items rows that link to updated Cost Items
+    # This ensures unit_price on the Cost Sheet is refreshed automatically
+    for ci_name in parents:
+        try:
+            uc = frappe.db.get_value("cost Item", ci_name, "unit_cost")
+            if not uc:
+                continue
+            # Find Cost Sheet Items rows linking this Cost Item
+            cs_rows = frappe.db.get_all(
+                "Cost Sheet Items",
+                filters={"item": ci_name},
+                fields=["name", "parent", "qty", "sscl", "vat"],
+            )
+            for row in cs_rows:
+                unit  = frappe.utils.flt(uc)
+                qty   = frappe.utils.flt(row.get("qty", 0))
+                sscl_amt  = unit * 0.0225 if row.get("sscl") else 0
+                vat_base  = unit + sscl_amt
+                vat_amt   = vat_base * 0.18 if row.get("vat") else 0
+                sell_unit = round(unit + sscl_amt + vat_amt, 4)
+                frappe.db.set_value("Cost Sheet Items", row["name"], {
+                    "unit_price":         round(unit, 4),
+                    "ammount":            round(qty * unit, 2),
+                    "selling_unit_price": sell_unit,
+                    "selling_ammount":    round(qty * sell_unit, 2),
+                }, update_modified=False)
+        except Exception as e:
+            frappe.log_error(title="sync_cost_sheet_items error", message=str(e))
+
     frappe.db.commit()
     return {"updated": updated}
+
+
+@frappe.whitelist()
+def calculate_qty_break(calculation_breakdown, qty, profit_margin=None, tax_sscl=None, tax_vat=None):
+    """
+    Re-run calculation with a different item_qty only.
+    All other params (material, machine, specs) come from the stored ui_state.
+    Used for Quotation qty break pricing.
+    Returns unit_cost and selling_price for the given qty.
+    """
+    if not calculation_breakdown:
+        return {"error": "No calculation breakdown specified"}
+
+    doc = frappe.get_doc("Calculation Breakdown", calculation_breakdown)
+    if not (hasattr(doc, "ui_state") and doc.ui_state):
+        return {"error": "No ui_state found on this Calculation Breakdown"}
+
+    try:
+        state = json.loads(doc.ui_state)
+    except Exception:
+        return {"error": "Could not parse ui_state"}
+
+    # Override item_qty with the break quantity
+    form = state.get("form", {})
+    form["item_qty"] = flt(qty)
+
+    # Override pricing params if provided
+    if profit_margin is not None:
+        form["profit_margin"] = flt(profit_margin)
+    if tax_sscl is not None:
+        form["tax_sscl"] = tax_sscl
+    if tax_vat is not None:
+        form["tax_vat"] = tax_vat
+
+    # Build payload and run calculate()
+    payload = {
+        "form":           form,
+        "machine_spec":   state.get("machine_spec"),
+        "selected_specs": state.get("selected_specs", []),
+    }
+
+    try:
+        result = calculate(json.dumps(payload))
+        pricing = result.get("pricing", {})
+        return {
+            "qty":           flt(qty),
+            "unit_cost":     pricing.get("unit_cost", 0),
+            "sell_unit":     pricing.get("sell_unit", 0),
+            "sell_total":    pricing.get("sell_total", 0),
+            "grand_total":   result.get("group_totals", {}).get("grand", 0),
+            "profit_margin": form.get("profit_margin", 0),
+        }
+    except Exception as e:
+        frappe.log_error(title="calculate_qty_break error", message=str(e))
+        return {"error": str(e)}

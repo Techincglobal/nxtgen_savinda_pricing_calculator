@@ -1,16 +1,16 @@
 {
  "actions": [],
- "allow_rename": 1,
  "autoname": "field:spec_name",
- "creation": "2026-04-09 07:27:33.408762",
+ "creation": "2026-04-09 00:00:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
   "spec_name",
-  "column_break_zscb",
   "group",
+  "column_break_1",
   "is_active",
-  "section_break_zhix",
+  "pricing_type",
+  "section_break_facts",
   "cost_facts"
  ],
  "fields": [
@@ -18,39 +18,59 @@
    "fieldname": "spec_name",
    "fieldtype": "Data",
    "label": "Spec Name",
-   "unique": 1
-  },
-  {
-   "fieldname": "column_break_zscb",
-   "fieldtype": "Column Break"
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1,
+   "columns": 5
   },
   {
    "fieldname": "group",
    "fieldtype": "Select",
    "label": "Group",
-   "options": "Specification\nFinishing\nMachine"
+   "options": "Specification\nFinishing\nMachine",
+   "default": "Specification",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 4,
+   "description": "Machine = shown as dropdown. Specification and Finishing = shown as checkboxes."
   },
   {
-   "default": "0",
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
    "fieldname": "is_active",
    "fieldtype": "Check",
-   "label": "Active"
+   "label": "Active",
+   "default": "1",
+   "in_list_view": 1,
+   "columns": 2
   },
   {
-   "fieldname": "section_break_zhix",
+   "fieldname": "pricing_type",
+   "fieldtype": "Select",
+   "label": "Pricing Type",
+   "options": "Offset\nFlexo\nBoth",
+   "default": "Offset",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 3,
+   "description": "Offset = only shown in Offset calculator. Flexo = only shown in Flexo calculator. Both = shown in both (e.g. Delivery, Proof Board, Corrugated Boxes)."
+  },
+  {
+   "fieldname": "section_break_facts",
    "fieldtype": "Section Break",
    "label": "Cost Facts"
   },
   {
    "fieldname": "cost_facts",
    "fieldtype": "Table",
+   "label": "Cost Facts",
    "options": "Offset Spec Cost Fact"
   }
  ],
- "grid_page_length": 50,
- "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-04-09 19:44:04.612637",
+ "modified": "2026-04-23 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Offset Spec",
@@ -68,11 +88,15 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Sales User"
   }
  ],
- "row_format": "Dynamic",
- "rows_threshold_for_grid_search": 20,
- "sort_field": "modified",
- "sort_order": "DESC",
- "states": []
+ "search_fields": "spec_name,group",
+ "sort_field": "spec_name",
+ "sort_order": "ASC",
+ "title_field": "spec_name",
+ "track_changes": 1
 }
