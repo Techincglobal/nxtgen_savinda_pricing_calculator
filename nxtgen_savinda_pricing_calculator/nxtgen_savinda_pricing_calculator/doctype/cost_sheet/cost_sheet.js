@@ -30,6 +30,30 @@ frappe.ui.form.on("Cost Sheet", {
 		frm.add_custom_button(__("Refresh Prices"), function () {
 			refresh_all_prices(frm);
 		}, __("Actions"));
+		// Create Quotation from this Cost Sheet
+		if (!frm.is_new()) {
+			frm.add_custom_button(__("Create Quotation"), function () {
+				// Build minimal doc — only pass cost_sheet and inquiry
+				// The quotation's before_insert will auto-fill customer from cost sheet
+				// The quotation's refresh will auto-load items from cost sheet
+				frappe.call({
+					method: "frappe.client.insert",
+					args: {
+						doc: {
+							doctype: "Savinda Quotation",
+							cost_sheet: frm.doc.name,
+							inquiry: frm.doc.inquiry || "",
+						},
+					},
+					callback: function (r) {
+						if (r.message) {
+							frappe.show_alert({ message: "Quotation created — loading items…", indicator: "green" });
+							frappe.set_route("Form", "Savinda Quotation", r.message.name);
+						}
+					},
+				});
+			}, __("Actions"));
+		}
 	},
 
 	inquiry: function (frm) {
@@ -217,8 +241,10 @@ function render_panel(frm, cdt, cdn) {
 				$w.off("click.edit_calc").on("click.edit_calc", ".btn-edit-calc", function () {
 					var cb = $(this).data("cb");
 					if (cb) {
+						var pt = frm.doc.pricing_type || "Offset";
 						var url = "/app/offset-calculator?ref=" + encodeURIComponent(cb)
-							+ "&cost_sheet=" + encodeURIComponent(frm.doc.name);
+							+ "&cost_sheet=" + encodeURIComponent(frm.doc.name)
+							+ "&pricing_type=" + encodeURIComponent(pt);
 						window.location.href = url;
 					}
 				});
@@ -270,6 +296,8 @@ function render_panel(frm, cdt, cdn) {
 
 function show_add_calc_popup(frm, cdt, cdn, item_name) {
 
+	var pricingType = frm.doc.pricing_type || "Offset";
+
 	// Load Cost Item to get qty and colour
 	frappe.call({
 		method: "frappe.client.get",
@@ -278,83 +306,80 @@ function show_add_calc_popup(frm, cdt, cdn, item_name) {
 			if (!r.message) return;
 			var ci = r.message;
 
+			// Common fields
+			var fields = [
+				{
+					fieldtype: "HTML",
+					options: "<div style='padding:7px 10px;background:#f0f4ff;border-radius:4px;"
+						+ "font-size:12px;color:#1a3a5c;margin-bottom:6px'>"
+						+ "Pricing Type: <b>" + pricingType + "</b>. "
+						+ "Fill in the specifications below. You can edit all cost details "
+						+ "in the calculator that opens next.</div>",
+				},
+				{
+					fieldtype: "Link", fieldname: "base_material",
+					label: "Base Material", options: "Item", reqd: 1,
+				},
+			];
+
+			if (pricingType === "Flexo") {
+				// Flexo: reel dimensions (stored only in ui_state, no dedicated CB fields)
+				fields = fields.concat([
+					{ fieldtype: "Section Break", label: "Reel Dimensions (mm)" },
+					{ fieldtype: "Float", fieldname: "reel_width_mm", label: "Reel Width (mm)", reqd: 1 },
+					{ fieldtype: "Column Break" },
+					{ fieldtype: "Float", fieldname: "product_width_mm", label: "Product Width (mm)", reqd: 1 },
+					{ fieldtype: "Section Break", label: "Product Dimensions (mm)" },
+					{ fieldtype: "Float", fieldname: "product_length_mm", label: "Product Length (mm)", reqd: 1 },
+					{ fieldtype: "Column Break" },
+					{ fieldtype: "Float", fieldname: "product_margin_mm", label: "Margin (mm)", default: 4 },
+					{ fieldtype: "Section Break" },
+					{ fieldtype: "Float", fieldname: "product_gap_mm", label: "Gap (mm)", default: 3 },
+					{ fieldtype: "Column Break" },
+					{ fieldtype: "Int", fieldname: "no_of_colors", label: "No of Colors", default: ci.colour || 0 },
+				]);
+			} else {
+				// Offset: sheet dimensions (saved to CB doctype fields)
+				fields = fields.concat([
+					{ fieldtype: "Section Break", label: "Full Sheet (Inches)" },
+					{ fieldtype: "Float", fieldname: "full_sheet_l", label: "Full Sheet Length (L)", reqd: 1 },
+					{ fieldtype: "Column Break" },
+					{ fieldtype: "Float", fieldname: "full_sheet_w", label: "Full Sheet Width (W)", reqd: 1 },
+					{ fieldtype: "Section Break", label: "Cut Sheet (Inches)" },
+					{ fieldtype: "Float", fieldname: "cut_sheet_l", label: "Cut Sheet Length (L)", reqd: 1 },
+					{ fieldtype: "Column Break" },
+					{ fieldtype: "Float", fieldname: "cut_sheet_w", label: "Cut Sheet Width (W)", reqd: 1 },
+					{ fieldtype: "Section Break", label: "Cuts & Ups" },
+					{ fieldtype: "Int", fieldname: "no_of_cuts", label: "No of Cuts", default: 2, reqd: 1 },
+					{ fieldtype: "Column Break" },
+					{ fieldtype: "Int", fieldname: "no_of_ups", label: "No of Ups", default: 4, reqd: 1 },
+					{ fieldtype: "Section Break", label: "Colors" },
+					{ fieldtype: "Int", fieldname: "no_of_colors", label: "No of Colors", default: ci.colour || 0 },
+				]);
+			}
+
+			// Qty + description — common to both
+			fields = fields.concat([
+				{ fieldtype: "Section Break", label: "Quantity" },
+				{
+					fieldtype: "Float", fieldname: "item_qty",
+					label: "Item Qty", default: ci.item_qty || 0,
+					description: "Auto-filled from Cost Item",
+				},
+				{ fieldtype: "Section Break" },
+				{
+					fieldtype: "Data", fieldname: "description",
+					label: "Description (optional)", description: "e.g. Cover Page, Inner Page",
+				},
+			]);
+
 			var d = new frappe.ui.Dialog({
 				title: "Add Calculation — " + (ci.cost_item_name || item_name),
-				fields: [
-					// ── Info banner ──
-					{
-						fieldtype: "HTML",
-						options: "<div style='padding:7px 10px;background:#f0f4ff;border-radius:4px;"
-							+ "font-size:12px;color:#1a3a5c;margin-bottom:6px'>"
-							+ "Fill in the sheet specifications. These will be saved to the "
-							+ "Calculation Breakdown header. You can edit all cost details "
-							+ "in the calculator that opens next.</div>",
-					},
-					// ── Material ──
-					{
-						fieldtype: "Link", fieldname: "base_material",
-						label: "Base Material", options: "Item", reqd: 1,
-					},
-					// ── Full Sheet ──
-					{ fieldtype: "Section Break", label: "Full Sheet (Inches)" },
-					{
-						fieldtype: "Float", fieldname: "full_sheet_l",
-						label: "Full Sheet Length (L)", reqd: 1,
-					},
-					{ fieldtype: "Column Break" },
-					{
-						fieldtype: "Float", fieldname: "full_sheet_w",
-						label: "Full Sheet Width (W)", reqd: 1,
-					},
-					// ── Cut Sheet ──
-					{ fieldtype: "Section Break", label: "Cut Sheet (Inches)" },
-					{
-						fieldtype: "Float", fieldname: "cut_sheet_l",
-						label: "Cut Sheet Length (L)", reqd: 1,
-					},
-					{ fieldtype: "Column Break" },
-					{
-						fieldtype: "Float", fieldname: "cut_sheet_w",
-						label: "Cut Sheet Width (W)", reqd: 1,
-					},
-					// ── Cuts / Ups ──
-					{ fieldtype: "Section Break", label: "Cuts & Ups" },
-					{
-						fieldtype: "Int", fieldname: "no_of_cuts",
-						label: "No of Cuts", default: 2, reqd: 1,
-					},
-					{ fieldtype: "Column Break" },
-					{
-						fieldtype: "Int", fieldname: "no_of_ups",
-						label: "No of Ups", default: 4, reqd: 1,
-					},
-					// ── Qty & Colors (auto-filled) ──
-					{ fieldtype: "Section Break", label: "Quantity & Colors" },
-					{
-						fieldtype: "Float", fieldname: "item_qty",
-						label: "Item Qty",
-						default: ci.item_qty || 0,
-						description: "Auto-filled from Cost Item",
-					},
-					{ fieldtype: "Column Break" },
-					{
-						fieldtype: "Int", fieldname: "no_of_colors",
-						label: "No of Colors",
-						default: ci.colour || 0,
-						description: "Auto-filled from Cost Item colour",
-					},
-					// ── Description ──
-					{ fieldtype: "Section Break" },
-					{
-						fieldtype: "Data", fieldname: "description",
-						label: "Description (optional)",
-						description: "e.g. Cover Page, Inner Page",
-					},
-				],
+				fields: fields,
 				primary_action_label: "Create & Open Calculator",
 				primary_action: function (vals) {
 					d.hide();
-					create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals);
+					create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pricingType);
 				},
 			});
 
@@ -368,30 +393,37 @@ function show_add_calc_popup(frm, cdt, cdn, item_name) {
 //  CREATE Calculation Breakdown → link to Cost Item → open calculator
 // ─────────────────────────────────────────────────────────────
 
-function create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals) {
+function create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pricingType) {
 
 	frappe.show_alert({ message: "Creating Calculation Breakdown…", indicator: "blue" });
+
+	var cbDoc = {
+		doctype: "Calculation Breakdown",
+		customer_name: frm.doc.customer_name || "",
+		ref: frm.doc.inquiry || "",
+		pricing_type: pricingType || "Offset",
+		base_material: vals.base_material,
+		item_qty: vals.item_qty,
+		no_of_colors: vals.no_of_colors,
+	};
+
+	if (pricingType === "Flexo") {
+		// Flexo-specific fields have no dedicated CB columns — they are stored only
+		// in ui_state by the calculator. Nothing extra to add to cbDoc here.
+	} else {
+		// Offset: sheet dimension fields exist on the CB doctype
+		cbDoc.full_sheet_l = vals.full_sheet_l;
+		cbDoc.full_sheet_w = vals.full_sheet_w;
+		cbDoc.cut_sheet_l  = vals.cut_sheet_l;
+		cbDoc.cut_sheetw   = vals.cut_sheet_w; // intentional fieldname (no underscore)
+		cbDoc.no_of_cuts   = vals.no_of_cuts;
+		cbDoc.no_of_ups    = vals.no_of_ups;
+	}
 
 	// 1. Create the Calculation Breakdown with header params
 	frappe.call({
 		method: "frappe.client.insert",
-		args: {
-			doc: {
-				doctype: "Calculation Breakdown",
-				customer_name: frm.doc.customer_name || "",
-				ref: frm.doc.inquiry || "",
-				pricing_type: "Offset",
-				base_material: vals.base_material,
-				full_sheet_l: vals.full_sheet_l,
-				full_sheet_w: vals.full_sheet_w,
-				cut_sheet_l: vals.cut_sheet_l,
-				cut_sheetw: vals.cut_sheet_w,
-				no_of_cuts: vals.no_of_cuts,
-				no_of_ups: vals.no_of_ups,
-				item_qty: vals.item_qty,
-				no_of_colors: vals.no_of_colors,
-			},
-		},
+		args: { doc: cbDoc },
 		callback: function (r) {
 			if (!r.message) return;
 			var cb_name = r.message.name;
@@ -418,9 +450,10 @@ function create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals) {
 						callback: function () {
 							frappe.show_alert({ message: "Created: " + cb_name, indicator: "green" });
 
-							// 3. Open calculator with CB name in URL (survives page refresh)
+							// 3. Open calculator — pass pricing_type so it loads correct specs
 							var url = "/app/offset-calculator?ref=" + encodeURIComponent(cb_name)
-								+ "&cost_sheet=" + encodeURIComponent(frm.doc.name);
+								+ "&cost_sheet=" + encodeURIComponent(frm.doc.name)
+								+ "&pricing_type=" + encodeURIComponent(pricingType || "Offset");
 							window.location.href = url;
 						},
 					});

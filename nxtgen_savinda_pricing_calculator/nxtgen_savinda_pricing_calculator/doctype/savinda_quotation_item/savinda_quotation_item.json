@@ -1,138 +1,146 @@
 {
  "actions": [],
- "allow_rename": 1,
- "creation": "2026-05-04 16:19:13.661653",
+ "creation": "2026-04-23 00:00:00.000000",
  "doctype": "DocType",
- "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
-  "section_break_5yyf"
+  "item_name",
+  "finishing_variant",
+  "column_break_1",
+  "cost_item",
+  "calculation_breakdown",
+  "section_break_desc",
+  "size",
+  "material",
+  "column_break_2",
+  "finishing",
+  "section_break_pricing",
+  "qty",
+  "unit_cost",
+  "column_break_3",
+  "selling_price",
+  "is_manually_set"
  ],
  "fields": [
-   {
-      "fieldname": "item_name",
-      "fieldtype": "Data",
-      "label": "Item Name",
-      "reqd": 1,
-      "in_list_view": 1,
-      "bold": 1,
-      "columns": 3
-    },
-    {
-      "fieldname": "finishing_variant",
-      "fieldtype": "Int",
-      "label": "Variant #",
-      "default": "1",
-      "in_list_view": 1,
-      "columns": 1,
-      "description": "Group rows with same item_name and finishing_variant together in the quotation print"
-    },
-    {
-      "fieldname": "column_break_1",
-      "fieldtype": "Column Break"
-    },
-    {
-      "fieldname": "cost_item",
-      "fieldtype": "Link",
-      "label": "Cost Item",
-      "options": "cost Item",
-      "in_list_view": 1,
-      "columns": 3
-    },
-    {
-      "fieldname": "calculation_breakdown",
-      "fieldtype": "Link",
-      "label": "Base Calculation",
-      "options": "Calculation Breakdown",
-      "description": "The Calculation Breakdown used as base for qty break pricing",
-      "in_list_view": 1,
-      "columns": 2
-    },
-    {
-      "fieldname": "section_break_desc",
-      "fieldtype": "Section Break",
-      "label": "Product Description"
-    },
-    {
-      "fieldname": "size",
-      "fieldtype": "Data",
-      "label": "Size",
-      "in_list_view": 1,
-      "columns": 2
-    },
-    {
-      "fieldname": "material",
-      "fieldtype": "Data",
-      "label": "Material",
-      "in_list_view": 1,
-      "columns": 3
-    },
-    {
-      "fieldname": "column_break_2",
-      "fieldtype": "Column Break"
-    },
-    {
-      "fieldname": "finishing",
-      "fieldtype": "Data",
-      "label": "Finishing",
-      "in_list_view": 1,
-      "columns": 4
-    },
-    {
-      "fieldname": "section_break_pricing",
-      "fieldtype": "Section Break",
-      "label": "Pricing"
-    },
-    {
-      "fieldname": "qty",
-      "fieldtype": "Float",
-      "label": "Quantity",
-      "reqd": 1,
-      "in_list_view": 1,
-      "columns": 2
-    },
-    {
-      "fieldname": "unit_cost",
-      "fieldtype": "Currency",
-      "label": "Unit Cost (LKR)",
-      "read_only": 1,
-      "in_list_view": 1,
-      "columns": 2,
-      "description": "Internal cost — not shown on printed quotation"
-    },
-    {
-      "fieldname": "column_break_3",
-      "fieldtype": "Column Break"
-    },
-    {
-      "fieldname": "selling_price",
-      "fieldtype": "Currency",
-      "label": "Selling Price (LKR)",
-      "bold": 1,
-      "in_list_view": 1,
-      "columns": 2
-    },
-    {
-      "fieldname": "is_manually_set",
-      "fieldtype": "Check",
-      "label": "Manually Set",
-      "default": "0",
-      "description": "If ticked, this price will not be recalculated when refreshing qty breaks"
-    }
+  {
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "label": "Item Name",
+   "reqd": 1,
+   "in_list_view": 1,
+   "bold": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "finishing_variant",
+   "fieldtype": "Int",
+   "label": "Variant #",
+   "default": "1",
+   "in_list_view": 1,
+   "columns": 1,
+   "description": "Group rows with same item_name and finishing_variant together in the quotation print"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cost_item",
+   "fieldtype": "Link",
+   "label": "Cost Item",
+   "options": "cost Item",
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "calculation_breakdown",
+   "fieldtype": "Link",
+   "label": "Base Calculation",
+   "options": "Calculation Breakdown",
+   "description": "The Calculation Breakdown used as base for qty break pricing",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "section_break_desc",
+   "fieldtype": "Section Break",
+   "label": "Product Description"
+  },
+  {
+   "fieldname": "size",
+   "fieldtype": "Data",
+   "label": "Size",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "material",
+   "fieldtype": "Data",
+   "label": "Material",
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "finishing",
+   "fieldtype": "Data",
+   "label": "Finishing",
+   "in_list_view": 1,
+   "columns": 4
+  },
+  {
+   "fieldname": "section_break_pricing",
+   "fieldtype": "Section Break",
+   "label": "Pricing"
+  },
+  {
+   "fieldname": "qty",
+   "fieldtype": "Float",
+   "label": "Quantity",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "unit_cost",
+   "fieldtype": "Currency",
+   "label": "Unit Cost (LKR)",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 2,
+   "description": "Internal cost — not shown on printed quotation"
+  },
+  {
+   "fieldname": "column_break_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "selling_price",
+   "fieldtype": "Currency",
+   "label": "Selling Price (LKR)",
+   "bold": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "is_manually_set",
+   "fieldtype": "Check",
+   "label": "Manually Set",
+   "default": "0",
+   "description": "If ticked, this price will not be recalculated when refreshing qty breaks"
+  }
  ],
- "grid_page_length": 50,
- "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-05-04 16:19:13.661653",
+ "modified": "2026-04-23 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
- "name": "Savinda quotation item",
+ "name": "Savinda Quotation Item",
  "owner": "Administrator",
  "permissions": [],
- "row_format": "Dynamic",
- "rows_threshold_for_grid_search": 20,
  "sort_field": "modified",
- "sort_order": "DESC",
- "states": []
+ "sort_order": "DESC"
 }

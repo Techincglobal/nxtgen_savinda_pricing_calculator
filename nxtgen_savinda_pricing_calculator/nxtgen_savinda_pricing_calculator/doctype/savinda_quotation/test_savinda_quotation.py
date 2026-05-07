@@ -5,5 +5,5 @@
 from frappe.tests.utils import FrappeTestCase
 
 
-class TestSavindaquotation(FrappeTestCase):
+class TestSavindaQuotation(FrappeTestCase):
 	pass

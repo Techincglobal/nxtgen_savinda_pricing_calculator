@@ -157,6 +157,12 @@ function oc_mount_app(el) {
 		},
 
 		mounted() {
+			// Read pricing_type from URL before loadData so specs/machines load for the right type
+			var urlParams = new URLSearchParams(window.location.search);
+			var pt = urlParams.get('pricing_type');
+			if (pt === 'Flexo' || pt === 'Offset') {
+				this.form.pricing_type = pt;
+			}
 			this.loadData();
 		},
 

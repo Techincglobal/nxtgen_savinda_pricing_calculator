@@ -1,237 +1,227 @@
 {
  "actions": [],
- "allow_rename": 1,
- "creation": "2026-05-04 16:17:12.192759",
+ "autoname": "naming_series:",
+ "creation": "2026-04-23 00:00:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
   "naming_series",
-    "inquiry",
-    "column_break_1",
-    "cost_sheet",
-    "section_break_customer",
-    "customer",
-    "customer_name",
-    "column_break_2",
-    "sales_person",
-    "date",
-    "valid_till",
-    "section_break_items",
-    "items",
-    "section_break_footer",
-    "plate_charges",
-    "plate_per_colour",
-    "column_break_3",
-    "die_cutter_charges",
-    "section_break_terms",
-    "validity_note",
-    "duty_basis",
-    "vat_note",
-    "column_break_4",
-    "payment_terms",
-    "remarks",
-    "section_break_status",
-    "status",
-    "amended_from"
+  "inquiry",
+  "column_break_1",
+  "cost_sheet",
+  "section_break_customer",
+  "customer",
+  "customer_name",
+  "column_break_2",
+  "sales_person",
+  "date",
+  "valid_till",
+  "section_break_items",
+  "items",
+  "section_break_footer",
+  "plate_charges",
+  "plate_per_colour",
+  "column_break_3",
+  "die_cutter_charges",
+  "section_break_terms",
+  "validity_note",
+  "duty_basis",
+  "vat_note",
+  "column_break_4",
+  "payment_terms",
+  "remarks",
+  "section_break_status",
+  "status",
+  "amended_from"
  ],
  "fields": [
   {
-      "fieldname": "naming_series",
-      "fieldtype": "Select",
-      "label": "Series",
-      "options": "SQ-.YYYY.MM.-.#####",
-      "reqd": 1
-    },
-    {
-      "fieldname": "inquiry",
-      "fieldtype": "Link",
-      "label": "Inquiry",
-      "options": "Opportunity",
-      "in_list_view": 1,
-      "bold": 1
-    },
-    {
-      "fieldname": "column_break_1",
-      "fieldtype": "Column Break"
-    },
-    {
-      "fieldname": "cost_sheet",
-      "fieldtype": "Link",
-      "label": "Cost Sheet",
-      "options": "Cost Sheet",
-      "in_list_view": 1
-    },
-    {
-      "fieldname": "section_break_customer",
-      "fieldtype": "Section Break",
-      "label": "Customer"
-    },
-    {
-      "fieldname": "customer",
-      "fieldtype": "Link",
-      "label": "Customer",
-      "options": "Customer",
-      "reqd": 1,
-      "in_list_view": 1,
-      "bold": 1
-    },
-    {
-      "fieldname": "customer_name",
-      "fieldtype": "Data",
-      "label": "Customer Name",
-      "fetch_from": "customer.customer_name",
-      "read_only": 1
-    },
-    {
-      "fieldname": "column_break_2",
-      "fieldtype": "Column Break"
-    },
-    {
-      "fieldname": "sales_person",
-      "fieldtype": "Link",
-      "label": "Sales Person",
-      "options": "User"
-    },
-    {
-      "fieldname": "date",
-      "fieldtype": "Date",
-      "label": "Quotation Date",
-      "reqd": 1,
-      "default": "Today",
-      "in_list_view": 1
-    },
-    {
-      "fieldname": "valid_till",
-      "fieldtype": "Date",
-      "label": "Valid Till",
-      "in_list_view": 1
-    },
-    {
-      "fieldname": "section_break_items",
-      "fieldtype": "Section Break",
-      "label": "Quoted Items"
-    },
-    {
-      "fieldname": "items",
-      "fieldtype": "Table",
-      "label": "Items",
-      "options": "Savinda Quotation Item"
-    },
-    {
-      "fieldname": "section_break_footer",
-      "fieldtype": "Section Break",
-      "label": "One-Time Charges"
-    },
-    {
-      "fieldname": "plate_charges",
-      "fieldtype": "Currency",
-      "label": "Plate Charges (LKR)",
-      "description": "Per colour"
-    },
-    {
-      "fieldname": "plate_per_colour",
-      "fieldtype": "Check",
-      "label": "Plate Charges are Per Colour",
-      "default": "1"
-    },
-    {
-      "fieldname": "column_break_3",
-      "fieldtype": "Column Break"
-    },
-    {
-      "fieldname": "die_cutter_charges",
-      "fieldtype": "Currency",
-      "label": "Die Cutter / Block Charges (LKR)"
-    },
-    {
-      "fieldname": "section_break_terms",
-      "fieldtype": "Section Break",
-      "label": "Terms & Conditions"
-    },
-    {
-      "fieldname": "validity_note",
-      "fieldtype": "Select",
-      "label": "Validity",
-      "options": "\n07 Days\n01 Month\n02 Months\n03 Months",
-      "default": "01 Month"
-    },
-    {
-      "fieldname": "duty_basis",
-      "fieldtype": "Select",
-      "label": "Duty Basis",
-      "options": "\nDuty Free Basis\nDuty Paid Basis",
-      "default": "Duty Free Basis"
-    },
-    {
-      "fieldname": "vat_note",
-      "fieldtype": "Select",
-      "label": "VAT",
-      "options": "\nPrices do not include VAT\nInclusive of VAT",
-      "default": "Prices do not include VAT"
-    },
-    {
-      "fieldname": "column_break_4",
-      "fieldtype": "Column Break"
-    },
-    {
-      "fieldname": "payment_terms",
-      "fieldtype": "Small Text",
-      "label": "Payment Terms"
-    },
-    {
-      "fieldname": "remarks",
-      "fieldtype": "Small Text",
-      "label": "Remarks"
-    },
-    {
-      "fieldname": "section_break_status",
-      "fieldtype": "Section Break"
-    },
-    {
-      "fieldname": "status",
-      "fieldtype": "Select",
-      "label": "Status",
-      "options": "Draft\nSent\nAccepted\nCancelled",
-      "default": "Draft",
-      "in_list_view": 1
-    },
-    {
-      "fieldname": "amended_from",
-      "fieldtype": "Link",
-      "label": "Amended From",
-      "options": "Savinda Quotation",
-      "no_copy": 1,
-      "print_hide": 1,
-      "read_only": 1
-    }
- ],
- "grid_page_length": 50,
- "index_web_pages_for_search": 1,
- "is_submittable": 1,
- "links": [],
- "modified": "2026-05-04 16:17:12.192759",
- "modified_by": "Administrator",
- "module": "Nxtgen Savinda Pricing Calculator",
- "name": "Savinda quotation",
- "owner": "Administrator",
- "permissions": [
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "SQ-.YYYY.MM.-.#####",
+   "reqd": 1
+  },
   {
-   "create": 1,
-   "delete": 1,
-   "email": 1,
-   "export": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "System Manager",
-   "share": 1,
-   "submit": 1,
-   "write": 1
+   "fieldname": "inquiry",
+   "fieldtype": "Link",
+   "label": "Inquiry",
+   "options": "Opportunity",
+   "in_list_view": 1,
+   "bold": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cost_sheet",
+   "fieldtype": "Link",
+   "label": "Cost Sheet",
+   "options": "Cost Sheet",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "section_break_customer",
+   "fieldtype": "Section Break",
+   "label": "Customer"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer",
+   "reqd": 1,
+   "in_list_view": 1,
+   "bold": 1
+  },
+  {
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "Customer Name",
+   "fetch_from": "customer.customer_name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "sales_person",
+   "fieldtype": "Link",
+   "label": "Sales Person",
+   "options": "User"
+  },
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "label": "Quotation Date",
+   "reqd": 1,
+   "default": "Today",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "valid_till",
+   "fieldtype": "Date",
+   "label": "Valid Till",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "section_break_items",
+   "fieldtype": "Section Break",
+   "label": "Quoted Items"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "Savinda Quotation Item"
+  },
+  {
+   "fieldname": "section_break_footer",
+   "fieldtype": "Section Break",
+   "label": "One-Time Charges"
+  },
+  {
+   "fieldname": "plate_charges",
+   "fieldtype": "Currency",
+   "label": "Plate Charges (LKR)",
+   "description": "Per colour"
+  },
+  {
+   "fieldname": "plate_per_colour",
+   "fieldtype": "Check",
+   "label": "Plate Charges are Per Colour",
+   "default": "1"
+  },
+  {
+   "fieldname": "column_break_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "die_cutter_charges",
+   "fieldtype": "Currency",
+   "label": "Die Cutter / Block Charges (LKR)"
+  },
+  {
+   "fieldname": "section_break_terms",
+   "fieldtype": "Section Break",
+   "label": "Terms & Conditions"
+  },
+  {
+   "fieldname": "validity_note",
+   "fieldtype": "Select",
+   "label": "Validity",
+   "options": "\n07 Days\n01 Month\n02 Months\n03 Months",
+   "default": "01 Month"
+  },
+  {
+   "fieldname": "duty_basis",
+   "fieldtype": "Select",
+   "label": "Duty Basis",
+   "options": "\nDuty Free Basis\nDuty Paid Basis",
+   "default": "Duty Free Basis"
+  },
+  {
+   "fieldname": "vat_note",
+   "fieldtype": "Select",
+   "label": "VAT",
+   "options": "\nPrices do not include VAT\nInclusive of VAT",
+   "default": "Prices do not include VAT"
+  },
+  {
+   "fieldname": "column_break_4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "payment_terms",
+   "fieldtype": "Small Text",
+   "label": "Payment Terms"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "section_break_status",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nSent\nAccepted\nCancelled",
+   "default": "Draft",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "options": "Savinda Quotation",
+   "no_copy": 1,
+   "print_hide": 1,
+   "read_only": 1
   }
  ],
- "row_format": "Dynamic",
- "rows_threshold_for_grid_search": 20,
- "sort_field": "modified",
- "sort_order": "DESC",
- "states": []
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-04-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "Savinda Quotation",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,
+   "role":"System Manager","share":1,"write":1,"submit":1,"cancel":1,"amend":1},
+  {"create":1,"delete":0,"email":1,"export":1,"print":1,"read":1,"report":1,
+   "role":"Sales User","share":1,"write":1,"submit":1,"cancel":0,"amend":0},
+  {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,
+   "role":"Sales Manager","share":1,"write":1,"submit":1,"cancel":1,"amend":1}
+ ],
+ "search_fields": "customer_name,inquiry",
+ "title_field": "customer_name",
+ "track_changes": 1
 }

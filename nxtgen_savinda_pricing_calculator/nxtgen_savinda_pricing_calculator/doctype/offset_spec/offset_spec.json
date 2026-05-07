@@ -7,6 +7,7 @@
  "field_order": [
   "spec_name",
   "group",
+  "operation",
   "column_break_1",
   "is_active",
   "pricing_type",
@@ -33,6 +34,14 @@
    "in_list_view": 1,
    "columns": 4,
    "description": "Machine = shown as dropdown. Specification and Finishing = shown as checkboxes."
+  },
+  {
+   "depends_on": "eval:doc.group=='Finishing'",
+   "fieldname": "operation",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Finishing Operation",
+   "options": "Finishing"
   },
   {
    "fieldname": "column_break_1",

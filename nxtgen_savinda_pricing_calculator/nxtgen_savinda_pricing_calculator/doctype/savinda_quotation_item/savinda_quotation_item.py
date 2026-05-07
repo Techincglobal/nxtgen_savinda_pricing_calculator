@@ -5,5 +5,5 @@
 from frappe.model.document import Document
 
 
-class Savindaquotationitem(Document):
+class SavindaQuotationItem(Document):
 	pass

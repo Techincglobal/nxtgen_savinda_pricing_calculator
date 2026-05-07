@@ -306,6 +306,7 @@ def load_costing(name):
         except Exception:
             pass
     form = {
+        "pricing_type":  doc.pricing_type or "Offset",
         "customer_name": doc.customer_name or "",
         "ref":           doc.ref or "",
         "price_list":    doc.price_list or "",
