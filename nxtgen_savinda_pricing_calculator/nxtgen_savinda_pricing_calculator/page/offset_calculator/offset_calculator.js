@@ -63,6 +63,8 @@ function oc_mount_app(el) {
 
 				selectedSpecNames: [],
 				specState: {},
+				autoSelectOperations: [],
+				needsAutoSelect: false,
 
 				// Material link-field
 				matSearch: '', matResults: [], matOpen: false,
@@ -157,11 +159,16 @@ function oc_mount_app(el) {
 		},
 
 		mounted() {
-			// Read pricing_type from URL before loadData so specs/machines load for the right type
+			// Read URL params before loadData so specs/machines load for the right type
 			var urlParams = new URLSearchParams(window.location.search);
 			var pt = urlParams.get('pricing_type');
 			if (pt === 'Flexo' || pt === 'Offset') {
 				this.form.pricing_type = pt;
+			}
+			var ops = urlParams.get('operations');
+			if (ops) {
+				// URLSearchParams.get() already decodes the value; split on | separator
+				this.autoSelectOperations = ops.split('|').filter(Boolean);
 			}
 			this.loadData();
 		},
@@ -193,7 +200,12 @@ function oc_mount_app(el) {
 				var pt = self.form.pricing_type || 'Offset';
 				var done = 0;
 				function check() { done++; if (done >= 2) { self.loading = false; self.checkUrlRef(); } }
-				frappe.call({ method: API.getSpecs, args: { pricing_type: pt }, callback: function (r) { self.allSpecs = r.message || []; check(); } });
+				frappe.call({ method: API.getSpecs, args: { pricing_type: pt }, callback: function (r) {
+					self.allSpecs = r.message || [];
+					// on_page_show may have run _autoSelectFromOperations before specs loaded; retry now
+					if (self.needsAutoSelect) { self.needsAutoSelect = false; self._autoSelectFromOperations(); }
+					check();
+				}});
 				frappe.call({ method: API.getMachines, args: { pricing_type: pt }, callback: function (r) { self.allMachines = r.message || []; check(); } });
 			},
 
@@ -263,6 +275,27 @@ function oc_mount_app(el) {
 					if (sel && !(items[0] && items[0].is_fix_rate)) self.fetchItemRate(specName, cf.cost_fact, sel);
 				});
 				this.specState[specName] = state;
+			},
+
+			// Auto-select Finishing specs whose operation matches the inquiry's operations list.
+			// May be called before allSpecs is loaded (race with on_page_show); if so, set a
+			// flag so loadData's getSpecs callback retries once specs are available.
+			_autoSelectFromOperations() {
+				var self = this;
+				var ops = self.autoSelectOperations;
+				if (!ops.length) return;
+				if (!self.allSpecs.length) {
+					self.needsAutoSelect = true;
+					return;
+				}
+				self.allSpecs.forEach(function (spec) {
+					if (spec.group !== 'Finishing') return;
+					if (!spec.operation || ops.indexOf(spec.operation) === -1) return;
+					if (self.selectedSpecNames.indexOf(spec.spec_name) === -1) {
+						self.selectedSpecNames.push(spec.spec_name);
+						self.initSpecState(spec.spec_name);
+					}
+				});
 			},
 
 			getSpecState(sn, cf) { return (this.specState[sn] || {})[cf] || {}; },
@@ -487,6 +520,11 @@ function oc_mount_app(el) {
 							});
 							self.specState[spec.spec_name] = state;
 						});
+						// Auto-select finishing specs from inquiry (only for new CBs with no saved specs)
+						if (!(d.selected_specs && d.selected_specs.length) && self.autoSelectOperations.length) {
+							self._autoSelectFromOperations();
+						}
+
 						// Restore stored calculation — show as-is, no recalculation
 						if (d.calc_result && d.calc_result.cost_rows && d.calc_result.cost_rows.length) {
 							self.calc = {

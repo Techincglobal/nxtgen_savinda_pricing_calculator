@@ -20,6 +20,7 @@
   "colour",
   "pricing_type",
   "section_break_gjtb",
+  "operations",
   "breakdown",
   "pricing_list",
   "section_break_m78s",
@@ -121,6 +122,12 @@
   {
    "fieldname": "section_break_gjtb",
    "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "operations",
+   "fieldtype": "Table",
+   "label": "Finishing Operations",
+   "options": "Operation Details"
   },
   {
    "fieldname": "pricing_list",

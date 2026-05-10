@@ -69,6 +69,17 @@ frappe.ui.form.on("Cost Sheet", {
 				if (!frm.doc.colour) frm.set_value("colour", o.custom_colour || 0);
 				if (!frm.doc.item_group) frm.set_value("item_group", o.custom_item_group || "");
 				if (!frm.doc.tiep) frm.set_value("tiep", o.custom_tiep || "");
+
+				// Copy finishing operations from inquiry (only if table is currently empty)
+				if (!frm.doc.operations || !frm.doc.operations.length) {
+					(o.custom_operations || []).forEach(function (op) {
+						if (op.disabled) return;
+						var row = frm.add_child("operations");
+						row.operation = op.operation;
+						row.remarks = op.remarks || "";
+					});
+					frm.refresh_field("operations");
+				}
 			},
 		});
 	},
@@ -242,6 +253,7 @@ function render_panel(frm, cdt, cdn) {
 					var cb = $(this).data("cb");
 					if (cb) {
 						var pt = frm.doc.pricing_type || "Offset";
+						// No operations param on edit — saved CB already has its own selections
 						var url = "/app/offset-calculator?ref=" + encodeURIComponent(cb)
 							+ "&cost_sheet=" + encodeURIComponent(frm.doc.name)
 							+ "&pricing_type=" + encodeURIComponent(pt);
@@ -450,10 +462,11 @@ function create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pric
 						callback: function () {
 							frappe.show_alert({ message: "Created: " + cb_name, indicator: "green" });
 
-							// 3. Open calculator — pass pricing_type so it loads correct specs
+							// 3. Open calculator — pass pricing_type + operations for auto-selection
 							var url = "/app/offset-calculator?ref=" + encodeURIComponent(cb_name)
 								+ "&cost_sheet=" + encodeURIComponent(frm.doc.name)
-								+ "&pricing_type=" + encodeURIComponent(pricingType || "Offset");
+								+ "&pricing_type=" + encodeURIComponent(pricingType || "Offset")
+								+ get_operations_param(frm);
 							window.location.href = url;
 						},
 					});
@@ -853,6 +866,14 @@ function render_preview(d, subject, pages, breakdowns, selected, total_bd_qty) {
 // ─────────────────────────────────────────────────────────────
 //  HELPERS
 // ─────────────────────────────────────────────────────────────
+
+function get_operations_param(frm) {
+	var names = (frm.doc.operations || [])
+		.filter(function (r) { return r.operation; })
+		.map(function (r) { return r.operation; });
+	// Use | as separator so operation names containing commas don't break the split
+	return names.length ? "&operations=" + encodeURIComponent(names.join("|")) : "";
+}
 
 function price_row(label, val, bg) {
 	return "<tr style='background:" + bg + "'>"

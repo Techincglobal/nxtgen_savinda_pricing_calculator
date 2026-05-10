@@ -58,6 +58,7 @@ def _enrich_spec(spec):
         "name":       spec["name"],
         "spec_name":  spec["spec_name"],
         "group":      spec["group"],
+        "operation":  doc.operation or "",
         "cost_facts": [
             {
                 "cost_fact":  row.cost_fact,
