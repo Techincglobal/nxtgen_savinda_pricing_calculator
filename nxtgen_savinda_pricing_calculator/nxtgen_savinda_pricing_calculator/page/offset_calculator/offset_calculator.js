@@ -63,19 +63,28 @@ function oc_mount_app(el) {
 
 				selectedSpecNames: [],
 				specState: {},
+				autoSelectOperations: [],
+				needsAutoSelect: false,
 
 				// Material link-field
 				matSearch: '', matResults: [], matOpen: false,
 				matLoading: false, matHighlight: 0, matTimer: null,
 
 				form: {
+					// Common
+					pricing_type: 'Offset',
 					customer_name: '', ref: '', price_list: '', carton_size: '',
 					base_material: '', material_rate: 0,
+					no_of_colors: 4, item_qty: 1000,
+					profit_margin: 15, tax_sscl: true, tax_vat: false,
+					// Offset-specific
 					full_sheet_l: 0, full_sheet_w: 0,
 					cut_sheet_l: 0, cut_sheet_w: 0,
-					no_of_cuts: 2, no_of_ups: 4, no_of_colors: 4,
-					item_qty: 1000, profit_margin: 15,
-					tax_sscl: true, tax_vat: false,
+					no_of_cuts: 2, no_of_ups: 4,
+					// Flexo-specific
+					reel_width_mm: 0,
+					product_width_mm: 0, product_length_mm: 0,
+					product_margin_mm: 4, product_gap_mm: 3,
 				},
 
 				calc: { sheet: null, cost_rows: [], group_totals: {}, pricing: null },
@@ -96,9 +105,17 @@ function oc_mount_app(el) {
 				});
 				return g;
 			},
+			isOffset() { return this.form.pricing_type === 'Offset'; },
+			isFlexo() { return this.form.pricing_type === 'Flexo'; },
+
 			// Auto-include material row check
 			materialReady() {
 				return !!(this.form.base_material && this.form.material_rate && this.form.item_qty);
+			},
+
+			// Flexo reel requirements card — show when flexo calc done
+			flexoReady() {
+				return this.isFlexo && this.calc.sheet && this.calc.sheet.reel_area > 0;
 			},
 			calcPayload() {
 				var self = this;
@@ -142,6 +159,17 @@ function oc_mount_app(el) {
 		},
 
 		mounted() {
+			// Read URL params before loadData so specs/machines load for the right type
+			var urlParams = new URLSearchParams(window.location.search);
+			var pt = urlParams.get('pricing_type');
+			if (pt === 'Flexo' || pt === 'Offset') {
+				this.form.pricing_type = pt;
+			}
+			var ops = urlParams.get('operations');
+			if (ops) {
+				// URLSearchParams.get() already decodes the value; split on | separator
+				this.autoSelectOperations = ops.split('|').filter(Boolean);
+			}
 			this.loadData();
 		},
 
@@ -169,10 +197,32 @@ function oc_mount_app(el) {
 
 			loadData() {
 				var self = this;
+				var pt = self.form.pricing_type || 'Offset';
 				var done = 0;
 				function check() { done++; if (done >= 2) { self.loading = false; self.checkUrlRef(); } }
-				frappe.call({ method: API.getSpecs, callback: function (r) { self.allSpecs = r.message || []; check(); } });
-				frappe.call({ method: API.getMachines, callback: function (r) { self.allMachines = r.message || []; check(); } });
+				frappe.call({ method: API.getSpecs, args: { pricing_type: pt }, callback: function (r) {
+					self.allSpecs = r.message || [];
+					// on_page_show may have run _autoSelectFromOperations before specs loaded; retry now
+					if (self.needsAutoSelect) { self.needsAutoSelect = false; self._autoSelectFromOperations(); }
+					check();
+				}});
+				frappe.call({ method: API.getMachines, args: { pricing_type: pt }, callback: function (r) { self.allMachines = r.message || []; check(); } });
+			},
+
+			// Reload specs when pricing type changes
+			onPricingTypeChange() {
+				var self = this;
+				self.loading = true;
+				self.selectedSpecNames = [];
+				self.specState = {};
+				self.selectedMachine = null;
+				self.machineSpecState = {};
+				self.calc = { sheet: null, cost_rows: [], group_totals: {}, pricing: null };
+				var pt = self.form.pricing_type || 'Offset';
+				var done = 0;
+				function check() { done++; if (done >= 2) { self.loading = false; } }
+				frappe.call({ method: API.getSpecs, args: { pricing_type: pt }, callback: function (r) { self.allSpecs = r.message || []; check(); } });
+				frappe.call({ method: API.getMachines, args: { pricing_type: pt }, callback: function (r) { self.allMachines = r.message || []; check(); } });
 			},
 
 			// ── Machine ──
@@ -225,6 +275,27 @@ function oc_mount_app(el) {
 					if (sel && !(items[0] && items[0].is_fix_rate)) self.fetchItemRate(specName, cf.cost_fact, sel);
 				});
 				this.specState[specName] = state;
+			},
+
+			// Auto-select Finishing specs whose operation matches the inquiry's operations list.
+			// May be called before allSpecs is loaded (race with on_page_show); if so, set a
+			// flag so loadData's getSpecs callback retries once specs are available.
+			_autoSelectFromOperations() {
+				var self = this;
+				var ops = self.autoSelectOperations;
+				if (!ops.length) return;
+				if (!self.allSpecs.length) {
+					self.needsAutoSelect = true;
+					return;
+				}
+				self.allSpecs.forEach(function (spec) {
+					if (spec.group !== 'Finishing') return;
+					if (!spec.operation || ops.indexOf(spec.operation) === -1) return;
+					if (self.selectedSpecNames.indexOf(spec.spec_name) === -1) {
+						self.selectedSpecNames.push(spec.spec_name);
+						self.initSpecState(spec.spec_name);
+					}
+				});
 			},
 
 			getSpecState(sn, cf) { return (this.specState[sn] || {})[cf] || {}; },
@@ -449,6 +520,11 @@ function oc_mount_app(el) {
 							});
 							self.specState[spec.spec_name] = state;
 						});
+						// Auto-select finishing specs from inquiry (only for new CBs with no saved specs)
+						if (!(d.selected_specs && d.selected_specs.length) && self.autoSelectOperations.length) {
+							self._autoSelectFromOperations();
+						}
+
 						// Restore stored calculation — show as-is, no recalculation
 						if (d.calc_result && d.calc_result.cost_rows && d.calc_result.cost_rows.length) {
 							self.calc = {
@@ -523,9 +599,12 @@ function oc_mount_app(el) {
 
   <!-- ═══════ LEFT PANEL ═══════ -->
   <div class="oc-panel">
-    <div class="oc-ph">
+    <div class="oc-ph oc-ph-split">
       <span class="oc-pt">Order Details</span>
-      <span class="oc-badge">OFFSET</span>
+      <div class="oc-type-toggle">
+        <button class="oc-type-btn" :class="{active: isOffset}" @click="form.pricing_type='Offset'; onPricingTypeChange()">OFFSET</button>
+        <button class="oc-type-btn" :class="{active: isFlexo}"  @click="form.pricing_type='Flexo';  onPricingTypeChange()">FLEXO</button>
+      </div>
     </div>
     <div class="oc-pb">
 
@@ -550,15 +629,15 @@ function oc_mount_app(el) {
         </div>
       </div>
 
-      <!-- ══ MATERIAL (auto-adds paper cost) ══ -->
+      <!-- ══ MATERIAL (auto-adds paper/reel cost) ══ -->
       <div class="oc-auto-card">
         <div class="oc-auto-card-title">
           <span class="oc-auto-dot" :class="materialReady ? 'on' : ''"></span>
-          Base Material
+          {{ isFlexo ? 'Reel Material' : 'Base Material' }}
           <span v-if="materialReady" class="oc-auto-ok">✓ auto-included</span>
         </div>
         <div class="oc-field">
-          <label class="oc-lbl oc-lbl-blue">Item</label>
+          <label class="oc-lbl oc-lbl-blue">{{ isFlexo ? 'Reel Material (Item)' : 'Item' }}</label>
           <div class="mlf">
             <div class="mlf-row">
               <input v-model="matSearch" type="text" class="oc-inp mlf-inp"
@@ -591,7 +670,7 @@ function oc_mount_app(el) {
           </div>
         </div>
         <div class="oc-field">
-          <label class="oc-lbl">Rate (LKR / full sheet)</label>
+          <label class="oc-lbl">Rate (LKR / {{ isFlexo ? 'm²' : 'full sheet' }})</label>
           <input v-model.number="form.material_rate" type="number" min="0" step="0.01" class="oc-inp" @change="scheduleCalc" />
         </div>
       </div>
@@ -641,32 +720,60 @@ function oc_mount_app(el) {
         </div>
       </div>
 
-      <!-- ══ SHEET SPECS ══ -->
-      <div class="oc-divider-label">Sheet Specifications (Inches)</div>
-      <div class="oc-2col">
-        <div class="oc-field">
-          <label class="oc-lbl">Full Sheet L × W</label>
-          <div class="oc-2col-inner">
-            <input v-model.number="form.full_sheet_l" type="number" min="0" class="oc-inp" placeholder="L" @change="scheduleCalc" />
-            <input v-model.number="form.full_sheet_w" type="number" min="0" class="oc-inp" placeholder="W" @change="scheduleCalc" />
+      <!-- ══ OFFSET: Sheet Specs ══ -->
+      <div v-if="isOffset">
+        <div class="oc-divider-label">Sheet Specifications (Inches)</div>
+        <div class="oc-2col">
+          <div class="oc-field">
+            <label class="oc-lbl">Full Sheet L × W</label>
+            <div class="oc-2col-inner">
+              <input v-model.number="form.full_sheet_l" type="number" min="0" class="oc-inp" placeholder="L" @change="scheduleCalc" />
+              <input v-model.number="form.full_sheet_w" type="number" min="0" class="oc-inp" placeholder="W" @change="scheduleCalc" />
+            </div>
+          </div>
+          <div class="oc-field">
+            <label class="oc-lbl">Cut Sheet L × W</label>
+            <div class="oc-2col-inner">
+              <input v-model.number="form.cut_sheet_l" type="number" min="0" class="oc-inp" placeholder="L" @change="scheduleCalc" />
+              <input v-model.number="form.cut_sheet_w" type="number" min="0" class="oc-inp" placeholder="W" @change="scheduleCalc" />
+            </div>
           </div>
         </div>
-        <div class="oc-field">
-          <label class="oc-lbl">Cut Sheet L × W</label>
-          <div class="oc-2col-inner">
-            <input v-model.number="form.cut_sheet_l" type="number" min="0" class="oc-inp" placeholder="L" @change="scheduleCalc" />
-            <input v-model.number="form.cut_sheet_w" type="number" min="0" class="oc-inp" placeholder="W" @change="scheduleCalc" />
-          </div>
+        <div class="oc-3col">
+          <div class="oc-field"><label class="oc-lbl">No of Cuts</label><input v-model.number="form.no_of_cuts" type="number" min="1" class="oc-inp" @change="scheduleCalc" /></div>
+          <div class="oc-field"><label class="oc-lbl">No of Ups</label><input v-model.number="form.no_of_ups" type="number" min="1" class="oc-inp" @change="scheduleCalc" /></div>
+          <div class="oc-field"><label class="oc-lbl">No of Colors</label><input v-model.number="form.no_of_colors" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
+        </div>
+        <div class="oc-2col">
+          <div class="oc-field"><label class="oc-lbl">Order Quantity</label><input v-model.number="form.item_qty" type="number" min="1" class="oc-inp" @change="scheduleCalc" /></div>
+          <div class="oc-field"><label class="oc-lbl">Profit Margin (%)</label><input v-model.number="form.profit_margin" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
         </div>
       </div>
-      <div class="oc-3col">
-        <div class="oc-field"><label class="oc-lbl">No of Cuts</label><input v-model.number="form.no_of_cuts" type="number" min="1" class="oc-inp" @change="scheduleCalc" /></div>
-        <div class="oc-field"><label class="oc-lbl">No of Ups</label><input v-model.number="form.no_of_ups" type="number" min="1" class="oc-inp" @change="scheduleCalc" /></div>
-        <div class="oc-field"><label class="oc-lbl">No of Colors</label><input v-model.number="form.no_of_colors" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
-      </div>
-      <div class="oc-2col">
-        <div class="oc-field"><label class="oc-lbl">Order Quantity</label><input v-model.number="form.item_qty" type="number" min="1" class="oc-inp" @change="scheduleCalc" /></div>
-        <div class="oc-field"><label class="oc-lbl">Profit Margin (%)</label><input v-model.number="form.profit_margin" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
+
+      <!-- ══ FLEXO: Label & Reel Specs ══ -->
+      <div v-if="isFlexo">
+        <div class="oc-divider-label">Material Dimensions (mm)</div>
+        <div class="oc-field">
+          <label class="oc-lbl">Reel Width (mm)</label>
+          <input v-model.number="form.reel_width_mm" type="number" min="0" class="oc-inp" @change="scheduleCalc" />
+        </div>
+
+        <div class="oc-divider-label">Product / Label Dimensions (mm)</div>
+        <div class="oc-2col">
+          <div class="oc-field"><label class="oc-lbl">Width</label><input v-model.number="form.product_width_mm" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
+          <div class="oc-field"><label class="oc-lbl">Length</label><input v-model.number="form.product_length_mm" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
+        </div>
+        <div class="oc-2col">
+          <div class="oc-field"><label class="oc-lbl">Margin (mm)</label><input v-model.number="form.product_margin_mm" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
+          <div class="oc-field"><label class="oc-lbl">Gap (mm)</label><input v-model.number="form.product_gap_mm" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
+        </div>
+        <div class="oc-2col">
+          <div class="oc-field"><label class="oc-lbl">No of Colors</label><input v-model.number="form.no_of_colors" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
+          <div class="oc-field"><label class="oc-lbl">Order Quantity (stickers)</label><input v-model.number="form.item_qty" type="number" min="1" class="oc-inp" @change="scheduleCalc" /></div>
+        </div>
+        <div class="oc-2col">
+          <div class="oc-field"><label class="oc-lbl">Profit Margin (%)</label><input v-model.number="form.profit_margin" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
+        </div>
       </div>
       <div class="oc-field">
         <label class="oc-lbl">Taxes</label>
@@ -748,7 +855,7 @@ function oc_mount_app(el) {
         <button class="oc-link-btn" @click="openDoc">Open Document →</button>
       </div>
 
-      <!-- Sheet requirements -->
+      <!-- Offset: Sheet requirements -->
       <div v-if="calc.sheet && calc.sheet.full_sheet_qty" class="oc-result-card">
         <div class="oc-rc-title">Sheet Requirements</div>
         <div class="oc-kv-grid">
@@ -757,6 +864,21 @@ function oc_mount_app(el) {
           <div class="oc-kv"><span class="k">Wastage</span><span class="v">{{ fmtNum(calc.sheet.wastage) }}</span></div>
           <div class="oc-kv"><span class="k">Req. Cut Sheets</span><span class="v">{{ fmtNum(calc.sheet.req_cut_sheets) }}</span></div>
           <div class="oc-kv"><span class="k">Full Sheet Qty</span><span class="v oc-v-blue">{{ fmtNum(calc.sheet.full_sheet_qty) }}</span></div>
+        </div>
+      </div>
+
+      <!-- Flexo: Reel requirements -->
+      <div v-if="calc.sheet && calc.sheet.reel_area" class="oc-result-card">
+        <div class="oc-rc-title">Reel Requirements</div>
+        <div class="oc-kv-grid">
+          <div class="oc-kv"><span class="k">Ups</span><span class="v">{{ calc.sheet.ups }}</span></div>
+          <div class="oc-kv"><span class="k">Stickers / Reel</span><span class="v">{{ fmtNum(calc.sheet.stickers_per_reel) }}</span></div>
+          <div class="oc-kv"><span class="k">Reel Length (m)</span><span class="v">{{ fmtNum(calc.sheet.reel_length) }}</span></div>
+          <div class="oc-kv"><span class="k">Net Reel Area (m²)</span><span class="v">{{ fmtNum(calc.sheet.reel_area_net) }}</span></div>
+          <div class="oc-kv"><span class="k">Setup Metrage (m)</span><span class="v">{{ calc.sheet.setup_metrage }}</span></div>
+          <div class="oc-kv"><span class="k">Wastage %</span><span class="v">{{ (calc.sheet.wastage_pct * 100).toFixed(0) }}%</span></div>
+          <div class="oc-kv"><span class="k">Wastage Area (m²)</span><span class="v">{{ fmtNum(calc.sheet.wastage_area) }}</span></div>
+          <div class="oc-kv"><span class="k">Total Reel Area (m²)</span><span class="v oc-v-blue">{{ fmtNum(calc.sheet.reel_area) }}</span></div>
         </div>
       </div>
 
@@ -916,6 +1038,9 @@ function oc_inject_styles() {
 .oc-btn-blue{background:#2c7be5;color:#fff}.oc-btn-blue:hover:not(:disabled){filter:brightness(1.1)}
 .oc-btn-green{background:#28a745;color:#fff}.oc-btn-green:hover:not(:disabled){filter:brightness(1.1)}
 .oc-btn-back{background:#6c757d;color:#fff}.oc-btn-back:hover{filter:brightness(1.1)}
+.oc-type-toggle{display:flex;gap:2px;background:#e9ecef;border-radius:5px;padding:2px}
+.oc-type-btn{background:none;border:none;padding:3px 12px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;color:#6b7280;transition:all .15s;letter-spacing:.05em}
+.oc-type-btn.active{background:#2c7be5;color:#fff;box-shadow:0 1px 3px rgba(44,123,229,.3)}
 .oc-spin{width:14px;height:14px;border:2px solid rgba(0,0,0,.12);border-top-color:#2c7be5;border-radius:50%;animation:oc-spin .6s linear infinite;display:inline-block}
 /* Right panel */
 .oc-saved-banner{background:#f0fff4;border:1px solid #9ae6b4;border-radius:5px;padding:9px 14px;color:#276749;font-size:13px;display:flex;align-items:center;gap:8px;margin-bottom:14px}
