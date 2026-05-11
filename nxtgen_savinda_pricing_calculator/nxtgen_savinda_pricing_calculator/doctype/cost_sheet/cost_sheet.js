@@ -310,6 +310,17 @@ function show_add_calc_popup(frm, cdt, cdn, item_name) {
 
 	var pricingType = frm.doc.pricing_type || "Offset";
 
+	// If this item belongs to a group, use the group's total qty for the calculation
+	// (e.g. Mango×500 + Strawberry×1000 + Mixed×1000 → calculate at 2500)
+	var cs_row_for_item = (frm.doc.pricing_list || []).find(function (r) { return r.item === item_name; });
+	var group_name_val = cs_row_for_item ? (cs_row_for_item.group_name || "").trim() : "";
+	var group_total_qty = 0;
+	if (group_name_val) {
+		(frm.doc.pricing_list || []).forEach(function (r) {
+			if ((r.group_name || "").trim() === group_name_val) group_total_qty += flt_v(r.qty);
+		});
+	}
+
 	// Load Cost Item to get qty and colour
 	frappe.call({
 		method: "frappe.client.get",
@@ -371,12 +382,16 @@ function show_add_calc_popup(frm, cdt, cdn, item_name) {
 			}
 
 			// Qty + description — common to both
+			var default_qty = group_total_qty || ci.item_qty || 0;
+			var qty_desc = group_name_val
+				? "Group total: sum of all items in \"" + group_name_val + "\""
+				: "Auto-filled from Cost Item";
 			fields = fields.concat([
 				{ fieldtype: "Section Break", label: "Quantity" },
 				{
 					fieldtype: "Float", fieldname: "item_qty",
-					label: "Item Qty", default: ci.item_qty || 0,
-					description: "Auto-filled from Cost Item",
+					label: "Item Qty", default: default_qty,
+					description: qty_desc,
 				},
 				{ fieldtype: "Section Break" },
 				{
@@ -391,7 +406,7 @@ function show_add_calc_popup(frm, cdt, cdn, item_name) {
 				primary_action_label: "Create & Open Calculator",
 				primary_action: function (vals) {
 					d.hide();
-					create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pricingType);
+					create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pricingType, group_name_val);
 				},
 			});
 
@@ -405,9 +420,19 @@ function show_add_calc_popup(frm, cdt, cdn, item_name) {
 //  CREATE Calculation Breakdown → link to Cost Item → open calculator
 // ─────────────────────────────────────────────────────────────
 
-function create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pricingType) {
+function create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pricingType, group_name) {
 
 	frappe.show_alert({ message: "Creating Calculation Breakdown…", indicator: "blue" });
+
+	// Collect peer Cost Items in the same group (excluding the primary item)
+	var peer_items = [];
+	if (group_name) {
+		(frm.doc.pricing_list || []).forEach(function (r) {
+			if ((r.group_name || "").trim() === group_name.trim() && r.item && r.item !== item_name) {
+				peer_items.push(r.item);
+			}
+		});
+	}
 
 	var cbDoc = {
 		doctype: "Calculation Breakdown",
@@ -419,20 +444,16 @@ function create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pric
 		no_of_colors: vals.no_of_colors,
 	};
 
-	if (pricingType === "Flexo") {
-		// Flexo-specific fields have no dedicated CB columns — they are stored only
-		// in ui_state by the calculator. Nothing extra to add to cbDoc here.
-	} else {
-		// Offset: sheet dimension fields exist on the CB doctype
+	if (pricingType !== "Flexo") {
 		cbDoc.full_sheet_l = vals.full_sheet_l;
 		cbDoc.full_sheet_w = vals.full_sheet_w;
 		cbDoc.cut_sheet_l  = vals.cut_sheet_l;
-		cbDoc.cut_sheetw   = vals.cut_sheet_w; // intentional fieldname (no underscore)
+		cbDoc.cut_sheetw   = vals.cut_sheet_w;
 		cbDoc.no_of_cuts   = vals.no_of_cuts;
 		cbDoc.no_of_ups    = vals.no_of_ups;
 	}
 
-	// 1. Create the Calculation Breakdown with header params
+	// 1. Create the Calculation Breakdown
 	frappe.call({
 		method: "frappe.client.insert",
 		args: { doc: cbDoc },
@@ -440,7 +461,7 @@ function create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pric
 			if (!r.message) return;
 			var cb_name = r.message.name;
 
-			// 2. Add to Cost Item calculations child table
+			// 2. Add CB to primary Cost Item's calculations table
 			frappe.call({
 				method: "frappe.client.get",
 				args: { doctype: "cost Item", name: item_name },
@@ -462,12 +483,49 @@ function create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pric
 						callback: function () {
 							frappe.show_alert({ message: "Created: " + cb_name, indicator: "green" });
 
-							// 3. Open calculator — pass pricing_type + operations for auto-selection
-							var url = "/app/offset-calculator?ref=" + encodeURIComponent(cb_name)
-								+ "&cost_sheet=" + encodeURIComponent(frm.doc.name)
-								+ "&pricing_type=" + encodeURIComponent(pricingType || "Offset")
-								+ get_operations_param(frm);
-							window.location.href = url;
+							// 3. Link CB to all peer Cost Items in the same group, then open calculator
+							function link_peer(idx) {
+								if (idx >= peer_items.length) {
+									var url = "/app/offset-calculator?ref=" + encodeURIComponent(cb_name)
+										+ "&cost_sheet=" + encodeURIComponent(frm.doc.name)
+										+ "&pricing_type=" + encodeURIComponent(pricingType || "Offset")
+										+ get_operations_param(frm);
+									window.location.href = url;
+									return;
+								}
+								frappe.call({
+									method: "frappe.client.get",
+									args: { doctype: "cost Item", name: peer_items[idx] },
+									callback: function (rp) {
+										if (rp.message) {
+											var pdoc = rp.message;
+											if (!pdoc.calculations) pdoc.calculations = [];
+											var already = pdoc.calculations.some(function (c) {
+												return c.calculation_breakdown === cb_name;
+											});
+											if (!already) {
+												pdoc.calculations.push({
+													doctype: "Cost Item Calculation",
+													calculation_breakdown: cb_name,
+													description: vals.description || "",
+													unit_cost: 0,
+													amount: 0,
+												});
+												frappe.call({
+													method: "frappe.client.save",
+													args: { doc: pdoc },
+													callback: function () { link_peer(idx + 1); },
+													error: function () { link_peer(idx + 1); },
+												});
+												return;
+											}
+										}
+										link_peer(idx + 1);
+									},
+									error: function () { link_peer(idx + 1); },
+								});
+							}
+							link_peer(0);
 						},
 					});
 				},
@@ -590,6 +648,11 @@ function show_page_popup(frm, opp, subject, pages, breakdowns) {
 		});
 	});
 	fields.push({
+		fieldtype: "Data", fieldname: "group_name",
+		label: "Group Name (optional)",
+		description: "If set, all created items share this group — the quotation will show one combined row.",
+	});
+	fields.push({
 		fieldtype: "HTML", fieldname: "preview_html",
 		options: "<div id='cs-preview' style='margin-top:10px'></div>"
 	});
@@ -604,7 +667,7 @@ function show_page_popup(frm, opp, subject, pages, breakdowns) {
 			pages.forEach(function (page, i) {
 				if (values["sel_page_" + (page.idx || (i + 1))]) selected.add(page.idx || (i + 1));
 			});
-			do_create_items(frm, opp, subject, pages, breakdowns, selected, total_bd_qty);
+			do_create_items(frm, opp, subject, pages, breakdowns, selected, total_bd_qty, values.group_name || "");
 		},
 	});
 	d.show();
@@ -661,6 +724,11 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 	});
 
 	fields.push({
+		fieldtype: "Data", fieldname: "group_name",
+		label: "Group Name (optional)",
+		description: "If set, all selected items share this group — the quotation will show one combined row.",
+	});
+	fields.push({
 		fieldtype: "HTML", fieldname: "preview_html",
 		options: "<div id='cs-single-preview' style='margin-top:10px'></div>"
 	});
@@ -671,6 +739,7 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 		primary_action_label: "Create Cost Items",
 		primary_action: function (values) {
 			d.hide();
+			var group_name_val = values.group_name || "";
 			var selected_bds = breakdowns.filter(function (bd, i) {
 				return values["sel_bd_" + i];
 			});
@@ -706,6 +775,7 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 							row.item = r.message.name;
 							row.item_name = name;
 							row.qty = qty;
+							if (group_name_val) row.group_name = group_name_val;
 						}
 						insert_bd_next(idx + 1);
 					},
@@ -769,16 +839,13 @@ function build_items(subject, pages, breakdowns, selected, total_bd_qty) {
 	return items;
 }
 
-function do_create_items(frm, opp, subject, pages, breakdowns, selected, total_bd_qty) {
+function do_create_items(frm, opp, subject, pages, breakdowns, selected, total_bd_qty, group_name) {
 	var items = build_items(subject, pages, breakdowns, selected, total_bd_qty);
 	if (!items.length) { frappe.msgprint({ message: "No items.", indicator: "orange" }); return; }
 	frappe.show_alert({ message: "Creating " + items.length + " cost item(s)…", indicator: "blue" });
 
-	// Sequential insertion — each item is inserted AFTER the previous one completes
-	// This ensures all child rows are added before frm.save() is called
 	function insert_next(idx) {
 		if (idx >= items.length) {
-			// All inserted — refresh and save once
 			frm.refresh_field("pricing_list");
 			frm.save();
 			frappe.show_alert({ message: items.length + " cost item(s) created.", indicator: "green" });
@@ -808,12 +875,11 @@ function do_create_items(frm, opp, subject, pages, breakdowns, selected, total_b
 					row.item = r.message.name;
 					row.item_name = ci.cost_item_name;
 					row.qty = ci.item_qty;
+					if (group_name) row.group_name = group_name;
 				}
-				// Insert next item in sequence
 				insert_next(idx + 1);
 			},
 			error: function () {
-				// Continue even on error so other items are still created
 				insert_next(idx + 1);
 			},
 		});

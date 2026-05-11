@@ -6,6 +6,7 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
+  "group_name",
   "item",
   "column_break_brln",
   "item_name",
@@ -30,6 +31,12 @@
   "selling_ammount"
  ],
  "fields": [
+  {
+   "fieldname": "group_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Group"
+  },
   {
    "fieldname": "item",
    "fieldtype": "Data",
