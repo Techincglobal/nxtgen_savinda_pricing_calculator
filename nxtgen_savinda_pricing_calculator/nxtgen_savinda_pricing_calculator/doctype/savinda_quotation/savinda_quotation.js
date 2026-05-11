@@ -129,7 +129,12 @@ function _show_load_dialog(frm) {
 
 // ─────────────────────────────────────────────────────────────
 //  CORE LOAD FUNCTION — reads Cost Sheet pricing_list rows
-//  and populates quotation items table sequentially
+//  and populates quotation items table sequentially.
+//
+//  If the Cost Sheet has qty_breaks defined (e.g. 5000 / 20000 / 100000),
+//  each cost item produces one quotation row per qty break (pricing
+//  recalculated via calculate_qty_break). Otherwise one row per item
+//  at the base quantity is added (original behaviour).
 // ─────────────────────────────────────────────────────────────
 
 function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
@@ -149,78 +154,152 @@ function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
 			if (!frm.doc.customer && cs.customer_name)
 				frm.set_value("customer", cs.customer_name);
 
-			// Cost Sheet uses "pricing_list" as the child table fieldname
-			var rows = cs.pricing_list || [];
-			if (!rows.length) {
+			var cs_rows = cs.pricing_list || [];
+			if (!cs_rows.length) {
 				frappe.msgprint({ message: "No items found in Cost Sheet pricing list.", indicator: "orange" });
 				if (typeof on_done === "function") on_done(0);
 				return;
 			}
 
+			// Qty breaks defined on the cost sheet (sorted ascending)
+			var qty_breaks = (cs.qty_breaks || [])
+				.map(function (b) { return { qty: flt_v(b.qty), label: b.label || "" }; })
+				.filter(function (b) { return b.qty > 0; })
+				.sort(function (a, b) { return a.qty - b.qty; });
+
 			var loaded = 0;
 
-			function load_next(idx) {
-				if (idx >= rows.length) {
+			// Adds a single quotation row using base cost sheet data (no recalculation)
+			function _add_base_row(ci, cs_row, qty_override, variant) {
+				var qrow = frm.add_child("items");
+				qrow.item_name        = ci.cost_item_name || cs_row.item_name || cs_row.item;
+				qrow.cost_item        = cs_row.item;
+				qrow.calculation_breakdown = (ci.calculations && ci.calculations[0])
+					? (ci.calculations[0].calculation_breakdown || "") : "";
+				qrow.size             = _format_size(ci);
+				qrow.material         = ci.material || "";
+				qrow.finishing        = ci.breakdown || "";
+				qrow.finishing_variant = variant || 1;
+				qrow.qty              = qty_override !== undefined ? qty_override : flt_v(cs_row.qty);
+				qrow.unit_cost        = flt_v(cs_row.unit_price);
+				qrow.selling_price    = flt_v(cs_row.selling_unit_price) > 0
+					? flt_v(cs_row.selling_unit_price)
+					: flt_v(cs_row.unit_price);
+				qrow.is_manually_set  = 0;
+				loaded++;
+			}
+
+			// Process one cost sheet row (cs_row_idx) then move to the next
+			function process_item(cs_row_idx) {
+				if (cs_row_idx >= cs_rows.length) {
 					frm.refresh_field("items");
 					if (typeof on_done === "function") on_done(loaded);
 					return;
 				}
-				var row = rows[idx];
-
-				// Skip rows with no item linked
-				if (!row.item) {
-					load_next(idx + 1);
+				var cs_row = cs_rows[cs_row_idx];
+				if (!cs_row.item) {
+					process_item(cs_row_idx + 1);
 					return;
 				}
 
-				// Fetch Cost Item details to get name, material, and calculation breakdown
 				frappe.call({
 					method: "frappe.client.get",
-					args: { doctype: "cost Item", name: row.item },
+					args: { doctype: "cost Item", name: cs_row.item },
 					callback: function (r2) {
 						var ci = r2.message || {};
+						var cb_name = (ci.calculations && ci.calculations.length)
+							? (ci.calculations[0].calculation_breakdown || "") : "";
 
-						// Get first calculation breakdown from cost item
-						var cb_name = "";
-						if (ci.calculations && ci.calculations.length > 0) {
-							cb_name = ci.calculations[0].calculation_breakdown || "";
+						// No qty breaks or no CB to recalculate against → original single-row behaviour
+						if (!qty_breaks.length || !cb_name) {
+							_add_base_row(ci, cs_row, undefined, 1);
+							process_item(cs_row_idx + 1);
+							return;
 						}
 
-						// Add row to quotation items table
-						var qrow = frm.add_child("items");
-						qrow.item_name = ci.cost_item_name || row.item_name || row.item;
-						qrow.cost_item = row.item;
-						qrow.calculation_breakdown = cb_name;
-						qrow.size = _format_size(ci);
-						qrow.material = ci.material || "";
-						qrow.finishing = ci.breakdown || "";
-						qrow.finishing_variant = 1;
-						qrow.qty = flt_v(row.qty);
-						qrow.unit_cost = flt_v(row.unit_price);
-						// Use selling_unit_price if available, else fall back to unit_price
-						qrow.selling_price = flt_v(row.selling_unit_price) > 0
-							? flt_v(row.selling_unit_price)
-							: flt_v(row.unit_price);
-						qrow.is_manually_set = 0;
+						// ── Qty-break mode ──────────────────────────────────────
+						// One row per qty break, recalculated via calculate_qty_break.
+						// finishing_variant stays 1 so all rows for this item group
+						// together on the printed quotation.
+						var base_info = {
+							item_name:  ci.cost_item_name || cs_row.item_name || cs_row.item,
+							cost_item:  cs_row.item,
+							cb_name:    cb_name,
+							size:       _format_size(ci),
+							material:   ci.material || "",
+							finishing:  ci.breakdown || "",
+						};
 
-						loaded++;
-						load_next(idx + 1);
+						function add_break_row(qb_idx) {
+							if (qb_idx >= qty_breaks.length) {
+								process_item(cs_row_idx + 1);
+								return;
+							}
+							var qb = qty_breaks[qb_idx];
+
+							frappe.call({
+								method: API_CALC_QTY,
+								args: { calculation_breakdown: cb_name, qty: qb.qty },
+								callback: function (r3) {
+									var qrow = frm.add_child("items");
+									qrow.item_name         = base_info.item_name;
+									qrow.cost_item         = base_info.cost_item;
+									qrow.calculation_breakdown = base_info.cb_name;
+									qrow.size              = base_info.size;
+									qrow.material          = base_info.material;
+									qrow.finishing         = base_info.finishing;
+									qrow.finishing_variant = 1;
+									qrow.qty               = qb.qty;
+									qrow.is_manually_set   = 0;
+
+									if (r3.message && !r3.message.error) {
+										qrow.unit_cost     = flt_v(r3.message.unit_cost);
+										qrow.selling_price = flt_v(r3.message.sell_unit);
+									} else {
+										// Fallback if CB has no ui_state yet
+										qrow.unit_cost     = flt_v(cs_row.unit_price);
+										qrow.selling_price = flt_v(cs_row.selling_unit_price) || flt_v(cs_row.unit_price);
+									}
+
+									loaded++;
+									add_break_row(qb_idx + 1);
+								},
+								error: function () {
+									// Network / server error — fall back to base price
+									var qrow = frm.add_child("items");
+									qrow.item_name         = base_info.item_name;
+									qrow.cost_item         = base_info.cost_item;
+									qrow.calculation_breakdown = base_info.cb_name;
+									qrow.size              = base_info.size;
+									qrow.material          = base_info.material;
+									qrow.finishing         = base_info.finishing;
+									qrow.finishing_variant = 1;
+									qrow.qty               = qb.qty;
+									qrow.unit_cost         = flt_v(cs_row.unit_price);
+									qrow.selling_price     = flt_v(cs_row.selling_unit_price) || flt_v(cs_row.unit_price);
+									qrow.is_manually_set   = 0;
+									loaded++;
+									add_break_row(qb_idx + 1);
+								},
+							});
+						}
+						add_break_row(0);
 					},
 					error: function () {
-						// If cost item fetch fails, still add a basic row
+						// Cost Item fetch failed — add one fallback row
 						var qrow = frm.add_child("items");
-						qrow.item_name = row.item_name || row.item;
-						qrow.cost_item = row.item;
-						qrow.qty = flt_v(row.qty);
-						qrow.unit_cost = flt_v(row.unit_price);
-						qrow.selling_price = flt_v(row.selling_unit_price) || flt_v(row.unit_price);
+						qrow.item_name         = cs_row.item_name || cs_row.item;
+						qrow.cost_item         = cs_row.item;
+						qrow.qty               = flt_v(cs_row.qty);
+						qrow.unit_cost         = flt_v(cs_row.unit_price);
+						qrow.selling_price     = flt_v(cs_row.selling_unit_price) || flt_v(cs_row.unit_price);
 						qrow.finishing_variant = 1;
 						loaded++;
-						load_next(idx + 1);
+						process_item(cs_row_idx + 1);
 					},
 				});
 			}
-			load_next(0);
+			process_item(0);
 		},
 	});
 }
