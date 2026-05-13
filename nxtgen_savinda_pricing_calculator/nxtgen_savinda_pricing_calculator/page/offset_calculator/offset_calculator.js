@@ -76,7 +76,7 @@ function oc_mount_app(el) {
 					customer_name: '', ref: '', price_list: '', carton_size: '',
 					base_material: '', material_rate: 0,
 					no_of_colors: 4, item_qty: 1000,
-					profit_margin: 15, tax_sscl: true, tax_vat: false,
+					profit_margin: 15, tax_sscl: false, tax_vat: false,
 					// Offset-specific
 					full_sheet_l: 0, full_sheet_w: 0,
 					cut_sheet_l: 0, cut_sheet_w: 0,
@@ -456,14 +456,30 @@ function oc_mount_app(el) {
 						self.savedDocName = d.doc_name || '';
 						if (d.form) {
 							Object.assign(self.form, d.form);
-							// Restore matSearch display
+							// Restore matSearch display and fetch material rate if not saved in ui_state
 							if (d.form.base_material) {
-								var iname = frappe.db ? null : null;
 								frappe.call({
 									method: 'frappe.client.get_value',
-									args: { doctype: 'Item', filters: { name: d.form.base_material }, fieldname: 'item_name' },
+									args: { doctype: 'Item', filters: { name: d.form.base_material }, fieldname: ['item_name', 'valuation_rate'] },
 									callback: function (r2) {
 										self.matSearch = (r2.message && r2.message.item_name) || d.form.base_material;
+										// material_rate is 0 for new CBs (no saved ui_state) — fetch it now
+										if (!self.form.material_rate) {
+											var valRate = parseFloat((r2.message && r2.message.valuation_rate) || 0);
+											if (self.form.price_list) {
+												frappe.call({
+													method: 'frappe.client.get_value',
+													args: { doctype: 'Item Price', filters: { item_code: d.form.base_material, price_list: self.form.price_list, selling: 1 }, fieldname: 'price_list_rate' },
+													callback: function (r3) {
+														self.form.material_rate = parseFloat((r3.message && r3.message.price_list_rate) || valRate || 0);
+														if (self.form.material_rate) self.scheduleCalc();
+													},
+												});
+											} else {
+												self.form.material_rate = valRate;
+												if (self.form.material_rate) self.scheduleCalc();
+											}
+										}
 									},
 								});
 							}

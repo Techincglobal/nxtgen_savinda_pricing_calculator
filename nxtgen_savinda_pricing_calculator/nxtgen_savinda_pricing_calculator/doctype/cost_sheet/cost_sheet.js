@@ -21,6 +21,18 @@
 //  │  Selling Amount           LKR  72,420               │
 //  └─────────────────────────────────────────────────────┘
 
+// Costing config — loaded once per form session
+var _cc = { sscl_rate: 2.5, vat_rate: 18 };
+frappe.call({
+	method: "nxtgen_savinda_pricing_calculator.api.offset_calculator.get_costing_config",
+	callback: function (r) {
+		if (r.message) {
+			_cc.sscl_rate = parseFloat(r.message.sscl_rate || 2.5);
+			_cc.vat_rate  = parseFloat(r.message.vat_rate  || 18);
+		}
+	},
+});
+
 frappe.ui.form.on("Cost Sheet", {
 
 	refresh: function (frm) {
@@ -116,9 +128,9 @@ function recalc_row(frm, cdt, cdn) {
 	// unit_price is set by refresh_all_prices (sum of CB unit costs)
 	var unit = flt_v(row.unit_price);
 	var qty = flt_v(row.qty);
-	var sscl = unit * 0.0225;
+	var sscl = unit * (_cc.sscl_rate / 100);
 	var sscl_total = row.sscl ? sscl : 0;
-	var vat = (unit + sscl_total) * 0.18;
+	var vat = (unit + sscl_total) * (_cc.vat_rate / 100);
 	var vat_total = row.vat ? vat : 0;
 	var sell_unit = round2(unit + sscl_total + vat_total);
 
@@ -159,9 +171,9 @@ function render_panel(frm, cdt, cdn) {
 
 			var unit = round2(unit_cost_sum);
 			var qty = flt_v(row.qty);
-			var sscl_amt = row.sscl ? round2(unit * 0.0225) : 0;
+			var sscl_amt = row.sscl ? round2(unit * (_cc.sscl_rate / 100)) : 0;
 			var vat_base = unit + sscl_amt;
-			var vat_amt = row.vat ? round2(vat_base * 0.18) : 0;
+			var vat_amt = row.vat ? round2(vat_base * (_cc.vat_rate / 100)) : 0;
 			var sell_unit = round2(unit + sscl_amt + vat_amt);
 			var cost_amt = round2(qty * unit);
 			var sell_amt = round2(qty * sell_unit);
@@ -193,8 +205,8 @@ function render_panel(frm, cdt, cdn) {
 
 			// Build tax rows
 			var tax_rows = "";
-			if (row.sscl) tax_rows += price_row("SSCL (2.25%)", sscl_amt, "#fff8e1");
-			if (row.vat) tax_rows += price_row("VAT (18%)", vat_amt, "#fff8e1");
+			if (row.sscl) tax_rows += price_row("SSCL (" + _cc.sscl_rate + "%)", sscl_amt, "#fff8e1");
+			if (row.vat) tax_rows += price_row("VAT (" + _cc.vat_rate + "%)", vat_amt, "#fff8e1");
 
 			var html =
 				"<div style='padding:12px 14px;background:#f8fafc;border-radius:5px;border:1px solid #e5e7eb'>"
@@ -581,9 +593,9 @@ function finish_refresh(frm, cdt, cdn, unit_cost_sum) {
 
 	var unit = round2(unit_cost_sum);
 	var qty = flt_v(row.qty);
-	var sscl_amt = row.sscl ? round2(unit * 0.0225) : 0;
+	var sscl_amt = row.sscl ? round2(unit * (_cc.sscl_rate / 100)) : 0;
 	var vat_base = unit + sscl_amt;
-	var vat_amt = row.vat ? round2(vat_base * 0.18) : 0;
+	var vat_amt = row.vat ? round2(vat_base * (_cc.vat_rate / 100)) : 0;
 	var sell_unit = round2(unit + sscl_amt + vat_amt);
 
 	frappe.model.set_value(cdt, cdn, "selling_unit_price", sell_unit);
@@ -681,11 +693,10 @@ function show_page_popup(frm, opp, subject, pages, breakdowns) {
 }
 
 function create_single(frm, opp, subject, breakdowns) {
-	// Non-book items also use the breakdown list popup
-	// Each breakdown row creates one Cost Item: Subject - BreakdownDescription
-	// If no breakdowns, create directly with qty = 0
+	// If no breakdowns (or only a blank placeholder row), create one item directly
+	// using the Inquiry's Item Qty field (custom_item_qty) as the quantity.
 	if (!breakdowns.length || (breakdowns.length === 1 && !breakdowns[0].description && !breakdowns[0].qty)) {
-		var qty = breakdowns.length > 0 ? flt_v(breakdowns[0].qty) : 0;
+		var qty = flt_v(opp.custom_item_qty) || (breakdowns.length > 0 ? flt_v(breakdowns[0].qty) : 0);
 		frappe.confirm(
 			"Create cost item <b>" + subject + "</b><br>Qty: <b>" + qty.toLocaleString() + "</b>",
 			function () {

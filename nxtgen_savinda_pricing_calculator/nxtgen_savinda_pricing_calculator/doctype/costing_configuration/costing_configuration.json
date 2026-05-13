@@ -1,0 +1,35 @@
+{
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_tax", "sscl_rate", "column_break_1", "vat_rate",
+  "section_calc", "default_profit_margin",
+  "section_offset", "offset_wastage_pct", "column_break_2", "offset_wastage_min",
+  "section_flexo", "flexo_wastage"
+ ],
+ "fields": [
+  {"fieldname": "section_tax", "fieldtype": "Section Break", "label": "Tax Rates"},
+  {"default": "2.5", "fieldname": "sscl_rate", "fieldtype": "Float", "label": "SSCL Rate (%)"},
+  {"fieldname": "column_break_1", "fieldtype": "Column Break"},
+  {"default": "18", "fieldname": "vat_rate", "fieldtype": "Float", "label": "VAT Rate (%)"},
+  {"fieldname": "section_calc", "fieldtype": "Section Break", "label": "Calculation Defaults"},
+  {"default": "15", "fieldname": "default_profit_margin", "fieldtype": "Float", "label": "Default Profit Margin (%)"},
+  {"fieldname": "section_offset", "fieldtype": "Section Break", "label": "Offset Sheet Wastage"},
+  {"default": "5", "fieldname": "offset_wastage_pct", "fieldtype": "Float", "label": "Wastage % of Cut Sheet Qty", "description": "e.g. 5 = 5%"},
+  {"fieldname": "column_break_2", "fieldtype": "Column Break"},
+  {"default": "500", "fieldname": "offset_wastage_min", "fieldtype": "Int", "label": "Minimum Wastage (sheets)"},
+  {"fieldname": "section_flexo", "fieldtype": "Section Break", "label": "Flexo Reel Wastage Table"},
+  {"fieldname": "flexo_wastage", "fieldtype": "Table", "label": "Wastage by Color Count", "options": "Costing Config Wastage"}
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "Costing Configuration",
+ "owner": "Administrator",
+ "permissions": [
+  {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager", "share": 1, "write": 1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

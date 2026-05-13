@@ -245,7 +245,7 @@
    "fieldtype": "Column Break"
   },
   {
-   "default": "1",
+   "default": "0",
    "fieldname": "tax_sscl",
    "fieldtype": "Check",
    "label": "Apply SSCL (2.5%)"

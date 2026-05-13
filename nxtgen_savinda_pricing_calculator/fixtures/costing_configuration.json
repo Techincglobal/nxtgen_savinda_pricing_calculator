@@ -1,0 +1,21 @@
+[
+ {
+  "doctype": "Costing Configuration",
+  "name": "Costing Configuration",
+  "sscl_rate": 2.5,
+  "vat_rate": 18.0,
+  "default_profit_margin": 15.0,
+  "offset_wastage_pct": 5.0,
+  "offset_wastage_min": 500,
+  "flexo_wastage": [
+   {"max_colors": 0, "setup_metrage": 5.0, "wastage_percent": 4.0},
+   {"max_colors": 1, "setup_metrage": 100.0, "wastage_percent": 6.0},
+   {"max_colors": 2, "setup_metrage": 100.0, "wastage_percent": 7.0},
+   {"max_colors": 3, "setup_metrage": 150.0, "wastage_percent": 8.0},
+   {"max_colors": 4, "setup_metrage": 150.0, "wastage_percent": 9.0},
+   {"max_colors": 5, "setup_metrage": 200.0, "wastage_percent": 10.0},
+   {"max_colors": 6, "setup_metrage": 200.0, "wastage_percent": 11.0},
+   {"max_colors": 99, "setup_metrage": 250.0, "wastage_percent": 12.0}
+  ]
+ }
+]
