@@ -1,0 +1,795 @@
+[
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "SORD Plate",
+    "is_primary": 1,
+    "parent": "SORD Machine",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   },
+   {
+    "cost_fact": "SORD Printing",
+    "is_primary": 1,
+    "parent": "SORD Machine",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Machine",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.174091",
+  "name": "SORD Machine",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "SORD Machine"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "CD102 Plate",
+    "is_primary": 1,
+    "parent": "CD102 Machine",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   },
+   {
+    "cost_fact": "CD102 Printing",
+    "is_primary": 1,
+    "parent": "CD102 Machine",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Machine",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.178244",
+  "name": "CD102 Machine",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "CD102 Machine"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Heidelberg Plate",
+    "is_primary": 1,
+    "parent": "Heidelberg Machine",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   },
+   {
+    "cost_fact": "Heidelberg Printing",
+    "is_primary": 1,
+    "parent": "Heidelberg Machine",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Machine",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.181335",
+  "name": "Heidelberg Machine",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "Heidelberg Machine"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Die Cutter Block N*",
+    "is_primary": 1,
+    "parent": "Die Cutter",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   },
+   {
+    "cost_fact": "Die Cutter Machine",
+    "is_primary": 0,
+    "parent": "Die Cutter",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Specification",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.192833",
+  "name": "Die Cutter",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "Die Cutter"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Embossing Block N*",
+    "is_primary": 1,
+    "parent": "Embossing",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Specification",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.204427",
+  "name": "Embossing",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "Embossing"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Gold Silver Foiling Reel",
+    "is_primary": 1,
+    "parent": "Gold Silver Foiling",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   },
+   {
+    "cost_fact": "Gold Silver Foil Machine",
+    "is_primary": 0,
+    "parent": "Gold Silver Foiling",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Specification",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.209532",
+  "name": "Gold Silver Foiling",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "Gold Silver Foiling"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Cold Foil Screen",
+    "is_primary": 0,
+    "parent": "Cold Foiling",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   },
+   {
+    "cost_fact": "Cold Foil Mesh",
+    "is_primary": 0,
+    "parent": "Cold Foiling",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   },
+   {
+    "cost_fact": "Cold Foil Frame",
+    "is_primary": 0,
+    "parent": "Cold Foiling",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   },
+   {
+    "cost_fact": "Gold Silver Foiling Reel",
+    "is_primary": 1,
+    "parent": "Cold Foiling",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   },
+   {
+    "cost_fact": "Gold Silver Foil Machine",
+    "is_primary": 0,
+    "parent": "Cold Foiling",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Specification",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.214663",
+  "name": "Cold Foiling",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "Cold Foiling"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Channel Creasing",
+    "is_primary": 1,
+    "parent": "Channel Creasing",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Specification",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.220975",
+  "name": "Channel Creasing",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "Channel Creasing"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Guillotine",
+    "is_primary": 0,
+    "parent": "Guillotine",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Finishing",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.224022",
+  "name": "Guillotine",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "Guillotine"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Proof Board",
+    "is_primary": 0,
+    "parent": "Proof Board",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Finishing",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.227158",
+  "name": "Proof Board",
+  "operation": null,
+  "pricing_type": "Both",
+  "spec_name": "Proof Board"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Delivery",
+    "is_primary": 0,
+    "parent": "Delivery",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Finishing",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.230282",
+  "name": "Delivery",
+  "operation": null,
+  "pricing_type": "Both",
+  "spec_name": "Delivery"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Pasting",
+    "is_primary": 1,
+    "parent": "Pasting",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Finishing",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.235749",
+  "name": "Pasting",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "Pasting"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Four Corner Pasting",
+    "is_primary": 1,
+    "parent": "Four Corner Pasting",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Finishing",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.239242",
+  "name": "Four Corner Pasting",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "Four Corner Pasting"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Sorting",
+    "is_primary": 1,
+    "parent": "Sorting",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Finishing",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.242462",
+  "name": "Sorting",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "Sorting"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "UV Varnish",
+    "is_primary": 0,
+    "parent": "UV Varnish",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Finishing",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.245482",
+  "name": "UV Varnish",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "UV Varnish"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Gloss Lamination",
+    "is_primary": 0,
+    "parent": "Gloss Lamination",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Finishing",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.256315",
+  "name": "Gloss Lamination",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "Gloss Lamination"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Matt Lamination",
+    "is_primary": 0,
+    "parent": "Matt Lamination",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Finishing",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.258814",
+  "name": "Matt Lamination",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "Matt Lamination"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Window Lamination",
+    "is_primary": 0,
+    "parent": "Window Lamination",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Finishing",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.261269",
+  "name": "Window Lamination",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "Window Lamination"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Spot UV Option 1",
+    "is_primary": 0,
+    "parent": "Spot UV Option 1",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   },
+   {
+    "cost_fact": "Spot UV Option 1 Setup",
+    "is_primary": 0,
+    "parent": "Spot UV Option 1",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Finishing",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.264332",
+  "name": "Spot UV Option 1",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "Spot UV Option 1"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Spot UV Option 2",
+    "is_primary": 0,
+    "parent": "Spot UV Option 2",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   },
+   {
+    "cost_fact": "Spot UV Option 2 Polymer Block",
+    "is_primary": 0,
+    "parent": "Spot UV Option 2",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Finishing",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.268318",
+  "name": "Spot UV Option 2",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "Spot UV Option 2"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Spot UV Outsource",
+    "is_primary": 0,
+    "parent": "Spot UV Outsource",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   },
+   {
+    "cost_fact": "Spot UV Outsource Screen",
+    "is_primary": 0,
+    "parent": "Spot UV Outsource",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Finishing",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.271454",
+  "name": "Spot UV Outsource",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "Spot UV Outsource"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Sand UV",
+    "is_primary": 0,
+    "parent": "Sand UV",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   },
+   {
+    "cost_fact": "Sand UV Setup",
+    "is_primary": 0,
+    "parent": "Sand UV",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Finishing",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.274569",
+  "name": "Sand UV",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "Sand UV"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Soft Touch",
+    "is_primary": 0,
+    "parent": "Soft Touch",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Finishing",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.277103",
+  "name": "Soft Touch",
+  "operation": null,
+  "pricing_type": "Offset",
+  "spec_name": "Soft Touch"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Flexo Plates",
+    "is_primary": 0,
+    "parent": "Gallus Machine",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   },
+   {
+    "cost_fact": "Gallus Printing Setup",
+    "is_primary": 1,
+    "parent": "Gallus Machine",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   },
+   {
+    "cost_fact": "Gallus Printing",
+    "is_primary": 1,
+    "parent": "Gallus Machine",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Machine",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.280050",
+  "name": "Gallus Machine",
+  "operation": null,
+  "pricing_type": "Flexo",
+  "spec_name": "Gallus Machine"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Flexo Plates",
+    "is_primary": 0,
+    "parent": "Mark Andy Machine",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   },
+   {
+    "cost_fact": "Mark Andy Printing Setup",
+    "is_primary": 1,
+    "parent": "Mark Andy Machine",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   },
+   {
+    "cost_fact": "Mark Andy Printing",
+    "is_primary": 1,
+    "parent": "Mark Andy Machine",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Machine",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.284929",
+  "name": "Mark Andy Machine",
+  "operation": null,
+  "pricing_type": "Flexo",
+  "spec_name": "Mark Andy Machine"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Flexo Die Cutter Block",
+    "is_primary": 0,
+    "parent": "Flexo Die Cutting",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   },
+   {
+    "cost_fact": "Flexo Die Cutting Machine",
+    "is_primary": 0,
+    "parent": "Flexo Die Cutting",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Specification",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.288010",
+  "name": "Flexo Die Cutting",
+  "operation": null,
+  "pricing_type": "Flexo",
+  "spec_name": "Flexo Die Cutting"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Flexo Foil Block",
+    "is_primary": 1,
+    "parent": "Flexo Hot Foiling",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   },
+   {
+    "cost_fact": "Flexo Foiling Machine",
+    "is_primary": 0,
+    "parent": "Flexo Hot Foiling",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Specification",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.290813",
+  "name": "Flexo Hot Foiling",
+  "operation": null,
+  "pricing_type": "Flexo",
+  "spec_name": "Flexo Hot Foiling"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Flexo Corrugated Boxes",
+    "is_primary": 1,
+    "parent": "Flexo Corrugated",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Specification",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.293190",
+  "name": "Flexo Corrugated",
+  "operation": null,
+  "pricing_type": "Flexo",
+  "spec_name": "Flexo Corrugated"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Flexo Lamination",
+    "is_primary": 0,
+    "parent": "Flexo Lamination",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Finishing",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.298090",
+  "name": "Flexo Lamination",
+  "operation": null,
+  "pricing_type": "Flexo",
+  "spec_name": "Flexo Lamination"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Flexo Embossing",
+    "is_primary": 0,
+    "parent": "Flexo Embossing",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Finishing",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.301482",
+  "name": "Flexo Embossing",
+  "operation": null,
+  "pricing_type": "Flexo",
+  "spec_name": "Flexo Embossing"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Flexo Slitting",
+    "is_primary": 1,
+    "parent": "Flexo Slitting",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Finishing",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.304520",
+  "name": "Flexo Slitting",
+  "operation": null,
+  "pricing_type": "Flexo",
+  "spec_name": "Flexo Slitting"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Flexo Proof Board",
+    "is_primary": 0,
+    "parent": "Flexo Proof Board",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Finishing",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.307067",
+  "name": "Flexo Proof Board",
+  "operation": null,
+  "pricing_type": "Flexo",
+  "spec_name": "Flexo Proof Board"
+ },
+ {
+  "cost_facts": [
+   {
+    "cost_fact": "Flexo Delivery",
+    "is_primary": 0,
+    "parent": "Flexo Delivery",
+    "parentfield": "cost_facts",
+    "parenttype": "Offset Spec"
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Offset Spec",
+  "group": "Finishing",
+  "is_active": 1,
+  "modified": "2026-05-14 12:59:19.309514",
+  "name": "Flexo Delivery",
+  "operation": null,
+  "pricing_type": "Both",
+  "spec_name": "Flexo Delivery"
+ }
+]
