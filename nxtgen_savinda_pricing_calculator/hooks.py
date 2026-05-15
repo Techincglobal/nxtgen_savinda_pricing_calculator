@@ -32,6 +32,7 @@ fixtures = [
 	{"dt": "Item",       "filters": [["item_code", "like", "CALC-%"]]},
 	{"dt": "Cost Fact"},
 	{"dt": "Offset Spec"},
+	{"dt": "Print Format", "filters": [["doc_type", "=", "Cost Sheet"]]},
 ]
 
 app_include_js = [
