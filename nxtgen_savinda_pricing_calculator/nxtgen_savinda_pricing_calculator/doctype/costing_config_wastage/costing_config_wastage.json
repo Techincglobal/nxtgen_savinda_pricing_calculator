@@ -1,0 +1,20 @@
+{
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": ["max_colors", "setup_metrage", "wastage_percent"],
+ "fields": [
+  {"columns": 3, "fieldname": "max_colors", "fieldtype": "Int", "in_list_view": 1, "label": "Max Colors", "reqd": 1, "description": "Inclusive upper bound for this row. Last row is fallback for higher values."},
+  {"columns": 4, "fieldname": "setup_metrage", "fieldtype": "Float", "in_list_view": 1, "label": "Setup Metrage (m)", "reqd": 1},
+  {"columns": 3, "fieldname": "wastage_percent", "fieldtype": "Float", "in_list_view": 1, "label": "Wastage %", "reqd": 1}
+ ],
+ "index_web_pages_for_search": 0,
+ "istable": 1,
+ "links": [],
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "Costing Config Wastage",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "ASC"
+}

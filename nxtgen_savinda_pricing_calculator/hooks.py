@@ -26,6 +26,15 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/nxtgen_savinda_pricing_calculator/css/nxtgen_savinda_pricing_calculator.css"
+fixtures = [
+	{"dt": "Costing Configuration"},
+	{"dt": "Item Group", "filters": [["item_group_name", "=", "Costing Rate Items"]]},
+	{"dt": "Item",       "filters": [["item_code", "like", "CALC-%"]]},
+	{"dt": "Cost Fact"},
+	{"dt": "Offset Spec"},
+	{"dt": "Print Format", "filters": [["doc_type", "in", ["Cost Sheet", "Calculation Breakdown"]]]},
+]
+
 app_include_js = [
 	"https://unpkg.com/vue@3/dist/vue.global.prod.js",
     "/assets/nxtgen_savinda_pricing_calculator/js/offset_calculator.js",

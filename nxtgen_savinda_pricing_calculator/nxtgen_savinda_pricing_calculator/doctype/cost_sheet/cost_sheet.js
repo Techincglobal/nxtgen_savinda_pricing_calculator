@@ -21,21 +21,45 @@
 //  │  Selling Amount           LKR  72,420               │
 //  └─────────────────────────────────────────────────────┘
 
+// Costing config — loaded once per form session
+var _cc = { sscl_rate: 2.5, vat_rate: 18 };
+frappe.call({
+	method: "nxtgen_savinda_pricing_calculator.api.offset_calculator.get_costing_config",
+	callback: function (r) {
+		if (r.message) {
+			_cc.sscl_rate = parseFloat(r.message.sscl_rate || 2.5);
+			_cc.vat_rate  = parseFloat(r.message.vat_rate  || 18);
+		}
+	},
+});
+
 frappe.ui.form.on("Cost Sheet", {
 
 	refresh: function (frm) {
-		frm.add_custom_button(__("Create Breakdown"), function () {
-			run_create_breakdown(frm);
-		}, __("Actions"));
-		frm.add_custom_button(__("Refresh Prices"), function () {
-			refresh_all_prices(frm);
-		}, __("Actions"));
-		// Create Quotation from this Cost Sheet
-		if (!frm.is_new()) {
+		// ── Draft-only actions ─────────────────────────────────
+		if (frm.doc.docstatus === 0) {
+			frm.add_custom_button(__("Create Breakdown"), function () {
+				run_create_breakdown(frm);
+			}, __("Actions"));
+			frm.add_custom_button(__("Refresh Prices"), function () {
+				refresh_all_prices(frm);
+			}, __("Actions"));
+
+			// Banner for amended cost sheets
+			if (frm.doc.amended_from) {
+				frm.set_intro(
+					"<b>Price Revision</b> — This Cost Sheet is an amendment of <a href='/app/cost-sheet/"
+					+ frm.doc.amended_from + "'>" + frm.doc.amended_from + "</a>. "
+					+ "All Calculation Breakdowns have been amended. Open each item's calculation panel, "
+					+ "make changes, save, then submit this Cost Sheet.",
+					"blue"
+				);
+			}
+		}
+
+		// ── Submitted-only actions ─────────────────────────────
+		if (frm.doc.docstatus === 1) {
 			frm.add_custom_button(__("Create Quotation"), function () {
-				// Build minimal doc — only pass cost_sheet and inquiry
-				// The quotation's before_insert will auto-fill customer from cost sheet
-				// The quotation's refresh will auto-load items from cost sheet
 				frappe.call({
 					method: "frappe.client.insert",
 					args: {
@@ -53,6 +77,39 @@ frappe.ui.form.on("Cost Sheet", {
 					},
 				});
 			}, __("Actions"));
+
+			frm.add_custom_button(__("Print / PDF"), function () {
+				var url = "/printview?doctype=Cost+Sheet&name="
+					+ encodeURIComponent(frm.doc.name)
+					+ "&format=Cost+Sheet+Summary&trigger_print=1&no_letterhead=0";
+				var w = window.open(frappe.urllib.get_full_url(url));
+				if (!w) frappe.msgprint(__("Please allow pop-ups to open the print view."));
+			});
+
+			// ── Pricing totals bar below the grid ──────────────
+			setTimeout(function () {
+				if (!frm.fields_dict.pricing_list) return;
+				var rows = frm.doc.pricing_list || [];
+				var total_cost = 0, total_sell = 0;
+				rows.forEach(function (r) {
+					total_cost += flt_v(r.ammount);
+					total_sell += flt_v(r.selling_ammount);
+				});
+				var $grid = frm.fields_dict.pricing_list.$wrapper;
+				$grid.find(".pricing-totals-bar").remove();
+				if (rows.length) {
+					$grid.append(
+						"<div class='pricing-totals-bar' style='display:flex;justify-content:flex-end;"
+						+ "gap:24px;padding:8px 16px;margin-top:4px;background:#f0f4ff;"
+						+ "border:1px solid #dde4f0;border-radius:4px;font-size:12px'>"
+						+ "<span style='color:#555'>Total Cost Amount: "
+						+ "<b style='font-family:monospace;color:#1a3a5c'>LKR " + cur_fmt(total_cost) + "</b></span>"
+						+ "<span style='color:#555'>Total Selling Amount: "
+						+ "<b style='font-family:monospace;color:#166534'>LKR " + cur_fmt(total_sell) + "</b></span>"
+						+ "</div>"
+					);
+				}
+			}, 600);
 		}
 	},
 
@@ -116,9 +173,9 @@ function recalc_row(frm, cdt, cdn) {
 	// unit_price is set by refresh_all_prices (sum of CB unit costs)
 	var unit = flt_v(row.unit_price);
 	var qty = flt_v(row.qty);
-	var sscl = unit * 0.0225;
+	var sscl = unit * (_cc.sscl_rate / 100);
 	var sscl_total = row.sscl ? sscl : 0;
-	var vat = (unit + sscl_total) * 0.18;
+	var vat = (unit + sscl_total) * (_cc.vat_rate / 100);
 	var vat_total = row.vat ? vat : 0;
 	var sell_unit = round2(unit + sscl_total + vat_total);
 
@@ -138,6 +195,7 @@ function render_panel(frm, cdt, cdn) {
 	var row = locals[cdt][cdn];
 	var item_name = row.item; // Cost Item name/id
 	if (!item_name) return;
+	var is_submitted = frm.doc.docstatus >= 1; // 1=submitted, 2=cancelled → both lock the panel
 
 	// Load Cost Item calculations list from DB
 	frappe.call({
@@ -147,32 +205,63 @@ function render_panel(frm, cdt, cdn) {
 			if (!r.message) return;
 			var ci = r.message;
 			var calcs = ci.calculations || [];
+			// When submitted show only completed calculations (unit_cost > 0)
+			var display_calcs = is_submitted
+				? calcs.filter(function (c) { return flt_v(c.unit_cost) > 0; })
+				: calcs;
 
 			// Compute unit_price = sum of all CB unit_costs
 			var unit_cost_sum = calcs.reduce(function (s, c) { return s + flt_v(c.unit_cost); }, 0);
 
-			// Update unit_price silently if changed
-			if (Math.abs(flt_v(row.unit_price) - unit_cost_sum) > 0.001) {
+			// Update unit_price silently if changed (draft only)
+			if (!is_submitted && Math.abs(flt_v(row.unit_price) - unit_cost_sum) > 0.001) {
 				frappe.model.set_value(cdt, cdn, "unit_price", round2(unit_cost_sum));
 				row = locals[cdt][cdn]; // re-read
 			}
 
 			var unit = round2(unit_cost_sum);
 			var qty = flt_v(row.qty);
-			var sscl_amt = row.sscl ? round2(unit * 0.0225) : 0;
+			var sscl_amt = row.sscl ? round2(unit * (_cc.sscl_rate / 100)) : 0;
 			var vat_base = unit + sscl_amt;
-			var vat_amt = row.vat ? round2(vat_base * 0.18) : 0;
+			var vat_amt = row.vat ? round2(vat_base * (_cc.vat_rate / 100)) : 0;
 			var sell_unit = round2(unit + sscl_amt + vat_amt);
 			var cost_amt = round2(qty * unit);
 			var sell_amt = round2(qty * sell_unit);
 
 			// Build calculation list rows
 			var calc_rows = "";
-			if (calcs.length === 0) {
+			if (display_calcs.length === 0) {
+				var empty_msg = is_submitted
+					? "No completed calculations."
+					: "No calculations yet. Click + Add to create one.";
 				calc_rows = "<tr><td colspan='4' style='padding:8px;color:#aaa;font-style:italic;text-align:center'>"
-					+ "No calculations yet. Click + Add to create one.</td></tr>";
+					+ empty_msg + "</td></tr>";
 			} else {
-				calcs.forEach(function (c) {
+				display_calcs.forEach(function (c) {
+					var action_td;
+					if (is_submitted) {
+						var view_url = "/app/offset-calculator?ref=" + encodeURIComponent(c.calculation_breakdown || "")
+							+ "&cost_sheet=" + encodeURIComponent(frm.doc.name)
+							+ "&pricing_type=" + encodeURIComponent(frm.doc.pricing_type || "Offset")
+							+ "&view_only=1";
+						var print_url = "/printview?doctype=Calculation+Breakdown&name="
+							+ encodeURIComponent(c.calculation_breakdown || "")
+							+ "&format=Product+Costing+Summary&no_letterhead=0";
+						action_td = "<td style='padding:5px 8px;text-align:center;white-space:nowrap'>"
+							+ "<a href='" + view_url + "' target='_blank' "
+							+ "class='btn btn-xs btn-default' style='font-size:10.5px;margin-right:3px'>View</a>"
+							+ "<a href='" + print_url + "' target='_blank' "
+							+ "class='btn btn-xs btn-primary' style='font-size:10.5px'>Print</a>"
+							+ "</td>";
+					} else {
+						action_td = "<td style='padding:5px 8px;text-align:center;white-space:nowrap'>"
+							+ "<button class='btn-edit-calc btn btn-xs btn-default' "
+							+ "data-cb='" + c.calculation_breakdown + "' style='margin-right:4px'>✏️</button>"
+							+ "<button class='btn-remove-calc btn btn-xs btn-danger' "
+							+ "data-cb='" + c.calculation_breakdown + "' "
+							+ "data-row='" + c.name + "'>🗑</button>"
+							+ "</td>";
+					}
 					calc_rows +=
 						"<tr style='border-bottom:1px solid #f0f0f0'>"
 						+ "<td style='padding:5px 8px;font-size:11.5px;font-family:monospace'>"
@@ -181,20 +270,22 @@ function render_panel(frm, cdt, cdn) {
 						+ (c.description || "") + "</td>"
 						+ "<td style='padding:5px 8px;text-align:right;font-family:monospace;font-weight:600'>"
 						+ "LKR " + cur_fmt(c.unit_cost) + "</td>"
-						+ "<td style='padding:5px 8px;text-align:center;white-space:nowrap'>"
-						+ "<button class='btn-edit-calc btn btn-xs btn-default' "
-						+ "data-cb='" + c.calculation_breakdown + "' style='margin-right:4px'>✏️</button>"
-						+ "<button class='btn-remove-calc btn btn-xs btn-danger' "
-						+ "data-cb='" + c.calculation_breakdown + "' "
-						+ "data-row='" + c.name + "'>🗑</button>"
-						+ "</td></tr>";
+						+ action_td + "</tr>";
 				});
 			}
 
 			// Build tax rows
 			var tax_rows = "";
-			if (row.sscl) tax_rows += price_row("SSCL (2.25%)", sscl_amt, "#fff8e1");
-			if (row.vat) tax_rows += price_row("VAT (18%)", vat_amt, "#fff8e1");
+			if (row.sscl) tax_rows += price_row("SSCL (" + _cc.sscl_rate + "%)", sscl_amt, "#fff8e1");
+			if (row.vat) tax_rows += price_row("VAT (" + _cc.vat_rate + "%)", vat_amt, "#fff8e1");
+
+			var add_btn = is_submitted ? "" :
+				"<button class='btn-add-calc btn btn-xs btn-primary' "
+				+ "data-item='" + item_name + "' data-cdt='" + cdt + "' data-cdn='" + cdn + "'>"
+				+ "+ Add Calculation</button>";
+			var actions_th = is_submitted
+				? "<th style='padding:5px 8px;color:#fff;font-size:10.5px;text-align:center'>Link</th>"
+				: "<th style='padding:5px 8px;color:#fff;font-size:10.5px;text-align:center'>Actions</th>";
 
 			var html =
 				"<div style='padding:12px 14px;background:#f8fafc;border-radius:5px;border:1px solid #e5e7eb'>"
@@ -202,12 +293,10 @@ function render_panel(frm, cdt, cdn) {
 				// ── Calculation list header ──
 				+ "<div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:8px'>"
 				+ "<span style='font-size:12px;font-weight:700;color:#1a3a5c'>Calculations"
-				+ (calcs.length ? " <span style='font-size:10px;background:#e0e7ff;color:#3730a3;"
-					+ "border-radius:10px;padding:1px 7px;font-weight:600'>" + calcs.length + "</span>" : "")
+				+ (display_calcs.length ? " <span style='font-size:10px;background:#e0e7ff;color:#3730a3;"
+					+ "border-radius:10px;padding:1px 7px;font-weight:600'>" + display_calcs.length + "</span>" : "")
 				+ "</span>"
-				+ "<button class='btn-add-calc btn btn-xs btn-primary' "
-				+ "data-item='" + item_name + "' data-cdt='" + cdt + "' data-cdn='" + cdn + "'>"
-				+ "+ Add Calculation</button>"
+				+ add_btn
 				+ "</div>"
 
 				// ── Calculation list table ──
@@ -217,7 +306,7 @@ function render_panel(frm, cdt, cdn) {
 				+ "<th style='padding:5px 8px;color:#fff;font-size:10.5px;text-align:left'>Breakdown</th>"
 				+ "<th style='padding:5px 8px;color:#fff;font-size:10.5px;text-align:left'>Description</th>"
 				+ "<th style='padding:5px 8px;color:#fff;font-size:10.5px;text-align:right'>Unit Cost</th>"
-				+ "<th style='padding:5px 8px;color:#fff;font-size:10.5px;text-align:center'>Actions</th>"
+				+ actions_th
 				+ "</tr></thead><tbody>" + calc_rows + "</tbody></table></div>"
 
 				// ── Pricing summary ──
@@ -243,55 +332,54 @@ function render_panel(frm, cdt, cdn) {
 				var $w = $(fld.wrapper);
 				$w.html(html);
 
-				// ── Add Calculation button ──────────────────────
-				$w.off("click.add_calc").on("click.add_calc", ".btn-add-calc", function () {
-					show_add_calc_popup(frm, cdt, cdn, item_name);
-				});
+				if (!is_submitted) {
+					// ── Add Calculation button ──────────────────────
+					$w.off("click.add_calc").on("click.add_calc", ".btn-add-calc", function () {
+						show_add_calc_popup(frm, cdt, cdn, item_name);
+					});
 
-				// ── Edit (open calculator) button ───────────────
-				$w.off("click.edit_calc").on("click.edit_calc", ".btn-edit-calc", function () {
-					var cb = $(this).data("cb");
-					if (cb) {
-						var pt = frm.doc.pricing_type || "Offset";
-						// No operations param on edit — saved CB already has its own selections
-						var url = "/app/offset-calculator?ref=" + encodeURIComponent(cb)
-							+ "&cost_sheet=" + encodeURIComponent(frm.doc.name)
-							+ "&pricing_type=" + encodeURIComponent(pt);
-						window.location.href = url;
-					}
-				});
-
-				// ── Remove calculation button ───────────────────
-				$w.off("click.remove_calc").on("click.remove_calc", ".btn-remove-calc", function () {
-					var cb = $(this).data("cb");
-					var row_name = $(this).data("row");
-					frappe.confirm(
-						"Remove calculation <b>" + cb + "</b> from this item?",
-						function () {
-							// Remove row from Cost Item calculations table
-							frappe.call({
-								method: "frappe.client.get",
-								args: { doctype: "cost Item", name: item_name },
-								callback: function (r2) {
-									if (!r2.message) return;
-									var doc = r2.message;
-									doc.calculations = (doc.calculations || []).filter(function (c) {
-										return c.calculation_breakdown !== cb;
-									});
-									frappe.call({
-										method: "frappe.client.save",
-										args: { doc: doc },
-										callback: function () {
-											frappe.show_alert({ message: "Removed.", indicator: "green" });
-											render_panel(frm, cdt, cdn);
-											refresh_row_prices(frm, cdt, cdn);
-										},
-									});
-								},
-							});
+					// ── Edit (open calculator) button ───────────────
+					$w.off("click.edit_calc").on("click.edit_calc", ".btn-edit-calc", function () {
+						var cb = $(this).data("cb");
+						if (cb) {
+							var pt = frm.doc.pricing_type || "Offset";
+							var url = "/app/offset-calculator?ref=" + encodeURIComponent(cb)
+								+ "&cost_sheet=" + encodeURIComponent(frm.doc.name)
+								+ "&pricing_type=" + encodeURIComponent(pt);
+							window.location.href = url;
 						}
-					);
-				});
+					});
+
+					// ── Remove calculation button ───────────────────
+					$w.off("click.remove_calc").on("click.remove_calc", ".btn-remove-calc", function () {
+						var cb = $(this).data("cb");
+						frappe.confirm(
+							"Remove calculation <b>" + cb + "</b> from this item?",
+							function () {
+								frappe.call({
+									method: "frappe.client.get",
+									args: { doctype: "cost Item", name: item_name },
+									callback: function (r2) {
+										if (!r2.message) return;
+										var doc = r2.message;
+										doc.calculations = (doc.calculations || []).filter(function (c) {
+											return c.calculation_breakdown !== cb;
+										});
+										frappe.call({
+											method: "frappe.client.save",
+											args: { doc: doc },
+											callback: function () {
+												frappe.show_alert({ message: "Removed.", indicator: "green" });
+												render_panel(frm, cdt, cdn);
+												refresh_row_prices(frm, cdt, cdn);
+											},
+										});
+									},
+								});
+							}
+						);
+					});
+				}
 
 			}, 300);
 		},
@@ -581,9 +669,9 @@ function finish_refresh(frm, cdt, cdn, unit_cost_sum) {
 
 	var unit = round2(unit_cost_sum);
 	var qty = flt_v(row.qty);
-	var sscl_amt = row.sscl ? round2(unit * 0.0225) : 0;
+	var sscl_amt = row.sscl ? round2(unit * (_cc.sscl_rate / 100)) : 0;
 	var vat_base = unit + sscl_amt;
-	var vat_amt = row.vat ? round2(vat_base * 0.18) : 0;
+	var vat_amt = row.vat ? round2(vat_base * (_cc.vat_rate / 100)) : 0;
 	var sell_unit = round2(unit + sscl_amt + vat_amt);
 
 	frappe.model.set_value(cdt, cdn, "selling_unit_price", sell_unit);
@@ -681,11 +769,10 @@ function show_page_popup(frm, opp, subject, pages, breakdowns) {
 }
 
 function create_single(frm, opp, subject, breakdowns) {
-	// Non-book items also use the breakdown list popup
-	// Each breakdown row creates one Cost Item: Subject - BreakdownDescription
-	// If no breakdowns, create directly with qty = 0
+	// If no breakdowns (or only a blank placeholder row), create one item directly
+	// using the Inquiry's Item Qty field (custom_item_qty) as the quantity.
 	if (!breakdowns.length || (breakdowns.length === 1 && !breakdowns[0].description && !breakdowns[0].qty)) {
-		var qty = breakdowns.length > 0 ? flt_v(breakdowns[0].qty) : 0;
+		var qty = flt_v(opp.custom_item_qty) || (breakdowns.length > 0 ? flt_v(breakdowns[0].qty) : 0);
 		frappe.confirm(
 			"Create cost item <b>" + subject + "</b><br>Qty: <b>" + qty.toLocaleString() + "</b>",
 			function () {

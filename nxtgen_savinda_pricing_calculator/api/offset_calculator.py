@@ -149,9 +149,10 @@ def calculate(payload):
     grand = mat_total + prep_total + prod_total
     pm    = flt(form.get("profit_margin", 0)) / 100
     uc    = grand / item_qty if item_qty else 0
-    sscl  = uc * 0.025 if form.get("tax_sscl") else 0
+    cfg   = _get_config()
+    sscl  = uc * cfg["sscl_rate"] if form.get("tax_sscl") else 0
     qu    = (uc + sscl) * (1 + pm)
-    vat   = qu * 0.18 if form.get("tax_vat") else 0
+    vat   = qu * cfg["vat_rate"] if form.get("tax_vat") else 0
     su    = qu + vat
     mc    = (((qu * item_qty) - (prep_total + mat_total)) / (qu * item_qty) * 100) if qu * item_qty else 0
 
@@ -373,6 +374,48 @@ def _resolve_pl(price_list=None, customer=None):
     return frappe.db.get_single_value("Selling Settings", "selling_price_list") or ""
 
 
+def _get_config():
+    """Return Costing Configuration values as a dict with decimal rates."""
+    try:
+        doc = frappe.get_cached_doc("Costing Configuration")
+        rows = sorted(
+            [
+                (cint(r.max_colors), flt(r.setup_metrage), flt(r.wastage_percent) / 100.0)
+                for r in (doc.flexo_wastage or [])
+            ],
+            key=lambda x: x[0],
+        )
+        return {
+            "sscl_rate":             flt(doc.sscl_rate or 2.5) / 100.0,
+            "vat_rate":              flt(doc.vat_rate or 18.0) / 100.0,
+            "default_profit_margin": flt(doc.default_profit_margin or 15.0),
+            "offset_wastage_pct":    flt(doc.offset_wastage_pct or 5.0) / 100.0,
+            "offset_wastage_min":    cint(doc.offset_wastage_min) or 500,
+            "flexo_wastage":         rows,
+        }
+    except Exception:
+        return {
+            "sscl_rate": 0.025, "vat_rate": 0.18, "default_profit_margin": 15.0,
+            "offset_wastage_pct": 0.05, "offset_wastage_min": 500,
+            "flexo_wastage": [
+                (0, 5, 0.04), (1, 100, 0.06), (2, 100, 0.07),
+                (3, 150, 0.08), (4, 150, 0.09), (5, 200, 0.10),
+                (6, 200, 0.11), (99, 250, 0.12),
+            ],
+        }
+
+
+@frappe.whitelist()
+def get_costing_config():
+    """Return config values as percentages for frontend use."""
+    cfg = _get_config()
+    return {
+        "sscl_rate":             round(cfg["sscl_rate"] * 100, 4),
+        "vat_rate":              round(cfg["vat_rate"] * 100, 4),
+        "default_profit_margin": cfg["default_profit_margin"],
+    }
+
+
 def _get_item_rate(item_code, price_list):
     if not item_code: return 0.0
     if price_list:
@@ -393,7 +436,8 @@ def _calc_sheet(form):
         return {k: 0 for k in ["cut_sheet_ups","cut_sheet_qty","wastage","req_cut_sheets","full_sheet_qty"]}
     cup    = max(no_ups // no_cuts, 1)
     cqty   = math.ceil(item_qty / cup)
-    waste  = max(math.ceil(cqty * 0.05), 500)
+    cfg   = _get_config()
+    waste  = max(math.ceil(cqty * cfg["offset_wastage_pct"]), cfg["offset_wastage_min"])
     rqty   = cqty + waste
     fqty   = math.ceil(rqty / no_cuts)
     return {"cut_sheet_ups": cup, "cut_sheet_qty": cqty, "wastage": waste,
@@ -458,18 +502,12 @@ def _calc_flexo(form):
     reel_width_m      = reel_width / 1000
     reel_area_net     = reel_length * reel_width_m  # m²
 
-    # Wastage lookup by no_of_colors
-    _wastage_table = [
-        (0,  5,   0.04),
-        (1,  100, 0.06),
-        (2,  100, 0.07),
-        (3,  150, 0.08),
-        (4,  150, 0.09),
-        (5,  200, 0.10),
-        (6,  200, 0.11),
-    ]
-    setup_m = 250; wastage_pct = 0.12  # default for 7+ colors
-    for colors, sm, wp in _wastage_table:
+    # Wastage lookup by no_of_colors — loaded from Costing Configuration
+    _cfg = _get_config()
+    _wtable = _cfg["flexo_wastage"]
+    setup_m = _wtable[-1][1] if _wtable else 250
+    wastage_pct = _wtable[-1][2] if _wtable else 0.12
+    for colors, sm, wp in _wtable:
         if no_of_colors <= colors:
             setup_m = sm; wastage_pct = wp
             break
@@ -797,12 +835,31 @@ def sync_cost_item_unit_cost(calculation_breakdown):
                 filters={"item": ci_name},
                 fields=["name", "parent", "qty", "sscl", "vat"],
             )
+            _cfg = _get_config()
+            _sscl_rate = _cfg["sscl_rate"]
+            _vat_rate  = _cfg["vat_rate"]
+            # Sync tax flags from the CB to the Cost Sheet Item rows
+            try:
+                cb_doc = frappe.get_cached_doc("Calculation Breakdown", calculation_breakdown)
+                cb_sscl = cint(cb_doc.tax_sscl)
+                cb_vat  = cint(cb_doc.tax_vat)
+                for row in cs_rows:
+                    frappe.db.set_value("Cost Sheet Items", row["name"], {
+                        "sscl": cb_sscl,
+                        "vat":  cb_vat,
+                    }, update_modified=False)
+                    row["sscl"] = cb_sscl
+                    row["vat"]  = cb_vat
+            except Exception:
+                pass
             for row in cs_rows:
                 unit  = frappe.utils.flt(uc)
                 qty   = frappe.utils.flt(row.get("qty", 0))
-                sscl_amt  = unit * 0.0225 if row.get("sscl") else 0
+                apply_sscl = cint(row.get("sscl", 0))
+                apply_vat  = cint(row.get("vat", 0))
+                sscl_amt  = unit * _sscl_rate if apply_sscl else 0
                 vat_base  = unit + sscl_amt
-                vat_amt   = vat_base * 0.18 if row.get("vat") else 0
+                vat_amt   = vat_base * _vat_rate if apply_vat else 0
                 sell_unit = round(unit + sscl_amt + vat_amt, 4)
                 frappe.db.set_value("Cost Sheet Items", row["name"], {
                     "unit_price":         round(unit, 4),

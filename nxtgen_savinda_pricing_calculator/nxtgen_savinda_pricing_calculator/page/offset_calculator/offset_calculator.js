@@ -5,9 +5,12 @@
 frappe.pages['offset-calculator'].on_page_load = function (wrapper) {
 	var page = frappe.ui.make_app_page({
 		parent: wrapper,
-		title: 'Offset Calculator',
+		title: '',
 		single_column: true,
 	});
+	// Hide the standard page-head to give the calculator full viewport height
+	$(wrapper).addClass('oc-page-wrapper');
+	$(wrapper).find('.page-head').hide();
 	var mountEl = document.createElement('div');
 	mountEl.id = 'oc-mount';
 	page.main[0].appendChild(mountEl);
@@ -52,6 +55,9 @@ function oc_mount_app(el) {
 				calcError: '',
 				savedDocName: '',
 				costSheetRef: '',  // Cost Sheet to return to when clicking Back
+				viewOnly: false,   // Set to true via ?view_only=1 — disables editing
+				sheetExpanded: true,  // Offset: Sheet Requirements collapsible
+				flexoExpanded: true,  // Flexo: Reel Requirements collapsible
 
 				allSpecs: [],
 				allMachines: [],
@@ -76,7 +82,7 @@ function oc_mount_app(el) {
 					customer_name: '', ref: '', price_list: '', carton_size: '',
 					base_material: '', material_rate: 0,
 					no_of_colors: 4, item_qty: 1000,
-					profit_margin: 15, tax_sscl: true, tax_vat: false,
+					profit_margin: 15, tax_sscl: false, tax_vat: false,
 					// Offset-specific
 					full_sheet_l: 0, full_sheet_w: 0,
 					cut_sheet_l: 0, cut_sheet_w: 0,
@@ -170,6 +176,7 @@ function oc_mount_app(el) {
 				// URLSearchParams.get() already decodes the value; split on | separator
 				this.autoSelectOperations = ops.split('|').filter(Boolean);
 			}
+			if (urlParams.get('view_only') === '1') this.viewOnly = true;
 			this.loadData();
 		},
 
@@ -418,6 +425,17 @@ function oc_mount_app(el) {
 
 			openDoc() { if (this.savedDocName) frappe.set_route('Form', 'Calculation Breakdown', this.savedDocName); },
 
+			printPage() {
+				if (!this.savedDocName) {
+					frappe.msgprint({ title: 'Save First', message: 'Save the calculation before printing.', indicator: 'orange' });
+					return;
+				}
+				var url = '/printview?doctype=Calculation+Breakdown&name='
+					+ encodeURIComponent(this.savedDocName)
+					+ '&format=Product+Costing+Summary&no_letterhead=0';
+				window.open(frappe.urllib.get_full_url(url));
+			},
+
 			// Back to Cost Sheet
 			goBack() {
 				if (this.costSheetRef) {
@@ -456,14 +474,30 @@ function oc_mount_app(el) {
 						self.savedDocName = d.doc_name || '';
 						if (d.form) {
 							Object.assign(self.form, d.form);
-							// Restore matSearch display
+							// Restore matSearch display and fetch material rate if not saved in ui_state
 							if (d.form.base_material) {
-								var iname = frappe.db ? null : null;
 								frappe.call({
 									method: 'frappe.client.get_value',
-									args: { doctype: 'Item', filters: { name: d.form.base_material }, fieldname: 'item_name' },
+									args: { doctype: 'Item', filters: { name: d.form.base_material }, fieldname: ['item_name', 'valuation_rate'] },
 									callback: function (r2) {
 										self.matSearch = (r2.message && r2.message.item_name) || d.form.base_material;
+										// material_rate is 0 for new CBs (no saved ui_state) — fetch it now
+										if (!self.form.material_rate) {
+											var valRate = parseFloat((r2.message && r2.message.valuation_rate) || 0);
+											if (self.form.price_list) {
+												frappe.call({
+													method: 'frappe.client.get_value',
+													args: { doctype: 'Item Price', filters: { item_code: d.form.base_material, price_list: self.form.price_list, selling: 1 }, fieldname: 'price_list_rate' },
+													callback: function (r3) {
+														self.form.material_rate = parseFloat((r3.message && r3.message.price_list_rate) || valRate || 0);
+														if (self.form.material_rate) self.scheduleCalc();
+													},
+												});
+											} else {
+												self.form.material_rate = valRate;
+												if (self.form.material_rate) self.scheduleCalc();
+											}
+										}
 									},
 								});
 							}
@@ -598,7 +632,7 @@ function oc_mount_app(el) {
 <div class="oc-wrap">
 
   <!-- ═══════ LEFT PANEL ═══════ -->
-  <div class="oc-panel">
+  <div class="oc-panel" :class="{'oc-view-overlay': viewOnly}">
     <div class="oc-ph oc-ph-split">
       <span class="oc-pt">Order Details</span>
       <div class="oc-type-toggle">
@@ -843,22 +877,31 @@ function oc_mount_app(el) {
         <span class="oc-pt">Price Calculation</span>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
-        <span v-if="calcLoading" class="oc-spin"></span>
-        <button class="oc-btn oc-btn-green" @click="calculate" :disabled="calcLoading">⚡ {{ calcLoading ? 'Calculating…' : 'Calculate' }}</button>
-        <button class="oc-btn oc-btn-blue"  @click="saveCosting" :disabled="saveLoading">💾 {{ saveLoading ? 'Saving…' : 'Save' }}</button>
+        <template v-if="!viewOnly">
+          <span v-if="calcLoading" class="oc-spin"></span>
+          <button class="oc-btn oc-btn-green" @click="calculate" :disabled="calcLoading">⚡ {{ calcLoading ? 'Calculating…' : 'Calculate' }}</button>
+          <button class="oc-btn oc-btn-blue"  @click="saveCosting" :disabled="saveLoading">💾 {{ saveLoading ? 'Saving…' : 'Save' }}</button>
+        </template>
+        <button v-else class="oc-btn oc-btn-print" @click="printPage">🖨 Print / PDF</button>
       </div>
     </div>
     <div class="oc-pb">
 
-      <div v-if="savedDocName" class="oc-saved-banner">
+      <div v-if="savedDocName && !viewOnly" class="oc-saved-banner">
         ✓ Saved as <strong>{{ savedDocName }}</strong>
         <button class="oc-link-btn" @click="openDoc">Open Document →</button>
+      </div>
+      <div v-if="viewOnly && savedDocName" class="oc-view-banner">
+        👁 VIEW ONLY — {{ savedDocName }}
       </div>
 
       <!-- Offset: Sheet requirements -->
       <div v-if="calc.sheet && calc.sheet.full_sheet_qty" class="oc-result-card">
-        <div class="oc-rc-title">Sheet Requirements</div>
-        <div class="oc-kv-grid">
+        <div class="oc-rc-title oc-rc-toggle" @click="sheetExpanded = !sheetExpanded">
+          Sheet Requirements
+          <span class="oc-collapse-chevron">{{ sheetExpanded ? '▴' : '▾' }}</span>
+        </div>
+        <div v-show="sheetExpanded" class="oc-kv-grid" style="margin-top:8px">
           <div class="oc-kv"><span class="k">Cut Sheet Ups</span><span class="v">{{ calc.sheet.cut_sheet_ups }}</span></div>
           <div class="oc-kv"><span class="k">Cut Sheet Qty</span><span class="v">{{ fmtNum(calc.sheet.cut_sheet_qty) }}</span></div>
           <div class="oc-kv"><span class="k">Wastage</span><span class="v">{{ fmtNum(calc.sheet.wastage) }}</span></div>
@@ -869,8 +912,11 @@ function oc_mount_app(el) {
 
       <!-- Flexo: Reel requirements -->
       <div v-if="calc.sheet && calc.sheet.reel_area" class="oc-result-card">
-        <div class="oc-rc-title">Reel Requirements</div>
-        <div class="oc-kv-grid">
+        <div class="oc-rc-title oc-rc-toggle" @click="flexoExpanded = !flexoExpanded">
+          Reel Requirements
+          <span class="oc-collapse-chevron">{{ flexoExpanded ? '▴' : '▾' }}</span>
+        </div>
+        <div v-show="flexoExpanded" class="oc-kv-grid" style="margin-top:8px">
           <div class="oc-kv"><span class="k">Ups</span><span class="v">{{ calc.sheet.ups }}</span></div>
           <div class="oc-kv"><span class="k">Stickers / Reel</span><span class="v">{{ fmtNum(calc.sheet.stickers_per_reel) }}</span></div>
           <div class="oc-kv"><span class="k">Reel Length (m)</span><span class="v">{{ fmtNum(calc.sheet.reel_length) }}</span></div>
@@ -964,14 +1010,18 @@ function oc_inject_styles() {
 	if (document.getElementById('oc-page-styles')) return;
 	var s = document.createElement('style'); s.id = 'oc-page-styles';
 	s.textContent = `
-.oc-wrap{display:grid;grid-template-columns:440px 1fr;gap:16px;padding:16px;min-height:70vh;font-size:13px}
-@media(max-width:960px){.oc-wrap{grid-template-columns:1fr}}
-.oc-panel{background:#fff;border:1px solid var(--border-color,#d1d5db);border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.06);align-self:start;overflow:hidden}
-.oc-ph{display:flex;align-items:center;gap:8px;padding:10px 16px;background:var(--subtle-fg,#f8fafc);border-bottom:1px solid var(--border-color,#d1d5db)}
+/* Page-head removal — scoped to calculator wrapper only */
+.oc-page-wrapper .page-head{display:none!important}
+.oc-page-wrapper .layout-main-section-wrapper,.oc-page-wrapper .layout-main-section{padding:0!important;margin:0!important}
+/* Layout: both panels fill viewport height and scroll independently */
+.oc-wrap{display:grid;grid-template-columns:430px 1fr;gap:10px;padding:8px 10px;height:calc(100vh - 52px);overflow:hidden;font-size:13px;box-sizing:border-box}
+@media(max-width:960px){.oc-wrap{grid-template-columns:1fr;height:auto;overflow:visible}}
+.oc-panel{background:#fff;border:1px solid var(--border-color,#d1d5db);border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.oc-ph{display:flex;align-items:center;gap:8px;padding:9px 14px;background:var(--subtle-fg,#f8fafc);border-bottom:1px solid var(--border-color,#d1d5db);flex-shrink:0}
 .oc-ph-split{justify-content:space-between}
 .oc-pt{font-weight:700;font-size:13px;color:var(--text-color,#1f272e)}
 .oc-badge{font-size:10px;font-weight:700;background:#2c7be5;color:#fff;border-radius:4px;padding:2px 7px;letter-spacing:.05em}
-.oc-pb{padding:14px 16px}
+.oc-pb{padding:12px 14px;overflow-y:auto;flex:1;min-height:0}
 .oc-field{margin-bottom:10px}
 .oc-lbl{display:block;font-size:10.5px;font-weight:700;color:var(--text-muted,#6b7280);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em}
 .oc-lbl-blue{color:#2c7be5}
@@ -1050,7 +1100,7 @@ function oc_inject_styles() {
 .oc-kv-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
 .oc-kv{display:flex;justify-content:space-between;font-size:12px;padding:4px 8px;border-radius:3px;background:#fff;border:1px solid #eee}
 .oc-kv .k{color:#6b7280}.oc-kv .v{font-weight:600;color:#1f272e}.oc-v-blue{color:#2c7be5!important}
-.oc-tbl-scroll{overflow-x:auto;border-radius:4px;border:1px solid #d1d5db}
+.oc-tbl-scroll{overflow:auto;max-height:38vh;border-radius:4px;border:1px solid #d1d5db}
 .oc-tbl{width:100%;border-collapse:collapse;font-size:12px}
 .oc-tbl thead tr{background:#1a3a5c}
 .oc-tbl th{padding:7px 10px;color:#fff;font-weight:600;font-size:11px;letter-spacing:.04em;text-align:left;white-space:nowrap}
@@ -1075,6 +1125,28 @@ function oc_inject_styles() {
 .oc-error{background:#fff5f5;border:1px solid #fed7d7;border-radius:5px;padding:12px 14px;color:#c53030;font-size:13px;margin-bottom:14px}
 .oc-empty{text-align:center;padding:50px 20px;color:#9ca3af}
 .oc-empty p{font-size:13px;line-height:1.7;margin-top:8px}
+/* Collapsible result cards */
+.oc-rc-toggle{cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none}
+.oc-rc-toggle:hover{color:#2c7be5}
+.oc-collapse-chevron{font-size:11px;opacity:.6;margin-left:6px;transition:transform .15s}
+/* View-only mode */
+.oc-view-overlay{pointer-events:none;opacity:.82;user-select:none}
+.oc-view-banner{background:#1a3a5c;color:#fff;padding:8px 14px;font-size:12px;font-weight:600;border-radius:4px;display:flex;align-items:center;gap:6px;margin-bottom:12px;letter-spacing:.02em}
+.oc-btn-print{background:#1a3a5c;color:#fff}.oc-btn-print:hover{filter:brightness(1.2)}
+/* Print */
+@media print{
+  body>.navbar,body>.container>.page-container>.page-head,
+  .oc-view-banner,.oc-ph .oc-btn-back,
+  .oc-wrap .oc-panel:first-child{display:none!important}
+  .oc-wrap{height:auto!important;overflow:visible!important;display:block!important;padding:0!important;grid-template-columns:none!important}
+  .oc-panel{height:auto!important;overflow:visible!important;border:none!important;box-shadow:none!important}
+  .oc-pb{overflow:visible!important;height:auto!important}
+  .oc-tbl-scroll{max-height:none!important;overflow:visible!important}
+  .oc-ph{border-bottom:1px solid #ccc!important;margin-bottom:8px}
+  .oc-result-card{page-break-inside:avoid;border:1px solid #ccc!important}
+  .oc-sell-badge{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .oc-tbl thead tr,.oc-ptbl thead tr,.oc-tot td,.oc-sub td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
 	`;
 	document.head.appendChild(s);
 }
