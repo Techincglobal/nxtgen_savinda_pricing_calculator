@@ -425,7 +425,16 @@ function oc_mount_app(el) {
 
 			openDoc() { if (this.savedDocName) frappe.set_route('Form', 'Calculation Breakdown', this.savedDocName); },
 
-			printPage() { window.print(); },
+			printPage() {
+				if (!this.savedDocName) {
+					frappe.msgprint({ title: 'Save First', message: 'Save the calculation before printing.', indicator: 'orange' });
+					return;
+				}
+				var url = '/printview?doctype=Calculation+Breakdown&name='
+					+ encodeURIComponent(this.savedDocName)
+					+ '&format=Product+Costing+Summary&no_letterhead=0';
+				window.open(frappe.urllib.get_full_url(url));
+			},
 
 			// Back to Cost Sheet
 			goBack() {

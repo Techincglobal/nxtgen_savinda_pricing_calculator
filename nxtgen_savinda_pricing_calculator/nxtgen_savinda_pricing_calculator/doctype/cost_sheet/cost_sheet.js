@@ -244,9 +244,14 @@ function render_panel(frm, cdt, cdn) {
 							+ "&cost_sheet=" + encodeURIComponent(frm.doc.name)
 							+ "&pricing_type=" + encodeURIComponent(frm.doc.pricing_type || "Offset")
 							+ "&view_only=1";
+						var print_url = "/printview?doctype=Calculation+Breakdown&name="
+							+ encodeURIComponent(c.calculation_breakdown || "")
+							+ "&format=Product+Costing+Summary&no_letterhead=0";
 						action_td = "<td style='padding:5px 8px;text-align:center;white-space:nowrap'>"
-							+ "<a href='" + view_url + "' "
-							+ "target='_blank' class='btn btn-xs btn-default' style='font-size:10.5px'>View</a>"
+							+ "<a href='" + view_url + "' target='_blank' "
+							+ "class='btn btn-xs btn-default' style='font-size:10.5px;margin-right:3px'>View</a>"
+							+ "<a href='" + print_url + "' target='_blank' "
+							+ "class='btn btn-xs btn-primary' style='font-size:10.5px'>Print</a>"
 							+ "</td>";
 					} else {
 						action_td = "<td style='padding:5px 8px;text-align:center;white-space:nowrap'>"
