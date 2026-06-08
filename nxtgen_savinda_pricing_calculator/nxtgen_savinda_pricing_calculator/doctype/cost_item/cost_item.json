@@ -18,6 +18,7 @@
   "section_break_calc",
   "item_qty",
   "breakdown",
+  "breakdown_qtys_json",
   "column_break_3",
   "is_selected",
   "calculations",
@@ -103,6 +104,13 @@
   {
    "fieldname": "column_break_3",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "breakdown_qtys_json",
+   "fieldtype": "Small Text",
+   "label": "Breakdown Qtys (JSON)",
+   "hidden": 1,
+   "description": "JSON array of individual breakdown quantities when multiple breakdowns are combined into one calculation"
   },
   {
    "fieldname": "is_selected",

@@ -1,0 +1,129 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:ink_name",
+ "creation": "2026-06-07 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "ink_name",
+  "column_break_1",
+  "is_active",
+  "section_break_pricing",
+  "price_per_kg",
+  "consumption_per_sqinch",
+  "consumption_per_sqm",
+  "column_break_2",
+  "min_qty",
+  "min_value"
+ ],
+ "fields": [
+  {
+   "fieldname": "ink_name",
+   "fieldtype": "Data",
+   "label": "Ink Name",
+   "reqd": 1,
+   "in_list_view": 1,
+   "bold": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Is Active",
+   "default": "1",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "section_break_pricing",
+   "fieldtype": "Section Break",
+   "label": "Pricing & Consumption"
+  },
+  {
+   "fieldname": "price_per_kg",
+   "fieldtype": "Currency",
+   "label": "Price per KG (LKR)",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "consumption_per_sqinch",
+   "fieldtype": "Float",
+   "label": "Consumption per sq inch (kg)  [Offset]",
+   "description": "Kg of ink per sq inch of sheet area (Offset). E.g. 3.2e-7 for CMYK.",
+   "precision": "8"
+  },
+  {
+   "fieldname": "consumption_per_sqm",
+   "fieldtype": "Float",
+   "label": "Consumption per sq metre (kg)  [Flexo]",
+   "description": "Kg of ink per sq metre of reel area (Flexo). E.g. 0.0003 for UV Ink.",
+   "precision": "8"
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "min_qty",
+   "fieldtype": "Float",
+   "label": "Minimum Qty (kg)",
+   "description": "Minimum ink quantity applied per job"
+  },
+  {
+   "fieldname": "min_value",
+   "fieldtype": "Currency",
+   "label": "Minimum Charge (LKR)",
+   "description": "Minimum ink cost applied per job"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-06-07 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "Offset Ink",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Savinda Pricing Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Savinda Estimator"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "ink_name",
+ "sort_order": "ASC",
+ "states": []
+}

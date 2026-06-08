@@ -6,8 +6,10 @@
  "engine": "InnoDB",
  "field_order": [
   "cost_fact_name",
+  "uom",
   "column_break_vily",
   "cost_group",
+  "pricing_type",
   "section_break_bltt",
   "items",
   "table_acwl",
@@ -24,6 +26,14 @@
    "fieldtype": "Select",
    "label": "Cost Group",
    "options": "Preparation\nMaterial\nProduction"
+  },
+  {
+   "fieldname": "pricing_type",
+   "fieldtype": "Select",
+   "label": "Pricing Type",
+   "options": "\nOffset\nFlexo\nBoth",
+   "in_list_view": 1,
+   "description": "Which calculator this cost fact belongs to"
   },
   {
    "fieldname": "column_break_vily",
@@ -81,6 +91,12 @@
    "fieldtype": "Data",
    "label": "Name",
    "unique": 1
+  },
+  {
+   "fieldname": "uom",
+   "fieldtype": "Data",
+   "label": "UOM",
+   "description": "Unit of measure displayed in cost breakdown (e.g. PCS, SQINCH, NOS, HRS)"
   }
  ],
  "grid_page_length": 50,

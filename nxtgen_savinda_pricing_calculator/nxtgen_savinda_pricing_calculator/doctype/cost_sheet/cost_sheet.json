@@ -22,6 +22,8 @@
   "section_break_gjtb",
   "breakdown",
   "pricing_list",
+  "section_break_compliance",
+  "compliance",
   "section_break_secondary",
   "operations",
   "qty_breaks",
@@ -29,6 +31,20 @@
   "amended_from"
  ],
  "fields": [
+  {
+   "collapsed": 1,
+   "collapsible": 1,
+   "fieldname": "section_break_compliance",
+   "fieldtype": "Section Break",
+   "label": "Compliance"
+  },
+  {
+   "fieldname": "compliance",
+   "fieldtype": "Table MultiSelect",
+   "label": "Compliance",
+   "options": "Compliance Details",
+   "description": "Auto-populated from Inquiry. Used for Finish Good creation."
+  },
   {
    "collapsed": 1,
    "collapsible": 1,

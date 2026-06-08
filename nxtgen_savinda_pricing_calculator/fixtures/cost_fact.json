@@ -1,6 +1,22 @@
 [
  {
   "calculation": null,
+  "cost_fact_name": "Flexo UV Machine",
+  "cost_group": "Production",
+  "docstatus": 0,
+  "doctype": "Cost Fact",
+  "items": [],
+  "min_qty": 0.0,
+  "modified": "2026-06-07 16:42:31.179785",
+  "name": "Flexo UV Machine",
+  "pricing_type": "Flexo",
+  "qty_formula": "0.25 + reel_area / 900 if (no_of_colors + foil_count) > machine_capacity else 0",
+  "rate_formula": "fix_rate",
+  "table_acwl": [],
+  "uom": "NOS"
+ },
+ {
+  "calculation": null,
   "cost_fact_name": "SORD-machine",
   "cost_group": "Production",
   "docstatus": 0,
@@ -19,9 +35,11 @@
   "min_qty": 0.0,
   "modified": "2026-04-16 09:55:57.627350",
   "name": "SORD-machine",
+  "pricing_type": null,
   "qty_formula": "cut_sheet_qty",
   "rate_formula": "item_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -52,9 +70,11 @@
   "min_qty": 0.0,
   "modified": "2026-04-16 10:05:56.134477",
   "name": "Die Cutter N*",
+  "pricing_type": null,
   "qty_formula": "cut_sheet_ups",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -76,6 +96,7 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:16.759892",
   "name": "Embossing Block N*",
+  "pricing_type": null,
   "qty_formula": "attr.block_quantity",
   "rate_formula": "max(fix_rate * attr.block_length * attr.block_width, 3500)",
   "table_acwl": [
@@ -103,7 +124,8 @@
     "parenttype": "Cost Fact",
     "type": "Number"
    }
-  ]
+  ],
+  "uom": null
  },
  {
   "calculation": null,
@@ -125,6 +147,7 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:16.774513",
   "name": "Foil Block N*",
+  "pricing_type": null,
   "qty_formula": "attr.block_quantity",
   "rate_formula": "max(fix_rate * attr.block_length * attr.block_width, 2700)",
   "table_acwl": [
@@ -152,7 +175,8 @@
     "parenttype": "Cost Fact",
     "type": "Number"
    }
-  ]
+  ],
+  "uom": null
  },
  {
   "calculation": null,
@@ -174,6 +198,7 @@
   "min_qty": 4.0,
   "modified": "2026-05-14 12:59:16.785986",
   "name": "SORD Plate",
+  "pricing_type": null,
   "qty_formula": "max(no_of_colors, min_qty) * attr.plate_qty",
   "rate_formula": "fix_rate",
   "table_acwl": [
@@ -185,7 +210,8 @@
     "parenttype": "Cost Fact",
     "type": "Number"
    }
-  ]
+  ],
+  "uom": null
  },
  {
   "calculation": null,
@@ -207,6 +233,7 @@
   "min_qty": 4.0,
   "modified": "2026-05-14 12:59:16.797051",
   "name": "CD102 Plate",
+  "pricing_type": null,
   "qty_formula": "max(no_of_colors, min_qty) * attr.plate_qty",
   "rate_formula": "fix_rate",
   "table_acwl": [
@@ -218,7 +245,8 @@
     "parenttype": "Cost Fact",
     "type": "Number"
    }
-  ]
+  ],
+  "uom": null
  },
  {
   "calculation": null,
@@ -240,6 +268,7 @@
   "min_qty": 4.0,
   "modified": "2026-05-14 12:59:16.805432",
   "name": "Heidelberg Plate",
+  "pricing_type": null,
   "qty_formula": "max(no_of_colors, min_qty) * attr.plate_qty",
   "rate_formula": "fix_rate",
   "table_acwl": [
@@ -251,7 +280,8 @@
     "parenttype": "Cost Fact",
     "type": "Number"
    }
-  ]
+  ],
+  "uom": null
  },
  {
   "calculation": null,
@@ -345,9 +375,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:16.823697",
   "name": "Die Cutter Block N*",
+  "pricing_type": null,
   "qty_formula": "1",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -459,6 +491,7 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:16.844771",
   "name": "Channel Creasing",
+  "pricing_type": null,
   "qty_formula": "attr.creasing_per_up * cut_sheet_ups * full_sheet_qty",
   "rate_formula": "fix_rate",
   "table_acwl": [
@@ -470,7 +503,8 @@
     "parenttype": "Cost Fact",
     "type": "Number"
    }
-  ]
+  ],
+  "uom": null
  },
  {
   "calculation": null,
@@ -492,9 +526,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:16.853828",
   "name": "Proof Board",
+  "pricing_type": null,
   "qty_formula": "1",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -516,9 +552,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:16.864099",
   "name": "Cold Foil Screen",
+  "pricing_type": null,
   "qty_formula": "1",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -540,9 +578,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:16.874498",
   "name": "Cold Foil Mesh",
+  "pricing_type": null,
   "qty_formula": "1",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -564,9 +604,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:16.882627",
   "name": "Cold Foil Frame",
+  "pricing_type": null,
   "qty_formula": "1",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -606,9 +648,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:16.894605",
   "name": "Spot UV Option 1 Setup",
+  "pricing_type": null,
   "qty_formula": "1",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -630,9 +674,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:16.901990",
   "name": "Spot UV Option 2 Polymer Block",
+  "pricing_type": null,
   "qty_formula": "1",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -654,9 +700,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:16.910459",
   "name": "Spot UV Outsource Screen",
+  "pricing_type": null,
   "qty_formula": "1",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -687,9 +735,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:16.919998",
   "name": "Sand UV Setup",
+  "pricing_type": null,
   "qty_formula": "1",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -720,6 +770,7 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:16.930207",
   "name": "Gold Silver Foiling Reel",
+  "pricing_type": null,
   "qty_formula": "ceil(full_sheet_qty * cut_sheet_ups / attr.ctn_per_reel)",
   "rate_formula": "fix_rate",
   "table_acwl": [
@@ -731,7 +782,8 @@
     "parenttype": "Cost Fact",
     "type": "Number"
    }
-  ]
+  ],
+  "uom": null
  },
  {
   "calculation": null,
@@ -753,9 +805,11 @@
   "min_qty": 3000.0,
   "modified": "2026-05-14 12:59:16.939758",
   "name": "Die Cutter Machine",
+  "pricing_type": null,
   "qty_formula": "cut_sheet_qty",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -777,9 +831,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:16.950863",
   "name": "SORD Printing",
+  "pricing_type": null,
   "qty_formula": "1",
   "rate_formula": "max(fix_rate * cut_sheet_qty * no_of_colors, min_rate * max(no_of_colors, 4))",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -801,9 +857,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:16.959722",
   "name": "CD102 Printing",
+  "pricing_type": null,
   "qty_formula": "1",
   "rate_formula": "max(fix_rate * cut_sheet_qty * no_of_colors, min_rate * max(no_of_colors, 4))",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -825,9 +883,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:16.969281",
   "name": "Heidelberg Printing",
+  "pricing_type": null,
   "qty_formula": "1",
   "rate_formula": "max(fix_rate * cut_sheet_qty * no_of_colors, min_rate * max(no_of_colors, 4))",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -858,9 +918,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:16.977627",
   "name": "Gold Silver Foil Machine",
+  "pricing_type": null,
   "qty_formula": "cut_sheet_qty",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -882,9 +944,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:16.987944",
   "name": "Guillotine",
+  "pricing_type": null,
   "qty_formula": "1",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -906,9 +970,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:16.996246",
   "name": "Delivery",
+  "pricing_type": null,
   "qty_formula": "1",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -930,9 +996,11 @@
   "min_qty": 2000.0,
   "modified": "2026-05-14 12:59:17.005341",
   "name": "Pasting",
+  "pricing_type": null,
   "qty_formula": "item_qty",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -954,9 +1022,11 @@
   "min_qty": 2000.0,
   "modified": "2026-05-14 12:59:17.013508",
   "name": "Four Corner Pasting",
+  "pricing_type": null,
   "qty_formula": "item_qty",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -987,9 +1057,11 @@
   "min_qty": 2000.0,
   "modified": "2026-05-14 12:59:17.022873",
   "name": "Sorting",
+  "pricing_type": null,
   "qty_formula": "item_qty",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1029,9 +1101,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.033781",
   "name": "UV Varnish",
+  "pricing_type": null,
   "qty_formula": "cut_sheet_area * cut_sheet_qty",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1062,9 +1136,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.041947",
   "name": "Gloss Lamination",
+  "pricing_type": null,
   "qty_formula": "cut_sheet_area * cut_sheet_qty",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1095,9 +1171,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.054442",
   "name": "Matt Lamination",
+  "pricing_type": null,
   "qty_formula": "cut_sheet_area * cut_sheet_qty",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1119,9 +1197,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.065825",
   "name": "Window Lamination",
+  "pricing_type": null,
   "qty_formula": "cut_sheet_area * cut_sheet_qty",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1143,9 +1223,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.075250",
   "name": "Spot UV Option 1",
+  "pricing_type": null,
   "qty_formula": "cut_sheet_area * cut_sheet_qty",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1167,9 +1249,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.085097",
   "name": "Spot UV Option 2",
+  "pricing_type": null,
   "qty_formula": "cut_sheet_area * cut_sheet_qty",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1191,9 +1275,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.094678",
   "name": "Spot UV Outsource",
+  "pricing_type": null,
   "qty_formula": "cut_sheet_area * cut_sheet_qty",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1215,9 +1301,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.101942",
   "name": "Sand UV",
+  "pricing_type": null,
   "qty_formula": "cut_sheet_area * cut_sheet_qty",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1239,9 +1327,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.110875",
   "name": "Soft Touch",
+  "pricing_type": null,
   "qty_formula": "cut_sheet_area * cut_sheet_qty",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1263,9 +1353,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.118504",
   "name": "Flexo Lamination",
+  "pricing_type": null,
   "qty_formula": "reel_area",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1287,6 +1379,7 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.135142",
   "name": "Flexo Foil Block",
+  "pricing_type": null,
   "qty_formula": "attr.foil_count",
   "rate_formula": "fix_rate",
   "table_acwl": [
@@ -1298,7 +1391,8 @@
     "parenttype": "Cost Fact",
     "type": "Number"
    }
-  ]
+  ],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1320,9 +1414,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.148766",
   "name": "Flexo Foiling Machine",
+  "pricing_type": null,
   "qty_formula": "1 + reel_area / 180",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1344,9 +1440,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.160791",
   "name": "Flexo Die Cutter Block",
+  "pricing_type": null,
   "qty_formula": "1",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1368,9 +1466,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.175762",
   "name": "Flexo Die Cutting Machine",
+  "pricing_type": null,
   "qty_formula": "0.5 + reel_area / 180",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1392,9 +1492,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.187732",
   "name": "Flexo Proof Board",
+  "pricing_type": null,
   "qty_formula": "1",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1416,9 +1518,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.195548",
   "name": "Flexo Delivery",
+  "pricing_type": null,
   "qty_formula": "1",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1440,6 +1544,7 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.207347",
   "name": "Flexo Corrugated Boxes",
+  "pricing_type": null,
   "qty_formula": "ceil(item_qty / attr.pcs_per_box)",
   "rate_formula": "fix_rate",
   "table_acwl": [
@@ -1451,7 +1556,8 @@
     "parenttype": "Cost Fact",
     "type": "Number"
    }
-  ]
+  ],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1473,9 +1579,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.215044",
   "name": "Flexo Embossing",
+  "pricing_type": null,
   "qty_formula": "0.5 + reel_area / 125",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1497,6 +1605,7 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.226125",
   "name": "Flexo Slitting",
+  "pricing_type": null,
   "qty_formula": "0.25 + reel_area / attr.slitting_factor",
   "rate_formula": "fix_rate",
   "table_acwl": [
@@ -1508,7 +1617,8 @@
     "parenttype": "Cost Fact",
     "type": "Number"
    }
-  ]
+  ],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1530,6 +1640,7 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.236454",
   "name": "Flexo Plates",
+  "pricing_type": null,
   "qty_formula": "attr.plate_count",
   "rate_formula": "fix_rate",
   "table_acwl": [
@@ -1541,7 +1652,8 @@
     "parenttype": "Cost Fact",
     "type": "Number"
    }
-  ]
+  ],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1563,9 +1675,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.243875",
   "name": "Gallus Printing Setup",
+  "pricing_type": null,
   "qty_formula": "no_of_colors / 3",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1587,9 +1701,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.255705",
   "name": "Gallus Printing",
+  "pricing_type": null,
   "qty_formula": "reel_area / 750",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1611,9 +1727,11 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.265756",
   "name": "Mark Andy Printing Setup",
+  "pricing_type": null,
   "qty_formula": "no_of_colors / 3",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  },
  {
   "calculation": null,
@@ -1635,8 +1753,10 @@
   "min_qty": 0.0,
   "modified": "2026-05-14 12:59:17.274300",
   "name": "Mark Andy Printing",
+  "pricing_type": null,
   "qty_formula": "reel_area / 750",
   "rate_formula": "fix_rate",
-  "table_acwl": []
+  "table_acwl": [],
+  "uom": null
  }
 ]

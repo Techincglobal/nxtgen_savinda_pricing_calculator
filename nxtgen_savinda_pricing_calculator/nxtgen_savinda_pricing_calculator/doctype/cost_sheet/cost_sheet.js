@@ -137,6 +137,20 @@ frappe.ui.form.on("Cost Sheet", {
 					});
 					frm.refresh_field("operations");
 				}
+
+				// Copy compliance data from inquiry (always refresh — compliance may have changed)
+				var compliance_items = o.custom_compliance || [];
+				if (compliance_items.length) {
+					frm.doc.compliance = [];
+					compliance_items.forEach(function (c) {
+						if (c.disabled) return;
+						var row = frm.add_child("compliance");
+						// Table MultiSelect stores the linked value in the 'compliance_details' or first link field
+						row.compliance_type = c.compliance_type || c.type || "";
+						row.about_compliance = c.about_compliance || "";
+					});
+					frm.refresh_field("compliance");
+				}
 			},
 		});
 	},
@@ -221,10 +235,13 @@ function render_panel(frm, cdt, cdn) {
 
 			var unit = round2(unit_cost_sum);
 			var qty = flt_v(row.qty);
+			var margin_pct = flt_v(row.profit_margin);
 			var sscl_amt = row.sscl ? round2(unit * (_cc.sscl_rate / 100)) : 0;
-			var vat_base = unit + sscl_amt;
-			var vat_amt = row.vat ? round2(vat_base * (_cc.vat_rate / 100)) : 0;
-			var sell_unit = round2(unit + sscl_amt + vat_amt);
+			var cost_with_sscl = unit + sscl_amt;
+			var margin_amt = margin_pct ? round2(cost_with_sscl * (margin_pct / 100)) : 0;
+			var qu = round2(cost_with_sscl + margin_amt);
+			var vat_amt = row.vat ? round2(qu * (_cc.vat_rate / 100)) : 0;
+			var sell_unit = round2(qu + vat_amt);
 			var cost_amt = round2(qty * unit);
 			var sell_amt = round2(qty * sell_unit);
 
@@ -254,12 +271,17 @@ function render_panel(frm, cdt, cdn) {
 							+ "class='btn btn-xs btn-primary' style='font-size:10.5px'>Print</a>"
 							+ "</td>";
 					} else {
+						var draft_print_url = "/printview?doctype=Calculation+Breakdown&name="
+							+ encodeURIComponent(c.calculation_breakdown || "")
+							+ "&format=Product+Costing+Summary&no_letterhead=0";
 						action_td = "<td style='padding:5px 8px;text-align:center;white-space:nowrap'>"
 							+ "<button class='btn-edit-calc btn btn-xs btn-default' "
-							+ "data-cb='" + c.calculation_breakdown + "' style='margin-right:4px'>✏️</button>"
+							+ "data-cb='" + c.calculation_breakdown + "' style='margin-right:4px' title='Open Calculator'>✏️</button>"
+							+ "<a href='" + draft_print_url + "' target='_blank' "
+							+ "class='btn btn-xs btn-default' style='margin-right:4px;font-size:10.5px' title='Download PDF'>🖨</a>"
 							+ "<button class='btn-remove-calc btn btn-xs btn-danger' "
 							+ "data-cb='" + c.calculation_breakdown + "' "
-							+ "data-row='" + c.name + "'>🗑</button>"
+							+ "data-row='" + c.name + "' title='Remove'>🗑</button>"
 							+ "</td>";
 					}
 					calc_rows +=
@@ -274,9 +296,10 @@ function render_panel(frm, cdt, cdn) {
 				});
 			}
 
-			// Build tax rows
+			// Build tax + margin rows (SSCL on cost → add margin → then VAT)
 			var tax_rows = "";
 			if (row.sscl) tax_rows += price_row("SSCL (" + _cc.sscl_rate + "%)", sscl_amt, "#fff8e1");
+			if (margin_pct) tax_rows += price_row("Profit Margin (" + margin_pct + "%)", margin_amt, "#e8f5e9");
 			if (row.vat) tax_rows += price_row("VAT (" + _cc.vat_rate + "%)", vat_amt, "#fff8e1");
 
 			var add_btn = is_submitted ? "" :
@@ -574,9 +597,18 @@ function create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pric
 							// 3. Link CB to all peer Cost Items in the same group, then open calculator
 							function link_peer(idx) {
 								if (idx >= peer_items.length) {
+									// Build bqtys param from Cost Item's breakdown_qtys_json
+									var bqtys_param = "";
+									try {
+										var bqtys = ci.breakdown_qtys_json ? JSON.parse(ci.breakdown_qtys_json) : [];
+										if (bqtys && bqtys.length > 1) {
+											bqtys_param = "&bqtys=" + encodeURIComponent(bqtys.join(","));
+										}
+									} catch (e) {}
 									var url = "/app/offset-calculator?ref=" + encodeURIComponent(cb_name)
 										+ "&cost_sheet=" + encodeURIComponent(frm.doc.name)
 										+ "&pricing_type=" + encodeURIComponent(pricingType || "Offset")
+										+ bqtys_param
 										+ get_operations_param(frm);
 									window.location.href = url;
 									return;
@@ -669,10 +701,13 @@ function finish_refresh(frm, cdt, cdn, unit_cost_sum) {
 
 	var unit = round2(unit_cost_sum);
 	var qty = flt_v(row.qty);
-	var sscl_amt = row.sscl ? round2(unit * (_cc.sscl_rate / 100)) : 0;
-	var vat_base = unit + sscl_amt;
-	var vat_amt = row.vat ? round2(vat_base * (_cc.vat_rate / 100)) : 0;
-	var sell_unit = round2(unit + sscl_amt + vat_amt);
+	var margin_pct_r = flt_v(row.profit_margin);
+	var sscl_amt_r = row.sscl ? round2(unit * (_cc.sscl_rate / 100)) : 0;
+	var cost_with_sscl_r = unit + sscl_amt_r;
+	var margin_amt_r = margin_pct_r ? round2(cost_with_sscl_r * (margin_pct_r / 100)) : 0;
+	var qu_r = round2(cost_with_sscl_r + margin_amt_r);
+	var vat_amt_r = row.vat ? round2(qu_r * (_cc.vat_rate / 100)) : 0;
+	var sell_unit = round2(qu_r + vat_amt_r);
 
 	frappe.model.set_value(cdt, cdn, "selling_unit_price", sell_unit);
 	frappe.model.set_value(cdt, cdn, "ammount", round2(qty * unit));
@@ -795,8 +830,12 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 		fieldtype: "HTML",
 		options: "<div style='padding:8px 12px;background:#f0f4ff;border-radius:5px;"
 			+ "font-size:12px;color:#1a3a5c;margin-bottom:8px'>"
-			+ "Select breakdown items to create Cost Items for.<br>"
-			+ "Each selected row creates: <b>" + subject + " - [Description]</b></div>",
+			+ "<b>Individual mode:</b> each selected breakdown → separate Cost Item.<br>"
+			+ "<b>Combined mode:</b> all selected breakdowns → ONE Cost Item (sheet requirements calculated per-breakdown, summed).</div>",
+	}, {
+		fieldtype: "Check", fieldname: "combine_mode",
+		label: "Combine selected breakdowns into ONE calculation item",
+		default: 0,
 	}];
 
 	breakdowns.forEach(function (bd, i) {
@@ -813,7 +852,7 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 	fields.push({
 		fieldtype: "Data", fieldname: "group_name",
 		label: "Group Name (optional)",
-		description: "If set, all selected items share this group — the quotation will show one combined row.",
+		description: "If set, all created items share this group — the quotation will show one combined row.",
 	});
 	fields.push({
 		fieldtype: "HTML", fieldname: "preview_html",
@@ -833,7 +872,46 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 			if (!selected_bds.length) {
 				frappe.msgprint({ message: "No breakdowns selected.", indicator: "orange" }); return;
 			}
-			// Sequential insertion for non-book breakdowns
+
+			if (values.combine_mode && selected_bds.length > 1) {
+				// ── COMBINED MODE: create ONE Cost Item with total qty + breakdown_qtys_json ──
+				var total_qty = selected_bds.reduce(function (s, b) { return s + flt_v(b.qty); }, 0);
+				var breakdown_qtys = selected_bds.map(function (b) { return flt_v(b.qty); });
+				var descriptions = selected_bds.map(function (b) { return (b.description || "").trim(); }).filter(Boolean);
+				var combined_desc = descriptions.join(" + ");
+				var name = combined_desc ? subject + " - " + combined_desc : subject;
+				frappe.call({
+					method: "frappe.client.insert",
+					args: {
+						doc: {
+							doctype: "cost Item", cost_item_name: name,
+							inquiry: opp.name, subject: subject, page_type: "",
+							colour: cint_v(opp.custom_colour), material: "",
+							item_qty: total_qty, no_of_pages: 0,
+							breakdown: combined_desc, is_selected: 1,
+							breakdown_qtys_json: JSON.stringify(breakdown_qtys),
+						}
+					},
+					callback: function (r) {
+						if (r.message) {
+							var row = frm.add_child("pricing_list");
+							row.item = r.message.name;
+							row.item_name = name;
+							row.qty = total_qty;
+							if (group_name_val) row.group_name = group_name_val;
+						}
+						frm.refresh_field("pricing_list");
+						frm.save();
+						frappe.show_alert({
+							message: "Combined cost item created (" + breakdown_qtys.length + " breakdowns, total qty " + total_qty.toLocaleString() + ")",
+							indicator: "green",
+						});
+					},
+				});
+				return;
+			}
+
+			// ── INDIVIDUAL MODE: one Cost Item per selected breakdown ──
 			function insert_bd_next(idx) {
 				if (idx >= selected_bds.length) {
 					frm.refresh_field("pricing_list");
@@ -873,28 +951,46 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 		},
 	});
 
-	// Live preview
-	d.$wrapper.on("change", "input[type=checkbox]", function () {
+	// Live preview updates when checkboxes change
+	function update_preview() {
+		var combine = d.get_value("combine_mode");
 		var sel = breakdowns.filter(function (bd, i) { return d.get_value("sel_bd_" + i); });
-		var rows = sel.map(function (bd) {
-			var bd_desc = (bd.description || "").trim();
-			return "<tr><td style='padding:4px 8px;font-weight:600;font-size:12px'>"
-				+ (bd_desc ? subject + " - " + bd_desc : subject) + "</td>"
-				+ "<td style='padding:4px 8px;text-align:right;font-family:monospace'>"
-				+ flt_v(bd.qty).toLocaleString() + "</td></tr>";
-		}).join("");
-		d.$wrapper.find("#cs-single-preview").html(
-			rows ? "<table style='width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:4px'>"
-				+ "<thead><tr style='background:#1a3a5c'>"
+		var rows;
+		if (combine && sel.length > 1) {
+			var total = sel.reduce(function (s, b) { return s + flt_v(b.qty); }, 0);
+			var combined_name = sel.map(function (b) { return (b.description || "").trim(); }).filter(Boolean).join(" + ");
+			rows = "<tr style='background:#e8f5e9'>"
+				+ "<td style='padding:5px 8px;font-weight:600;font-size:12px'>" + subject + (combined_name ? " - " + combined_name : "") + "</td>"
+				+ "<td style='padding:5px 8px;text-align:right;font-family:monospace;color:#2e7d32;font-weight:700'>" + total.toLocaleString() + "</td>"
+				+ "<td style='padding:5px 8px;font-size:10px;color:#555'>"
+				+ sel.map(function (b) { return flt_v(b.qty).toLocaleString(); }).join(" + ") + "</td></tr>";
+			rows = "<thead><tr style='background:#1a3a5c'>"
+				+ "<th style='padding:5px 8px;color:#fff;font-size:11px;text-align:left'>Cost Item</th>"
+				+ "<th style='padding:5px 8px;color:#fff;font-size:11px;text-align:right'>Total Qty</th>"
+				+ "<th style='padding:5px 8px;color:#fff;font-size:11px'>Breakdown Qtys</th>"
+				+ "</tr></thead><tbody>" + rows + "</tbody>";
+		} else {
+			rows = sel.map(function (bd) {
+				var bd_desc = (bd.description || "").trim();
+				return "<tr><td style='padding:4px 8px;font-weight:600;font-size:12px'>"
+					+ (bd_desc ? subject + " - " + bd_desc : subject) + "</td>"
+					+ "<td style='padding:4px 8px;text-align:right;font-family:monospace'>"
+					+ flt_v(bd.qty).toLocaleString() + "</td></tr>";
+			}).join("");
+			rows = "<thead><tr style='background:#1a3a5c'>"
 				+ "<th style='padding:5px 8px;color:#fff;font-size:11px;text-align:left'>Cost Item Name</th>"
 				+ "<th style='padding:5px 8px;color:#fff;font-size:11px;text-align:right'>Qty</th>"
-				+ "</tr></thead><tbody>" + rows + "</tbody></table>" : ""
+				+ "</tr></thead><tbody>" + rows + "</tbody>";
+		}
+		d.$wrapper.find("#cs-single-preview").html(
+			sel.length ? "<table style='width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:4px'>"
+				+ rows + "</table>" : ""
 		);
-	});
+	}
 
+	d.$wrapper.on("change", "input[type=checkbox]", update_preview);
 	d.show();
-	// Trigger initial preview
-	d.$wrapper.find("input[type=checkbox]").trigger("change");
+	setTimeout(update_preview, 100);
 }
 
 function build_items(subject, pages, breakdowns, selected, total_bd_qty) {

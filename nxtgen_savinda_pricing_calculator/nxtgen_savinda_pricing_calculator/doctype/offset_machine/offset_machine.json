@@ -1,0 +1,195 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:machine_name",
+ "creation": "2026-05-21 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "machine_name",
+  "is_printing_machine",
+  "column_break_1",
+  "can_run_parallel",
+  "section_break_output",
+  "max_output_per_hour",
+  "color_capacity",
+  "column_break_2",
+  "machine_cost_per_hour",
+  "section_break_setup",
+  "basic_setup_time",
+  "customer_sample_setup_time",
+  "column_break_3",
+  "additional_color_setup_time",
+  "section_break_formulas",
+  "formula_guide_html",
+  "qty_formula",
+  "column_break_4",
+  "rate_formula"
+ ],
+ "fields": [
+  {
+   "fieldname": "machine_name",
+   "fieldtype": "Data",
+   "label": "Machine Name",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "is_printing_machine",
+   "fieldtype": "Check",
+   "label": "Is Printing Machine",
+   "in_list_view": 1,
+   "description": "Uses printing makeready formula (basic setup + extra colors above 4)"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "can_run_parallel",
+   "fieldtype": "Check",
+   "label": "Can Run Parallel Operations",
+   "in_list_view": 1,
+   "description": "If checked, pass count = 1 when multiple specs share this machine"
+  },
+  {
+   "fieldname": "section_break_output",
+   "fieldtype": "Section Break",
+   "label": "Output & Cost"
+  },
+  {
+   "fieldname": "max_output_per_hour",
+   "fieldtype": "Float",
+   "label": "Max Output Per Hour",
+   "reqd": 1,
+   "description": "Sheets, cuts, pcs, impressions — depends on the operation unit"
+  },
+  {
+   "fieldname": "color_capacity",
+   "fieldtype": "Int",
+   "label": "Color Capacity",
+   "depends_on": "eval:doc.is_printing_machine",
+   "description": "Colors per pass (printing machines only)"
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "machine_cost_per_hour",
+   "fieldtype": "Currency",
+   "label": "Machine Cost Per Hour (LKR)",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_setup",
+   "fieldtype": "Section Break",
+   "label": "Setup Times (hours)"
+  },
+  {
+   "fieldname": "basic_setup_time",
+   "fieldtype": "Float",
+   "label": "Basic Setup Time",
+   "reqd": 1,
+   "description": "Makeready hours for standard setup"
+  },
+  {
+   "fieldname": "customer_sample_setup_time",
+   "fieldtype": "Float",
+   "label": "Customer Sample Setup Time",
+   "depends_on": "eval:doc.is_printing_machine",
+   "description": "Used instead of basic setup when Customer Sample Colors is checked"
+  },
+  {
+   "fieldname": "column_break_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "additional_color_setup_time",
+   "fieldtype": "Float",
+   "label": "Additional Color Setup Time",
+   "depends_on": "eval:doc.is_printing_machine",
+   "description": "Hours per extra color above 4 (printing only)"
+  },
+  {
+   "fieldname": "section_break_formulas",
+   "fieldtype": "Section Break",
+   "label": "Custom Formulas (Optional)",
+   "description": "Leave blank to use the standard hour-based cost. Use formulas only to override how req_qty or rate is calculated.",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "formula_guide_html",
+   "fieldtype": "HTML",
+   "label": "Formula Reference Guide",
+   "options": "<div style=\"font-family:var(--font-stack,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif);font-size:13px;line-height:1.5;padding:4px 0 10px\">\n\n  <!-- How cost is calculated -->\n  <div style=\"background:#e3f2fd;border-left:4px solid #1976d2;padding:10px 14px;border-radius:0 6px 6px 0;margin-bottom:14px\">\n    <div style=\"font-weight:700;color:#1565c0;font-size:13px;margin-bottom:6px\">&#9881;&#65039; How Machine Cost is Calculated</div>\n    <div style=\"font-family:'Courier New',monospace;font-size:12px;color:#0d47a1;line-height:1.9\">\n      <b>Cost = req_qty &times; rate</b><br>\n      <span style=\"color:#666\">&#8212; Default (no formula) &#8212;</span><br>\n      req_qty &nbsp;= <b>total_hrs</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style=\"color:#555\">&larr; overridden by Qty Formula</span><br>\n      rate &nbsp;&nbsp;&nbsp;&nbsp;= <b>machine_cost_per_hour</b> &nbsp;<span style=\"color:#555\">&larr; overridden by Rate Formula</span>\n    </div>\n  </div>\n\n  <div style=\"display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px\">\n\n    <!-- Time Variables -->\n    <div>\n      <div style=\"background:#1565c0;color:#fff;padding:5px 10px;border-radius:5px 5px 0 0;font-weight:700;font-size:11px;letter-spacing:.5px\">&#128336; TIME VARIABLES</div>\n      <table style=\"width:100%;border-collapse:collapse;background:#e3f2fd\">\n        <tr><td style=\"padding:4px 8px;font-family:monospace;color:#0d47a1;font-size:12px\">total_hrs</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">(Makeready + Production) &times; Cycles</td></tr>\n        <tr style=\"background:#bbdefb\"><td style=\"padding:4px 8px;font-family:monospace;color:#0d47a1;font-size:12px\">makeready_hrs</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">Setup / makeready hours</td></tr>\n        <tr><td style=\"padding:4px 8px;font-family:monospace;color:#0d47a1;font-size:12px\">production_hrs</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">unit_qty &divide; max_output &times; pass_count</td></tr>\n        <tr style=\"background:#bbdefb\"><td style=\"padding:4px 8px;font-family:monospace;color:#0d47a1;font-size:12px\">pass_count</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">Printing: ceil(colors/capacity)<br>Non-print: ops sharing machine</td></tr>\n        <tr><td style=\"padding:4px 8px;font-family:monospace;color:#0d47a1;font-size:12px\">cycles</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">Repeat cycles (set per job)</td></tr>\n        <tr style=\"background:#bbdefb\"><td style=\"padding:4px 8px;font-family:monospace;color:#0d47a1;font-size:12px\">unit_qty</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">Qty in spec unit (sheets/pcs/sqin)</td></tr>\n      </table>\n    </div>\n\n    <!-- Quantity Variables -->\n    <div>\n      <div style=\"background:#2e7d32;color:#fff;padding:5px 10px;border-radius:5px 5px 0 0;font-weight:700;font-size:11px;letter-spacing:.5px\">&#128230; SHEET &amp; JOB QUANTITIES</div>\n      <table style=\"width:100%;border-collapse:collapse;background:#e8f5e9\">\n        <tr><td style=\"padding:4px 8px;font-family:monospace;color:#1b5e20;font-size:12px\">item_qty</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">Total order quantity (pcs)</td></tr>\n        <tr style=\"background:#c8e6c9\"><td style=\"padding:4px 8px;font-family:monospace;color:#1b5e20;font-size:12px\">full_sheet_qty</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">Number of full sheets</td></tr>\n        <tr><td style=\"padding:4px 8px;font-family:monospace;color:#1b5e20;font-size:12px\">cut_sheet_qty</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">Number of cut sheets</td></tr>\n        <tr style=\"background:#c8e6c9\"><td style=\"padding:4px 8px;font-family:monospace;color:#1b5e20;font-size:12px\">cut_sheet_area</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">Cut sheet area (L &times; W mm)</td></tr>\n        <tr><td style=\"padding:4px 8px;font-family:monospace;color:#1b5e20;font-size:12px\">no_of_colors</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">Colors in job</td></tr>\n        <tr style=\"background:#c8e6c9\"><td style=\"padding:4px 8px;font-family:monospace;color:#1b5e20;font-size:12px\">no_of_cuts</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">Number of cuts</td></tr>\n        <tr><td style=\"padding:4px 8px;font-family:monospace;color:#1b5e20;font-size:12px\">no_of_ups</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">Number of ups per sheet</td></tr>\n        <tr style=\"background:#c8e6c9\"><td style=\"padding:4px 8px;font-family:monospace;color:#1b5e20;font-size:12px\">reel_area / reel_length</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">Flexo only</td></tr>\n      </table>\n    </div>\n\n  </div>\n\n  <div style=\"display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px\">\n\n    <!-- Cost Parameters -->\n    <div>\n      <div style=\"background:#e65100;color:#fff;padding:5px 10px;border-radius:5px 5px 0 0;font-weight:700;font-size:11px;letter-spacing:.5px\">&#128181; COST PARAMETERS</div>\n      <table style=\"width:100%;border-collapse:collapse;background:#fff3e0\">\n        <tr><td style=\"padding:4px 8px;font-family:monospace;color:#bf360c;font-size:12px\">machine_cost_per_hour</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">Running cost per hour (LKR) &#8212; default rate</td></tr>\n      </table>\n    </div>\n\n    <!-- Math Functions -->\n    <div>\n      <div style=\"background:#6a1b9a;color:#fff;padding:5px 10px;border-radius:5px 5px 0 0;font-weight:700;font-size:11px;letter-spacing:.5px\">&#128290; MATH FUNCTIONS</div>\n      <table style=\"width:100%;border-collapse:collapse;background:#f3e5f5\">\n        <tr><td style=\"padding:4px 8px;font-family:monospace;color:#4a148c;font-size:12px\">ceil(x)</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">Round up</td></tr>\n        <tr style=\"background:#e1bee7\"><td style=\"padding:4px 8px;font-family:monospace;color:#4a148c;font-size:12px\">floor(x)</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">Round down</td></tr>\n        <tr><td style=\"padding:4px 8px;font-family:monospace;color:#4a148c;font-size:12px\">max(a, b)</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">Larger of two values</td></tr>\n        <tr style=\"background:#e1bee7\"><td style=\"padding:4px 8px;font-family:monospace;color:#4a148c;font-size:12px\">min(a, b)</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">Smaller of two values</td></tr>\n        <tr><td style=\"padding:4px 8px;font-family:monospace;color:#4a148c;font-size:12px\">round(x, n)</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">Round to n decimal places</td></tr>\n        <tr style=\"background:#e1bee7\"><td style=\"padding:4px 8px;font-family:monospace;color:#4a148c;font-size:12px\">abs(x)</td><td style=\"padding:4px 8px;color:#333;font-size:12px\">Absolute value</td></tr>\n      </table>\n    </div>\n\n  </div>\n\n  <!-- Examples -->\n  <div style=\"background:#fafafa;border:1px solid #e0e0e0;border-radius:6px;padding:12px 14px\">\n    <div style=\"font-weight:700;color:#333;margin-bottom:10px;font-size:13px\">&#128203; Formula Examples</div>\n\n    <div style=\"display:grid;grid-template-columns:1fr 1fr;gap:8px\">\n\n      <div style=\"background:#e3f2fd;border-radius:5px;padding:8px 10px\">\n        <div style=\"font-size:11px;font-weight:700;color:#1565c0;margin-bottom:4px\">STANDARD MACHINE HOUR</div>\n        <div style=\"font-family:monospace;font-size:12px;color:#1976d2\">Qty: <i>(leave blank)</i><br>Rate: <i>(leave blank)</i></div>\n        <div style=\"font-size:11px;color:#555;margin-top:4px\">Cost = total_hrs &times; machine_cost_per_hour</div>\n      </div>\n\n      <div style=\"background:#e8f5e9;border-radius:5px;padding:8px 10px\">\n        <div style=\"font-size:11px;font-weight:700;color:#2e7d32;margin-bottom:4px\">CHARGE PER CUT SHEET</div>\n        <div style=\"font-family:monospace;font-size:12px;color:#388e3c\">Qty: cut_sheet_qty<br>Rate: 0.5</div>\n        <div style=\"font-size:11px;color:#555;margin-top:4px\">e.g. 0.50 LKR per cut sheet</div>\n      </div>\n\n      <div style=\"background:#fff3e0;border-radius:5px;padding:8px 10px\">\n        <div style=\"font-size:11px;font-weight:700;color:#e65100;margin-bottom:4px\">MINIMUM HOURS ENFORCED</div>\n        <div style=\"font-family:monospace;font-size:12px;color:#f57c00\">Qty: max(total_hrs, 0.5)<br>Rate: <i>(leave blank)</i></div>\n        <div style=\"font-size:11px;color:#555;margin-top:4px\">Always charge at least 0.5 hrs</div>\n      </div>\n\n      <div style=\"background:#f3e5f5;border-radius:5px;padding:8px 10px\">\n        <div style=\"font-size:11px;font-weight:700;color:#6a1b9a;margin-bottom:4px\">AREA-BASED CHARGE</div>\n        <div style=\"font-family:monospace;font-size:12px;color:#7b1fa2\">Qty: cut_sheet_area * cut_sheet_qty<br>Rate: 0.002</div>\n        <div style=\"font-size:11px;color:#555;margin-top:4px\">e.g. lamination cost per mm&sup2;</div>\n      </div>\n\n      <div style=\"background:#fce4ec;border-radius:5px;padding:8px 10px\">\n        <div style=\"font-size:11px;font-weight:700;color:#880e4f;margin-bottom:4px\">PER-COLOR RATE OVERRIDE</div>\n        <div style=\"font-family:monospace;font-size:12px;color:#c2185b\">Qty: total_hrs<br>Rate: machine_cost_per_hour * no_of_colors</div>\n        <div style=\"font-size:11px;color:#555;margin-top:4px\">Rate scales with number of colors</div>\n      </div>\n\n      <div style=\"background:#e0f2f1;border-radius:5px;padding:8px 10px\">\n        <div style=\"font-size:11px;font-weight:700;color:#004d40;margin-bottom:4px\">MINIMUM COST GUARANTEE</div>\n        <div style=\"font-family:monospace;font-size:12px;color:#00695c\">Qty: max(total_hrs, 1)<br>Rate: max(machine_cost_per_hour, 2500)</div>\n        <div style=\"font-size:11px;color:#555;margin-top:4px\">Floor on both hours and rate</div>\n      </div>\n\n    </div>\n  </div>\n\n</div>"
+  },
+  {
+   "fieldname": "qty_formula",
+   "fieldtype": "Small Text",
+   "label": "Qty Formula (overrides total_hrs)",
+   "description": "Result replaces total_hrs as req_qty. Leave blank to use total_hrs."
+  },
+  {
+   "fieldname": "column_break_4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "rate_formula",
+   "fieldtype": "Small Text",
+   "label": "Rate Formula (overrides machine_cost_per_hour)",
+   "description": "Result replaces machine_cost_per_hour as the rate. Leave blank to use machine_cost_per_hour."
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-06-04 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "Offset Machine",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Savinda Pricing Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Savinda Estimator"
+  },
+  {
+   "print": 1,
+   "read": 1,
+   "role": "Savinda Pricing Viewer"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
