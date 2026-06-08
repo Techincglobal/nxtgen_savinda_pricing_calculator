@@ -27,7 +27,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Type",
-   "options": "Number\nText"
+   "options": "Number\nFloat\nPercentage\nText"
   }
  ],
  "grid_page_length": 50,

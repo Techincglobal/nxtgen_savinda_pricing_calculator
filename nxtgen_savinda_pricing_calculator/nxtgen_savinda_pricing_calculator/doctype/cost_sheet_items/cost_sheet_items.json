@@ -11,6 +11,7 @@
   "column_break_djsy",
   "item_name",
   "unit_price",
+  "profit_margin",
   "ammount",
   "selling_unit_price",
   "selling_ammount",
@@ -57,28 +58,41 @@
    "fieldname": "unit_price",
    "fieldtype": "Currency",
    "in_list_view": 1,
-   "label": "Unit Cost"
+   "label": "Unit Cost",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "profit_margin",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Margin %",
+   "read_only": 1,
+   "description": "Copied from Calculation Breakdown. Edit in the calculator."
   },
   {
    "columns": 2,
    "fieldname": "ammount",
    "fieldtype": "Currency",
    "in_list_view": 1,
-   "label": "Cost Amount"
+   "label": "Cost Amount",
+   "read_only": 1
   },
   {
    "columns": 2,
    "fieldname": "selling_unit_price",
    "fieldtype": "Currency",
    "in_list_view": 1,
-   "label": "Selling Unit Price"
+   "label": "Selling Unit Price",
+   "read_only": 1
   },
   {
    "columns": 2,
    "fieldname": "selling_ammount",
    "fieldtype": "Currency",
    "in_list_view": 1,
-   "label": "Selling Amount"
+   "label": "Selling Amount",
+   "read_only": 1
   },
   {
    "fieldname": "section_break_iefe",
@@ -132,7 +146,8 @@
    "default": "0",
    "fieldname": "sscl",
    "fieldtype": "Check",
-   "label": "Apply SSCL"
+   "label": "Apply SSCL",
+   "read_only": 1
   },
   {
    "fieldname": "column_break_fpia",
@@ -142,7 +157,8 @@
    "default": "0",
    "fieldname": "vat",
    "fieldtype": "Check",
-   "label": "Apply VAT"
+   "label": "Apply VAT",
+   "read_only": 1
   },
   {
    "fieldname": "section_break_qauz",

@@ -32,6 +32,10 @@ fixtures = [
 	{"dt": "Item",       "filters": [["item_code", "like", "CALC-%"]]},
 	{"dt": "Cost Fact"},
 	{"dt": "Offset Spec"},
+	{"dt": "Offset Machine"},
+	{"dt": "Offset Ink"},
+	{"dt": "Flexo Foil"},
+	{"dt": "Role", "filters": [["name", "in", ["Savinda Pricing Manager", "Savinda Estimator", "Savinda Pricing Viewer"]]]},
 	{"dt": "Print Format", "filters": [["doc_type", "in", ["Cost Sheet", "Calculation Breakdown", "Savinda Quotation"]]]},
 ]
 
@@ -39,6 +43,10 @@ app_include_js = [
 	"https://unpkg.com/vue@3/dist/vue.global.prod.js",
     "/assets/nxtgen_savinda_pricing_calculator/js/offset_calculator.js",
 	]
+
+doctype_js = {
+	"Opportunity": "public/js/opportunity.js",
+}
 
 # include js, css files in header of web template
 # web_include_css = "/assets/nxtgen_savinda_pricing_calculator/css/nxtgen_savinda_pricing_calculator.css"

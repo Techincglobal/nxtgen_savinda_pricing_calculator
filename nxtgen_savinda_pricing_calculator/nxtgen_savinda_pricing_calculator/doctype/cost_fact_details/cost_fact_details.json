@@ -14,6 +14,7 @@
   "section_break_pmcc",
   "req_qty_column",
   "req_qty",
+  "uom",
   "column_break_tvkl",
   "rate",
   "column_break_xaeq",
@@ -81,6 +82,12 @@
    "fieldtype": "Float",
    "in_list_view": 1,
    "label": "Req. Qty"
+  },
+  {
+   "fieldname": "uom",
+   "fieldtype": "Data",
+   "label": "UOM",
+   "in_list_view": 1
   },
   {
    "fieldname": "selected_item",

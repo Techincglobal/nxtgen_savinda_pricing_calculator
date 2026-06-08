@@ -34,6 +34,9 @@ function oc_mount_app(el) {
 		calculate: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.calculate',
 		save: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.save_costing',
 		load: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.load_costing',
+		getInquiryBreakdowns: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.get_inquiry_breakdowns',
+		getOffsetInks: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.get_offset_inks',
+		getFlexoFoils: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.get_flexo_foils',
 	};
 
 	function debounce(fn, ms) {
@@ -44,6 +47,20 @@ function oc_mount_app(el) {
 		return parseFloat(v || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 	}
 	function fmtNum(v) { return Math.round(v || 0).toLocaleString('en-LK'); }
+	function fmtRate(v) {
+		var n = parseFloat(v || 0);
+		if (n === 0) return '0.00';
+		if (Math.abs(n) >= 1) return n.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+		// Small values like 0.0024: show up to 6 significant figures
+		var s = n.toPrecision(6);
+		return parseFloat(s).toString();
+	}
+	function fmtQty(v) {
+		var n = parseFloat(v || 0);
+		if (n === 0) return '0';
+		if (Math.abs(n) >= 1) return n.toLocaleString('en-LK', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
+		return n.toPrecision(6);
+	}
 
 	var app = Vue.createApp({
 
@@ -94,6 +111,18 @@ function oc_mount_app(el) {
 				},
 
 				calc: { sheet: null, cost_rows: [], group_totals: {}, pricing: null },
+				additionalBreakdowns: [],
+				newBreakdownQty: '',
+				collapsedGroups: {},
+				collapsedSpecs: {},
+
+				// Production Assignment dialog
+				allInks: [],
+				allFoils: [],
+				inkDialog: null,
+				inkDialogState: { machine: '', cycles: 1, csc: false, inks: [], foils: [] },
+				inkNewInk: '', inkNewPct: 100,
+				foilNewName: '', foilNewGroup: 'COLD', foilNewPct: 100,
 			};
 		},
 
@@ -104,7 +133,13 @@ function oc_mount_app(el) {
 			},
 			specsByGroup() {
 				var g = {};
-				this.allSpecs.forEach(function (s) {
+				// Sort: Print first within each group, then alphabetically
+				var sorted = this.allSpecs.slice().sort(function (a, b) {
+					if (a.spec_name === 'Print') return -1;
+					if (b.spec_name === 'Print') return 1;
+					return a.spec_name < b.spec_name ? -1 : a.spec_name > b.spec_name ? 1 : 0;
+				});
+				sorted.forEach(function (s) {
 					var gr = s.group || 'Other';
 					if (!g[gr]) g[gr] = [];
 					g[gr].push(s);
@@ -113,6 +148,18 @@ function oc_mount_app(el) {
 			},
 			isOffset() { return this.form.pricing_type === 'Offset'; },
 			isFlexo() { return this.form.pricing_type === 'Flexo'; },
+			totalOrderQty() {
+				// form.item_qty is always the canonical total; additionalBreakdowns are the splits for sheet calc only
+				return parseFloat(this.form.item_qty) || 0;
+			},
+			hasBreakdowns() { return this.additionalBreakdowns.length > 0; },
+			isFlexoDialog() { return this.isFlexo; },
+			isDialogMachinePrinting() {
+				if (!this.inkDialog || !this.inkDialogState.machine) return false;
+				var mList = this.inkDialog.machines || [];
+				var mData = mList.find(function (m) { return m.machine === this.inkDialogState.machine; }, this);
+				return mData ? !!mData.is_printing_machine : false;
+			},
 
 			// Auto-include material row check
 			materialReady() {
@@ -123,44 +170,65 @@ function oc_mount_app(el) {
 			flexoReady() {
 				return this.isFlexo && this.calc.sheet && this.calc.sheet.reel_area > 0;
 			},
+
 			calcPayload() {
 				var self = this;
 				var specs = this.selectedSpecs.map(function (spec) {
+					var st = self.specState[spec.spec_name] || {};
 					var facts = (spec.cost_facts || []).map(function (cf) {
-						var st = (self.specState[spec.spec_name] || {})[cf.cost_fact] || {};
+						var cfst = st[cf.cost_fact] || {};
 						var hasItems = cf.master && cf.master.items && cf.master.items.length > 0;
-						var rate = parseFloat(st.rate || 0);
+						var rate = parseFloat(cfst.rate || 0);
 						if (!rate && !hasItems) rate = parseFloat(self.form.material_rate || 0);
 						return {
 							cost_fact: cf.cost_fact, is_primary: cf.is_primary,
-							selected_item: st.selected_item || '',
-							attribute_values: st.attr_values || {},
-							rate: rate, req_qty: parseFloat(st.req_qty || 0),
+							selected_item: cfst.selected_item || '',
+							attribute_values: cfst.attr_values || {},
+							rate: rate, req_qty: parseFloat(cfst.req_qty || 0),
 						};
 					});
-					return { spec_name: spec.spec_name, cost_facts: facts };
+					return {
+						spec_name: spec.spec_name,
+						has_machine: spec.has_machine || 0,
+						units: spec.units || 'Full sheet',
+						skip_machine_if_spec: spec.skip_machine_if_spec || '',
+						machines: spec.machines || [],
+						machine_assignment: {
+							machine: st._machine || '',
+							cycles: parseInt(st._cycles || 1),
+							customer_sample_colors: !!(st._csc),
+							inks: st._inks || [],
+							foils: st._foils || [],
+						},
+						cost_facts: facts,
+					};
 				});
 
 				// Machine spec — same structure as a regular spec
 				var machine_spec = null;
 				if (this.selectedMachine) {
 					var mfacts = (this.selectedMachine.cost_facts || []).map(function (cf) {
-						var st = self.machineSpecState[cf.cost_fact] || {};
+						var mst = self.machineSpecState[cf.cost_fact] || {};
 						return {
 							cost_fact: cf.cost_fact, is_primary: cf.is_primary,
-							selected_item: st.selected_item || '',
-							attribute_values: st.attr_values || {},
-							rate: parseFloat(st.rate || 0),
-							req_qty: parseFloat(st.req_qty || 0),
+							selected_item: mst.selected_item || '',
+							attribute_values: mst.attr_values || {},
+							rate: parseFloat(mst.rate || 0),
+							req_qty: parseFloat(mst.req_qty || 0),
 						};
 					});
 					machine_spec = {
 						spec_name: this.selectedMachine.spec_name,
-						group: "Machine",
+						group: 'Machine',
 						cost_facts: mfacts,
 					};
 				}
-				return { form: this.form, selected_specs: specs, machine_spec: machine_spec };
+				var formData = Object.assign({}, this.form);
+				// breakdown_qtys = individual split quantities (sheet calc only); item_qty = total (all formulas)
+				formData.breakdown_qtys = this.additionalBreakdowns.length > 0
+					? this.additionalBreakdowns.map(function (q) { return parseFloat(q) || 0; })
+					: [];
+				return { form: formData, selected_specs: specs, machine_spec: machine_spec };
 			},
 		},
 
@@ -173,10 +241,19 @@ function oc_mount_app(el) {
 			}
 			var ops = urlParams.get('operations');
 			if (ops) {
-				// URLSearchParams.get() already decodes the value; split on | separator
 				this.autoSelectOperations = ops.split('|').filter(Boolean);
 			}
 			if (urlParams.get('view_only') === '1') this.viewOnly = true;
+			// Read bqtys — breakdown split quantities passed from Cost Sheet (affect sheet calc only)
+			var bqtys = urlParams.get('bqtys');
+			if (bqtys) {
+				var qtys = bqtys.split(',').map(function (q) { return parseFloat(q) || 0; }).filter(function (q) { return q > 0; });
+				if (qtys.length > 0) {
+					this.additionalBreakdowns = qtys;
+					// Total order qty = sum of all splits
+					this.form.item_qty = qtys.reduce(function (s, q) { return s + q; }, 0);
+				}
+			}
 			this.loadData();
 		},
 
@@ -206,14 +283,22 @@ function oc_mount_app(el) {
 				var self = this;
 				var pt = self.form.pricing_type || 'Offset';
 				var done = 0;
-				function check() { done++; if (done >= 2) { self.loading = false; self.checkUrlRef(); } }
+				function check() { done++; if (done >= 3) { self.loading = false; self.checkUrlRef(); } }
 				frappe.call({ method: API.getSpecs, args: { pricing_type: pt }, callback: function (r) {
 					self.allSpecs = r.message || [];
-					// on_page_show may have run _autoSelectFromOperations before specs loaded; retry now
 					if (self.needsAutoSelect) { self.needsAutoSelect = false; self._autoSelectFromOperations(); }
 					check();
 				}});
 				frappe.call({ method: API.getMachines, args: { pricing_type: pt }, callback: function (r) { self.allMachines = r.message || []; check(); } });
+				// Load inks + foils (needed for both Offset and Flexo Production Assignment)
+				var inkDone = 0;
+				function checkInkFoil() { inkDone++; if (inkDone >= 2) check(); }
+				if (!self.allInks.length) {
+					frappe.call({ method: API.getOffsetInks, callback: function (r) { self.allInks = r.message || []; checkInkFoil(); } });
+				} else { checkInkFoil(); }
+				if (!self.allFoils.length) {
+					frappe.call({ method: API.getFlexoFoils, callback: function (r) { self.allFoils = r.message || []; checkInkFoil(); } });
+				} else { checkInkFoil(); }
 			},
 
 			// Reload specs when pricing type changes
@@ -281,12 +366,29 @@ function oc_mount_app(el) {
 					state[cf.cost_fact] = { selected_item: sel, attr_values: {}, rate: rate, req_qty: 0 };
 					if (sel && !(items[0] && items[0].is_fix_rate)) self.fetchItemRate(specName, cf.cost_fact, sel);
 				});
+				// Machine state fields
+				if (spec.has_machine) {
+					state._machine = '';
+					state._cycles = 1;
+					state._csc = false;
+					state._inks = [];
+					state._foils = [];
+				}
 				this.specState[specName] = state;
 			},
 
+			// Helper: check if the currently selected machine for a spec is a printing machine
+			isPrintingMachine(specName) {
+				var st = this.specState[specName] || {};
+				var machineName = st._machine;
+				if (!machineName) return false;
+				var spec = this.allSpecs.find(function (s) { return s.spec_name === specName; });
+				if (!spec) return false;
+				var mData = (spec.machines || []).find(function (m) { return m.machine === machineName; });
+				return !!(mData && mData.is_printing_machine);
+			},
+
 			// Auto-select Finishing specs whose operation matches the inquiry's operations list.
-			// May be called before allSpecs is loaded (race with on_page_show); if so, set a
-			// flag so loadData's getSpecs callback retries once specs are available.
 			_autoSelectFromOperations() {
 				var self = this;
 				var ops = self.autoSelectOperations;
@@ -345,7 +447,8 @@ function oc_mount_app(el) {
 				var st = (this.specState[specName] || {})[costFact];
 				if (!st) return;
 				if (!st.attr_values) st.attr_values = {};
-				st.attr_values[attrName] = attrType === 'Number' ? (parseFloat(value) || 0) : value;
+				var isNumeric = attrType === 'Number' || attrType === 'Float' || attrType === 'Percentage';
+				st.attr_values[attrName] = isNumeric ? (parseFloat(value) || 0) : value;
 				this.scheduleCalc();
 			},
 
@@ -353,12 +456,106 @@ function oc_mount_app(el) {
 				var st = this.machineSpecState[costFact];
 				if (!st) return;
 				if (!st.attr_values) st.attr_values = {};
-				st.attr_values[attrName] = attrType === 'Number' ? (parseFloat(value) || 0) : value;
+				var isNumeric = attrType === 'Number' || attrType === 'Float' || attrType === 'Percentage';
+				st.attr_values[attrName] = isNumeric ? (parseFloat(value) || 0) : value;
 				this.scheduleCalc();
 			},
 
 			getAttrValue(sn, cf, a) { return ((this.specState[sn] || {})[cf] || {}).attr_values && ((this.specState[sn] || {})[cf] || {}).attr_values[a] || ''; },
 			getMachineAttrValue(cf, a) { return (this.machineSpecState[cf] || {}).attr_values && (this.machineSpecState[cf] || {}).attr_values[a] || ''; },
+
+				openInkDialog(spec) {
+				var st = this.specState[spec.spec_name] || {};
+				this.inkDialog = spec;
+				this.inkDialogState = {
+					machine: st._machine || '',
+					cycles: parseInt(st._cycles || 1),
+					csc: !!(st._csc),
+					inks:  JSON.parse(JSON.stringify(st._inks  || [])),
+					foils: JSON.parse(JSON.stringify(st._foils || [])),
+				};
+				this.inkNewInk = '';
+				this.inkNewPct = 100;
+				this.foilNewName = '';
+				this.foilNewGroup = 'COLD';
+				this.foilNewPct = 100;
+			},
+			saveInkDialog() {
+				if (!this.inkDialog) return;
+				var st = this.specState[this.inkDialog.spec_name];
+				if (!st) return;
+				st._machine = this.inkDialogState.machine;
+				st._cycles  = this.inkDialogState.cycles;
+				st._csc     = this.inkDialogState.csc;
+				st._inks    = JSON.parse(JSON.stringify(this.inkDialogState.inks));
+				st._foils   = JSON.parse(JSON.stringify(this.inkDialogState.foils));
+				this.inkDialog = null;
+				this.scheduleCalc();
+			},
+			addDialogInk() {
+				var name = this.inkNewInk;
+				var pct  = parseFloat(this.inkNewPct) || 100;
+				if (!name) return;
+				this.inkDialogState.inks.push({ ink_name: name, percentage: pct });
+				this.inkNewInk = '';
+				this.inkNewPct = 100;
+			},
+			removeDialogInk(idx) {
+				this.inkDialogState.inks.splice(idx, 1);
+			},
+			addDialogFoil() {
+				var name  = this.foilNewName;
+				var grp   = this.foilNewGroup || 'COLD';
+				var pct   = parseFloat(this.foilNewPct) || 100;
+				if (!name) return;
+				// Get foil_name from the selected foil key (which is foil.name = "HOT-Gold" etc.)
+				var foilDoc = this.allFoils.find(function(f){ return f.name === name; });
+				this.inkDialogState.foils.push({
+					foil_name:  foilDoc ? foilDoc.foil_name : name,
+					foil_key:   name,
+					foil_group: foilDoc ? foilDoc.foil_group : grp,
+					percentage: pct,
+				});
+				this.foilNewName = '';
+				this.foilNewPct  = 100;
+			},
+			removeDialogFoil(idx) {
+				this.inkDialogState.foils.splice(idx, 1);
+			},
+			toggleGroup(name) {
+				this.collapsedGroups[name] = !this.collapsedGroups[name];
+			},
+			toggleSpecCollapse(name) {
+				this.collapsedSpecs[name] = !this.collapsedSpecs[name];
+			},
+			addBreakdown() {
+				var q = parseFloat(this.newBreakdownQty);
+				if (!q || q <= 0) return;
+				this.additionalBreakdowns.push(q);
+				this.newBreakdownQty = '';
+				this.scheduleCalc();
+			},
+			removeBreakdown(idx) {
+				this.additionalBreakdowns.splice(idx, 1);
+				this.scheduleCalc();
+			},
+			fetchInquiryBreakdowns(ref) {
+				var self = this;
+				if (!ref || !self.isOffset) return;
+				frappe.call({
+					method: API.getInquiryBreakdowns,
+					args: { ref: ref },
+					callback: function (r) {
+						if (r.message && r.message.length > 0) {
+							self.form.item_qty = parseFloat(r.message[0].qty) || self.form.item_qty;
+							var allQtys = r.message.map(function (b) { return parseFloat(b.qty) || 0; }).filter(function (q) { return q > 0; });
+						self.additionalBreakdowns = allQtys;
+						if (allQtys.length > 0) self.form.item_qty = allQtys.reduce(function (s, q) { return s + q; }, 0);
+							self.scheduleCalc();
+						}
+					},
+				});
+			},
 
 			// ── Calculate ──
 			scheduleCalc: debounce(function () { this.calculate(); }, 500),
@@ -503,8 +700,6 @@ function oc_mount_app(el) {
 							}
 						}
 						// Restore machine
-						// allMachines is already loaded before loadExisting is called
-						// (loadData waits for both getSpecs+getMachines before calling checkUrlRef)
 						self.selectedMachine = null;
 						self.machineSpecState = {};
 						if (d.machine_spec && d.machine_spec.spec_name) {
@@ -538,7 +733,7 @@ function oc_mount_app(el) {
 								}, 1000);
 							}
 						}
-						// Restore specs
+						// Restore specs (including machine assignment state)
 						self.selectedSpecNames = [];
 						self.specState = {};
 						(d.selected_specs || []).forEach(function (spec) {
@@ -552,8 +747,28 @@ function oc_mount_app(el) {
 									req_qty: parseFloat(cf.req_qty || 0),
 								};
 							});
+							// Restore machine assignment if this spec has_machine
+							if (spec.has_machine && spec.machine_assignment) {
+								state._machine = spec.machine_assignment.machine || '';
+								state._cycles  = parseInt(spec.machine_assignment.cycles || 1);
+								state._csc     = !!(spec.machine_assignment.customer_sample_colors);
+								state._inks    = spec.machine_assignment.inks  || [];
+								state._foils   = spec.machine_assignment.foils || [];
+							} else if (spec.has_machine) {
+								state._machine = '';
+								state._cycles  = 1;
+								state._inks    = [];
+								state._foils   = [];
+								state._csc     = false;
+							}
 							self.specState[spec.spec_name] = state;
 						});
+						// Restore ALL breakdown splits (not just the "additional" ones)
+						self.additionalBreakdowns = (d.form && d.form.breakdown_qtys && d.form.breakdown_qtys.length > 0)
+							? d.form.breakdown_qtys.map(function (q) { return parseFloat(q) || 0; }).filter(function (q) { return q > 0; })
+							: [];
+						{  // dummy block to match old else
+						}
 						// Auto-select finishing specs from inquiry (only for new CBs with no saved specs)
 						if (!(d.selected_specs && d.selected_specs.length) && self.autoSelectOperations.length) {
 							self._autoSelectFromOperations();
@@ -602,7 +817,6 @@ function oc_mount_app(el) {
 				var self = this;
 				self.matOpen = false;
 				self.form.base_material = item.name;
-				// Show item_name as display text, store item.name (code) as value
 				self.matSearch = item.item_name || item.name;
 				if (self.form.price_list) {
 					frappe.call({
@@ -624,12 +838,116 @@ function oc_mount_app(el) {
 				this.scheduleCalc();
 			},
 
-			fmtCur, fmtNum,
+			fmtCur, fmtNum, fmtRate, fmtQty,
+		},
+
+		watch: {
+			'form.ref': function (newRef) {
+				// Only auto-fetch if no breakdowns are already loaded (don't overwrite restored or URL-injected breakdowns)
+				if (newRef && !this.additionalBreakdowns.length) this.fetchInquiryBreakdowns(newRef);
+			},
 		},
 
 		// ── TEMPLATE ────────────────────────────────────────────────
 		template: `
 <div class="oc-wrap">
+
+  <!-- ═══════ PRODUCTION ASSIGNMENT DIALOG ═══════ -->
+  <div v-if="inkDialog" class="oc-pa-overlay" @click.self="inkDialog = null">
+    <div class="oc-pa-dialog">
+      <div class="oc-pa-hdr">Production Assignment: <b>{{ inkDialog.spec_name }}</b></div>
+      <div class="oc-pa-body">
+        <div class="oc-field">
+          <label class="oc-sublbl">Select Machine</label>
+          <select v-model="inkDialogState.machine" class="oc-inp oc-sel">
+            <option value="">— Select Machine —</option>
+            <option v-for="m in inkDialog.machines" :key="m.machine" :value="m.machine">{{ m.machine }}</option>
+          </select>
+        </div>
+        <div class="oc-field">
+          <label class="oc-sublbl">Machine Cycles</label>
+          <input type="number" v-model.number="inkDialogState.cycles" min="1" class="oc-inp" placeholder="Number of cycles" />
+          <div class="oc-hint">Multiplies make-ready and production time.</div>
+        </div>
+        <!-- Offset: CSC + Inks -->
+        <template v-if="!isFlexoDialog && isDialogMachinePrinting">
+          <div class="oc-field">
+            <label class="oc-chk-lbl">
+              <input type="checkbox" v-model="inkDialogState.csc" class="oc-chk" />
+              <span>Customer Sample Colors</span>
+            </label>
+          </div>
+          <div class="oc-field">
+            <label class="oc-sublbl">Assigned Inks</label>
+            <div v-if="!inkDialogState.inks.length" class="oc-no-inks">No inks assigned yet.</div>
+            <div v-for="(ink, i) in inkDialogState.inks" :key="i" class="oc-ink-chip">
+              <span class="oc-ink-chip-label">{{ ink.ink_name }} <span class="oc-ink-pct">({{ ink.percentage }}%)</span></span>
+              <button @click="removeDialogInk(i)" class="oc-ink-rm" title="Remove">🗑</button>
+            </div>
+          </div>
+          <div class="oc-field">
+            <label class="oc-sublbl">Add Ink</label>
+            <div class="oc-add-ink">
+              <select v-model="inkNewInk" class="oc-inp oc-sel oc-ink-sel">
+                <option value="">Select Ink</option>
+                <option v-for="ink in allInks" :key="ink.ink_name" :value="ink.ink_name">{{ ink.ink_name }}</option>
+              </select>
+              <input type="number" v-model.number="inkNewPct" min="1" max="100" class="oc-inp oc-pct-inp" />
+              <span class="oc-pct-sym">%</span>
+              <button @click="addDialogInk" class="oc-btn oc-btn-blue oc-btn-sm">Add</button>
+            </div>
+          </div>
+        </template>
+
+        <!-- Flexo: Foils + Inks -->
+        <template v-if="isFlexoDialog">
+          <!-- Foils -->
+          <div class="oc-pa-section-hdr">Foils</div>
+          <div v-if="!inkDialogState.foils.length" class="oc-no-inks">No foils assigned.</div>
+          <div v-for="(foil, i) in inkDialogState.foils" :key="i" class="oc-ink-chip"
+               :style="foil.foil_group==='COLD' ? 'background:#e3f2fd' : 'background:#fff3e0'">
+            <span class="oc-ink-chip-label">
+              <span class="oc-badge-csc">{{ foil.foil_group }}</span>
+              {{ foil.foil_name }} <span class="oc-ink-pct">({{ foil.percentage }}%)</span>
+            </span>
+            <button @click="removeDialogFoil(i)" class="oc-ink-rm">🗑</button>
+          </div>
+          <div class="oc-add-ink" style="margin-top:6px">
+            <select v-model="foilNewName" class="oc-inp oc-sel oc-ink-sel">
+              <option value="">Select Foil</option>
+              <optgroup label="COLD Foil">
+                <option v-for="f in allFoils.filter(function(x){return x.foil_group==='COLD'})" :key="f.name" :value="f.name">{{ f.foil_name }}</option>
+              </optgroup>
+              <optgroup label="HOT Foil">
+                <option v-for="f in allFoils.filter(function(x){return x.foil_group==='HOT'})" :key="f.name" :value="f.name">{{ f.foil_name }}</option>
+              </optgroup>
+            </select>
+            <input type="number" v-model.number="foilNewPct" min="1" max="100" class="oc-inp oc-pct-inp" />
+            <span class="oc-pct-sym">%</span>
+            <button @click="addDialogFoil" class="oc-btn oc-btn-blue oc-btn-sm">Add</button>
+          </div>
+          <!-- Inks -->
+          <div class="oc-pa-section-hdr" style="margin-top:12px">Inks</div>
+          <div v-if="!inkDialogState.inks.length" class="oc-no-inks">No inks assigned.</div>
+          <div v-for="(ink, i) in inkDialogState.inks" :key="i" class="oc-ink-chip">
+            <span class="oc-ink-chip-label">{{ ink.ink_name }}</span>
+            <button @click="removeDialogInk(i)" class="oc-ink-rm">🗑</button>
+          </div>
+          <div class="oc-add-ink" style="margin-top:6px">
+            <select v-model="inkNewInk" class="oc-inp oc-sel oc-ink-sel">
+              <option value="">Select Ink</option>
+              <option v-for="ink in allInks" :key="ink.ink_name" :value="ink.ink_name">{{ ink.ink_name }}</option>
+            </select>
+            <button @click="addDialogInk" class="oc-btn oc-btn-blue oc-btn-sm">Add</button>
+          </div>
+        </template>
+      </div>
+      <div class="oc-pa-ftr">
+        <button @click="inkDialog = null" class="oc-btn oc-btn-cancel">Cancel</button>
+        <button @click="saveInkDialog" class="oc-btn oc-btn-blue">Assign</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ═══════ LEFT PANEL ═══════ -->
   <div class="oc-panel" :class="{'oc-view-overlay': viewOnly}">
@@ -682,7 +1000,6 @@ function oc_mount_app(el) {
               <button v-if="form.base_material" class="mlf-x" @click="clearMaterial" title="Clear">✕</button>
               <span v-if="matLoading" class="mlf-spin"></span>
             </div>
-            <!-- Selected: show item_name (display) + item code (secondary) -->
             <div v-if="form.base_material && !matOpen" class="mlf-badge">
               <span class="mlf-badge-check">✓</span>
               <span class="mlf-badge-name">{{ matSearch }}</span>
@@ -690,7 +1007,6 @@ function oc_mount_app(el) {
             </div>
             <div v-if="matOpen" class="mlf-drop">
               <div v-if="matResults.length===0&&!matLoading" class="mlf-empty">No items found</div>
-              <!-- Dropdown: item_name as main label, item code as small badge -->
               <div v-for="(item,idx) in matResults" :key="item.name"
                 class="mlf-row-item" :class="{active:matHighlight===idx}"
                 @mousedown.prevent="pickMaterial(item)">
@@ -706,51 +1022,6 @@ function oc_mount_app(el) {
         <div class="oc-field">
           <label class="oc-lbl">Rate (LKR / {{ isFlexo ? 'm²' : 'full sheet' }})</label>
           <input v-model.number="form.material_rate" type="number" min="0" step="0.01" class="oc-inp" @change="scheduleCalc" />
-        </div>
-      </div>
-
-      <!-- ══ MACHINE (auto-adds plates + printing costs) ══ -->
-      <div class="oc-auto-card">
-        <div class="oc-auto-card-title">
-          <span class="oc-auto-dot" :class="selectedMachine ? 'on' : ''"></span>
-          Printing Machine
-          <span v-if="selectedMachine" class="oc-auto-ok">✓ auto-included</span>
-        </div>
-        <div class="oc-field">
-          <label class="oc-lbl oc-lbl-blue">Machine</label>
-          <select class="oc-inp oc-sel"
-            :value="selectedMachine ? selectedMachine.spec_name : ''"
-            @change="selectMachine($event.target.value)">
-            <option value="">— No machine —</option>
-            <option v-for="m in allMachines" :key="m.spec_name" :value="m.spec_name">
-              {{ m.spec_name }}
-            </option>
-          </select>
-        </div>
-        <!-- Machine's additional cost fact inputs (if any) -->
-        <div v-if="selectedMachine && selectedMachine.cost_facts && selectedMachine.cost_facts.length">
-          <div v-for="cf in selectedMachine.cost_facts" :key="cf.cost_fact" class="oc-cf">
-            <!-- Multi-item selector for machine extra cost facts -->
-            <div v-if="cf.master && cf.master.items && cf.master.items.length > 1" class="oc-field">
-              <label class="oc-sublbl">{{ cf.cost_fact }}</label>
-              <select class="oc-inp oc-sel"
-                :value="getMachineState(cf.cost_fact).selected_item"
-                @change="onMachineItemSelect(cf.cost_fact, $event.target.value, cf.master.items)">
-                <option value="">— Select —</option>
-                <option v-for="item in cf.master.items" :key="item.item" :value="item.item">
-                  {{ item.item_name || item.item }}{{ item.is_fix_rate && item.rate ? ' — LKR '+item.rate.toLocaleString() : '' }}
-                </option>
-              </select>
-            </div>
-            <div v-if="cf.is_primary && cf.master && cf.master.attributes && cf.master.attributes.length" class="oc-attrs">
-              <div v-for="attr in cf.master.attributes" :key="attr.attribute_name" class="oc-attr-field">
-                <label class="oc-attr-lbl">{{ attr.lable || attr.attribute_name }}</label>
-                <input :type="attr.type==='Number'?'number':'text'" min="0" class="oc-inp"
-                  :value="getMachineAttrValue(cf.cost_fact, attr.attribute_name)"
-                  @input="onMachineAttrChange(cf.cost_fact, attr.attribute_name, $event.target.value, attr.type)" />
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -779,7 +1050,25 @@ function oc_mount_app(el) {
           <div class="oc-field"><label class="oc-lbl">No of Colors</label><input v-model.number="form.no_of_colors" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
         </div>
         <div class="oc-2col">
-          <div class="oc-field"><label class="oc-lbl">Order Quantity</label><input v-model.number="form.item_qty" type="number" min="1" class="oc-inp" @change="scheduleCalc" /></div>
+          <div>
+            <div class="oc-field">
+              <label class="oc-lbl">Order Quantity <span v-if="hasBreakdowns" class="oc-total-badge">Splits: {{ fmtNum(additionalBreakdowns.reduce(function(s,q){return s+(parseFloat(q)||0);},0)) }}</span></label>
+              <input v-model.number="form.item_qty" type="number" min="1" class="oc-inp" @change="scheduleCalc" />
+            </div>
+            <!-- Breakdown splits — only shown when splits are loaded (combined group items) -->
+            <div v-if="hasBreakdowns" class="oc-breakdown-wrap">
+              <div class="oc-chips-label">Sheet splits:</div>
+              <div class="oc-chips-row">
+                <span v-for="(q, i) in additionalBreakdowns" :key="i" class="oc-chip-extra">
+                  {{ fmtNum(q) }}<button class="oc-chip-x" @click="removeBreakdown(i)" title="Remove">×</button>
+                </span>
+                <span class="oc-chip-adder">
+                  <input type="number" v-model="newBreakdownQty" class="oc-chip-inp" placeholder="+ split" min="1" @keyup.enter="addBreakdown" />
+                  <button class="oc-btn-mini" @click="addBreakdown">Add</button>
+                </span>
+              </div>
+            </div>
+          </div>
           <div class="oc-field"><label class="oc-lbl">Profit Margin (%)</label><input v-model.number="form.profit_margin" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
         </div>
       </div>
@@ -823,16 +1112,45 @@ function oc_mount_app(el) {
       <div v-if="loading" class="oc-loading">Loading…</div>
       <div v-else>
         <div v-for="(specs, groupName) in specsByGroup" :key="groupName" class="oc-group">
-          <div class="oc-group-label">{{ groupName }}</div>
+          <div class="oc-group-label oc-group-toggle" @click="toggleGroup(groupName)">
+            <span>{{ groupName }}</span>
+            <span class="oc-group-arrow">{{ collapsedGroups[groupName] ? '▶' : '▼' }}</span>
+          </div>
+          <div v-show="!collapsedGroups[groupName]">
           <div v-for="spec in specs" :key="spec.spec_name" class="oc-spec">
             <label class="oc-spec-label" :class="{active: isSelected(spec.spec_name)}">
               <input type="checkbox" class="oc-chk" :checked="isSelected(spec.spec_name)" @change="toggleSpec(spec.spec_name)" />
               <span class="oc-spec-name">{{ spec.spec_name }}</span>
+              <span v-if="isSelected(spec.spec_name)" class="oc-spec-chevron" @click.prevent.stop="toggleSpecCollapse(spec.spec_name)">
+                {{ collapsedSpecs[spec.spec_name] ? '▶' : '▼' }}
+              </span>
             </label>
-            <div v-if="isSelected(spec.spec_name)" class="oc-spec-detail">
+            <div v-if="isSelected(spec.spec_name)" v-show="!collapsedSpecs[spec.spec_name]" class="oc-spec-detail">
+
+              <!-- Machine assignment — opens Production Assignment dialog -->
+              <div v-if="spec.has_machine" class="oc-machine-sec">
+                <div class="oc-assign-row">
+                  <div class="oc-assign-summary">
+                    <span v-if="specState[spec.spec_name]._machine">
+                      <b class="oc-assign-mname">{{ specState[spec.spec_name]._machine }}</b>
+                      <span class="oc-assign-dim"> × {{ specState[spec.spec_name]._cycles || 1 }}</span>
+                      <span v-if="specState[spec.spec_name]._csc" class="oc-badge-csc">CSC</span>
+                      <span v-for="(foil, fi) in (specState[spec.spec_name]._foils || [])" :key="'f'+fi" class="oc-badge-ink" :style="foil.foil_group==='COLD'?'background:#bbdefb':'background:#ffe0b2'">
+                        {{ foil.foil_group }} {{ foil.foil_name }}
+                      </span>
+                      <span v-for="(ink, ii) in (specState[spec.spec_name]._inks || [])" :key="'i'+ii" class="oc-badge-ink">
+                        {{ ink.ink_name }}
+                      </span>
+                    </span>
+                    <span v-else class="oc-no-assign">No machine assigned</span>
+                  </div>
+                  <button class="oc-btn-assign" @click.stop="openInkDialog(spec)">⚙ Assign</button>
+                </div>
+              </div>
+
               <div v-for="cf in spec.cost_facts" :key="cf.cost_fact" class="oc-cf">
                 <div v-if="spec.cost_facts.length > 1" class="oc-cf-title">{{ cf.cost_fact }}</div>
-                <!-- Item selector: item_name as display, item code as stored value -->
+                <!-- Item selector -->
                 <div v-if="cf.master && cf.master.items && cf.master.items.length > 1" class="oc-field">
                   <label class="oc-sublbl">Select Option</label>
                   <select class="oc-inp oc-sel"
@@ -853,8 +1171,8 @@ function oc_mount_app(el) {
                 <!-- Attribute inputs -->
                 <div v-if="cf.is_primary && cf.master && cf.master.attributes && cf.master.attributes.length" class="oc-attrs">
                   <div v-for="attr in cf.master.attributes" :key="attr.attribute_name" class="oc-attr-field">
-                    <label class="oc-attr-lbl">{{ attr.lable || attr.attribute_name }}</label>
-                    <input :type="attr.type==='Number'?'number':'text'" min="0" class="oc-inp"
+                    <label class="oc-attr-lbl">{{ attr.lable || attr.attribute_name }}{{ attr.type==='Percentage' ? ' (%)' : '' }}</label>
+                    <input :type="(attr.type==='Number'||attr.type==='Float'||attr.type==='Percentage')?'number':'text'" min="0" class="oc-inp"
                       :value="getAttrValue(spec.spec_name, cf.cost_fact, attr.attribute_name)"
                       @input="onAttrChange(spec.spec_name, cf.cost_fact, attr.attribute_name, $event.target.value, attr.type)" />
                   </div>
@@ -863,6 +1181,7 @@ function oc_mount_app(el) {
               </div>
             </div>
           </div>
+          </div><!-- /v-show collapsible group -->
         </div>
       </div>
 
@@ -940,6 +1259,7 @@ function oc_mount_app(el) {
                 <th>Group</th>
                 <th>Item / Option</th>
                 <th class="r">Qty</th>
+                <th>UOM</th>
                 <th class="r">Rate</th>
                 <th class="r">Amount (LKR)</th>
               </tr>
@@ -949,7 +1269,6 @@ function oc_mount_app(el) {
                 <td>{{ row.spec_name }}<span v-if="row.is_auto" class="oc-auto-tag">auto</span></td>
                 <td>{{ row.cost_fact }}</td>
                 <td class="oc-grp">{{ row.cost_group }}</td>
-                <!-- Display: item_name (human readable) as main, code as small badge -->
                 <td>
                   <span v-if="row.selected_item_name && row.selected_item_name !== row.selected_item">
                     {{ row.selected_item_name }}
@@ -957,14 +1276,15 @@ function oc_mount_app(el) {
                   </span>
                   <span v-else>{{ row.selected_item }}</span>
                 </td>
-                <td class="r mono">{{ row.req_qty }}</td>
-                <td class="r mono">{{ fmtCur(row.rate) }}</td>
+                <td class="r mono">{{ fmtQty(row.req_qty) }}</td>
+                <td class="oc-uom">{{ row.uom || '' }}</td>
+                <td class="r mono">{{ fmtRate(row.rate) }}</td>
                 <td class="r mono">{{ fmtCur(row.amount) }}</td>
               </tr>
-              <tr class="oc-sub" v-if="calc.group_totals.material"><td colspan="6">Material Subtotal</td><td class="r mono">{{ fmtCur(calc.group_totals.material) }}</td></tr>
-              <tr class="oc-sub" v-if="calc.group_totals.preparation"><td colspan="6">Preparation Subtotal</td><td class="r mono">{{ fmtCur(calc.group_totals.preparation) }}</td></tr>
-              <tr class="oc-sub" v-if="calc.group_totals.production"><td colspan="6">Production Subtotal</td><td class="r mono">{{ fmtCur(calc.group_totals.production) }}</td></tr>
-              <tr class="oc-tot"><td colspan="6"><strong>TOTAL COST</strong></td><td class="r mono">{{ fmtCur(calc.group_totals.grand) }}</td></tr>
+              <tr class="oc-sub" v-if="calc.group_totals.material"><td colspan="7">Material Subtotal</td><td class="r mono">{{ fmtCur(calc.group_totals.material) }}</td></tr>
+              <tr class="oc-sub" v-if="calc.group_totals.preparation"><td colspan="7">Preparation Subtotal</td><td class="r mono">{{ fmtCur(calc.group_totals.preparation) }}</td></tr>
+              <tr class="oc-sub" v-if="calc.group_totals.production"><td colspan="7">Production Subtotal</td><td class="r mono">{{ fmtCur(calc.group_totals.production) }}</td></tr>
+              <tr class="oc-tot"><td colspan="7"><strong>TOTAL COST</strong></td><td class="r mono">{{ fmtCur(calc.group_totals.grand) }}</td></tr>
             </tbody>
           </table>
         </div>
@@ -996,6 +1316,7 @@ function oc_mount_app(el) {
 
     </div>
   </div>
+
 </div>
 		`,
 	});
@@ -1066,12 +1387,48 @@ function oc_inject_styles() {
 .oc-loading{color:#6b7280;font-style:italic;font-size:12px;padding:8px 0}
 .oc-group{margin-bottom:14px}
 .oc-group-label{font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
+.oc-group-toggle{cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 6px;border-radius:4px;user-select:none}
+.oc-group-toggle:hover{background:#f0f4ff;color:#1a3a5c}
+.oc-group-arrow{font-size:9px;color:#9ca3af;transition:transform .15s}
+.oc-chips-label{font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
 .oc-spec{border-radius:5px;margin-bottom:3px;overflow:hidden;border:1px solid transparent}
 .oc-spec:has(.oc-spec-label.active){border-color:#2c7be5}
 .oc-spec-label{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-radius:5px;background:#f8fafc;transition:background .12s;user-select:none}
 .oc-spec-label.active{background:#e8f0fd}
 .oc-spec-label:hover{background:#f0f4ff}
 .oc-spec-name{flex:1;font-weight:600;font-size:13px;color:#1f272e}
+.oc-spec-chevron{font-size:9px;color:#9ca3af;padding:2px 4px;border-radius:3px;cursor:pointer;line-height:1}
+.oc-spec-chevron:hover{background:#e0eaff;color:#1a3a5c}
+/* Machine assign row */
+.oc-assign-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0}
+.oc-assign-summary{flex:1;font-size:12px;min-width:0}
+.oc-assign-mname{color:#1a3a5c}
+.oc-assign-dim{color:#888;font-size:11px}
+.oc-no-assign{color:#aaa;font-style:italic;font-size:12px}
+.oc-badge-csc{background:#fff3cd;color:#856404;border-radius:3px;padding:1px 5px;font-size:10px;margin-left:4px}
+.oc-badge-ink{background:#e3f2fd;color:#1565c0;border-radius:3px;padding:1px 5px;font-size:10px;margin-left:4px}
+.oc-btn-assign{padding:4px 10px;background:#1a3a5c;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;white-space:nowrap}
+.oc-btn-assign:hover{background:#2c5f8a}
+/* Production Assignment dialog */
+.oc-pa-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center}
+.oc-pa-dialog{background:#fff;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.18);width:460px;max-width:95vw;max-height:90vh;display:flex;flex-direction:column}
+.oc-pa-hdr{padding:14px 18px;background:#1a3a5c;color:#fff;border-radius:8px 8px 0 0;font-size:14px;font-weight:600}
+.oc-pa-body{padding:16px 18px;overflow-y:auto;flex:1}
+.oc-pa-ftr{padding:10px 18px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:8px}
+.oc-hint{font-size:11px;color:#888;margin-top:3px;font-style:italic}
+.oc-pa-section-hdr{font-size:11px;font-weight:700;color:#1a3a5c;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;padding-bottom:3px;border-bottom:1px solid #e5e7eb}
+.oc-no-inks{color:#aaa;font-style:italic;font-size:12px;padding:4px 0}
+.oc-ink-chip{display:flex;align-items:center;justify-content:space-between;background:#e3f2fd;border-radius:5px;padding:5px 10px;margin-bottom:4px}
+.oc-ink-chip-label{font-size:13px;color:#1565c0;font-weight:500}
+.oc-ink-pct{font-size:11px;color:#1976d2;font-weight:400}
+.oc-ink-rm{background:transparent;border:none;cursor:pointer;font-size:14px;padding:0 2px;opacity:.7}
+.oc-ink-rm:hover{opacity:1}
+.oc-add-ink{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.oc-ink-sel{flex:1;min-width:140px}
+.oc-pct-inp{width:60px!important}
+.oc-pct-sym{font-size:13px;color:#555;margin-left:-4px}
+.oc-btn-cancel{padding:6px 14px;background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;font-size:13px}
+.oc-btn-cancel:hover{background:#e5e7eb}
 .oc-spec-detail{padding:10px 12px;background:#f9fbff;border-top:1px solid #e0eaff}
 .oc-cf{margin-bottom:8px}.oc-cf:last-child{margin-bottom:0}
 .oc-cf-title{font-size:11px;font-weight:700;color:#1a3a5c;margin-bottom:5px;text-transform:uppercase;letter-spacing:.03em}
@@ -1082,6 +1439,8 @@ function oc_inject_styles() {
 .oc-attrs{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;padding:8px 10px;background:#f0f4ff;border-radius:4px;border-left:3px solid #2c7be5}
 .oc-attr-field{display:flex;flex-direction:column;min-width:80px;flex:1}
 .oc-attr-lbl{font-size:11px;font-weight:600;color:#6b7280;margin-bottom:3px}
+/* Machine section inside spec detail */
+.oc-machine-sec{background:#fff8e1;border:1px solid #ffe082;border-radius:5px;padding:8px 10px;margin-bottom:10px}
 /* Buttons */
 .oc-btn{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 14px;border:none;border-radius:4px;font-size:12.5px;font-weight:500;cursor:pointer;transition:filter .15s}
 .oc-btn:disabled{opacity:.4;cursor:not-allowed}
@@ -1129,10 +1488,23 @@ function oc_inject_styles() {
 .oc-rc-toggle{cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none}
 .oc-rc-toggle:hover{color:#2c7be5}
 .oc-collapse-chevron{font-size:11px;opacity:.6;margin-left:6px;transition:transform .15s}
+.oc-hint{font-size:11px;color:#6b7280;margin-top:3px;display:block}
 /* View-only mode */
 .oc-view-overlay{pointer-events:none;opacity:.82;user-select:none}
 .oc-view-banner{background:#1a3a5c;color:#fff;padding:8px 14px;font-size:12px;font-weight:600;border-radius:4px;display:flex;align-items:center;gap:6px;margin-bottom:12px;letter-spacing:.02em}
 .oc-btn-print{background:#1a3a5c;color:#fff}.oc-btn-print:hover{filter:brightness(1.2)}
+.oc-breakdown-wrap{margin-top:4px;margin-bottom:8px}
+.oc-chips-row{display:flex;flex-wrap:wrap;gap:5px;align-items:center;min-height:28px}
+.oc-chip-base{background:#1a73e8;color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600}
+.oc-chip-extra{background:#455a64;color:#fff;padding:3px 6px 3px 10px;border-radius:12px;font-size:12px;display:flex;align-items:center;gap:4px}
+.oc-chip-x{background:transparent;border:none;color:#fff;cursor:pointer;font-size:14px;padding:0 2px;line-height:1;opacity:.8}
+.oc-chip-x:hover{opacity:1}
+.oc-chip-adder{display:flex;align-items:center;gap:4px}
+.oc-chip-inp{width:80px;padding:3px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px;height:26px}
+.oc-btn-mini{padding:3px 8px;background:#43a047;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;height:26px}
+.oc-btn-mini:hover{background:#388e3c}
+.oc-total-badge{font-size:11px;background:#e8f5e9;color:#2e7d32;padding:1px 6px;border-radius:8px;font-weight:600;margin-left:6px}
+.oc-uom{color:#888;font-size:11px;text-align:center;white-space:nowrap}
 /* Print */
 @media print{
   body>.navbar,body>.container>.page-container>.page-head,

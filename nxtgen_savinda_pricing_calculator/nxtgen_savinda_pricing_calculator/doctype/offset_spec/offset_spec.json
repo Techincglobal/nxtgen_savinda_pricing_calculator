@@ -11,6 +11,14 @@
   "column_break_1",
   "is_active",
   "pricing_type",
+  "section_break_machine_cfg",
+  "has_machine",
+  "column_break_mach1",
+  "skip_machine_if_spec",
+  "section_break_mach_units",
+  "units",
+  "section_break_mach_list",
+  "machines",
   "section_break_facts",
   "cost_facts"
  ],
@@ -67,6 +75,55 @@
    "description": "Offset = only shown in Offset calculator. Flexo = only shown in Flexo calculator. Both = shown in both (e.g. Delivery, Proof Board, Corrugated Boxes)."
   },
   {
+   "fieldname": "section_break_machine_cfg",
+   "fieldtype": "Section Break",
+   "label": "Machine Configuration",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "has_machine",
+   "fieldtype": "Check",
+   "label": "Has Machine",
+   "default": "0"
+  },
+  {
+   "fieldname": "column_break_mach1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "skip_machine_if_spec",
+   "fieldtype": "Link",
+   "label": "Skip Machine If Spec Selected",
+   "options": "Offset Spec",
+   "depends_on": "eval:doc.has_machine==1",
+   "description": "If this spec is also selected, skip the machine cost for the current spec."
+  },
+  {
+   "fieldname": "section_break_mach_units",
+   "fieldtype": "Section Break",
+   "depends_on": "eval:doc.has_machine==1"
+  },
+  {
+   "fieldname": "units",
+   "fieldtype": "Select",
+   "label": "Machine Qty Units",
+   "options": "Full sheet\nCut sheet\nSqinch\nPcs\nImpressions",
+   "default": "Full sheet",
+   "depends_on": "eval:doc.has_machine==1"
+  },
+  {
+   "fieldname": "section_break_mach_list",
+   "fieldtype": "Section Break",
+   "depends_on": "eval:doc.has_machine==1"
+  },
+  {
+   "fieldname": "machines",
+   "fieldtype": "Table",
+   "label": "Machines",
+   "options": "Offset Spec Machine",
+   "depends_on": "eval:doc.has_machine==1"
+  },
+  {
    "fieldname": "section_break_facts",
    "fieldtype": "Section Break",
    "label": "Cost Facts"
@@ -79,7 +136,7 @@
   }
  ],
  "links": [],
- "modified": "2026-05-07 00:00:00.000000",
+ "modified": "2026-05-24 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Offset Spec",
