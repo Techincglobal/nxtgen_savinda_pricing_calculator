@@ -137,6 +137,20 @@ frappe.ui.form.on("Cost Sheet", {
 					});
 					frm.refresh_field("operations");
 				}
+
+				// Copy compliance data from inquiry (always refresh — compliance may have changed)
+				var compliance_items = o.custom_compliance || [];
+				if (compliance_items.length) {
+					frm.doc.compliance = [];
+					compliance_items.forEach(function (c) {
+						if (c.disabled) return;
+						var row = frm.add_child("compliance");
+						// Table MultiSelect stores the linked value in the 'compliance_details' or first link field
+						row.compliance_type = c.compliance_type || c.type || "";
+						row.about_compliance = c.about_compliance || "";
+					});
+					frm.refresh_field("compliance");
+				}
 			},
 		});
 	},
@@ -257,12 +271,17 @@ function render_panel(frm, cdt, cdn) {
 							+ "class='btn btn-xs btn-primary' style='font-size:10.5px'>Print</a>"
 							+ "</td>";
 					} else {
+						var draft_print_url = "/printview?doctype=Calculation+Breakdown&name="
+							+ encodeURIComponent(c.calculation_breakdown || "")
+							+ "&format=Product+Costing+Summary&no_letterhead=0";
 						action_td = "<td style='padding:5px 8px;text-align:center;white-space:nowrap'>"
 							+ "<button class='btn-edit-calc btn btn-xs btn-default' "
-							+ "data-cb='" + c.calculation_breakdown + "' style='margin-right:4px'>✏️</button>"
+							+ "data-cb='" + c.calculation_breakdown + "' style='margin-right:4px' title='Open Calculator'>✏️</button>"
+							+ "<a href='" + draft_print_url + "' target='_blank' "
+							+ "class='btn btn-xs btn-default' style='margin-right:4px;font-size:10.5px' title='Download PDF'>🖨</a>"
 							+ "<button class='btn-remove-calc btn btn-xs btn-danger' "
 							+ "data-cb='" + c.calculation_breakdown + "' "
-							+ "data-row='" + c.name + "'>🗑</button>"
+							+ "data-row='" + c.name + "' title='Remove'>🗑</button>"
 							+ "</td>";
 					}
 					calc_rows +=

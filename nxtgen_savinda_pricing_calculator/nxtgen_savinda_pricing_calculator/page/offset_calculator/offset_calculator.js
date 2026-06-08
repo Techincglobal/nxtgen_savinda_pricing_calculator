@@ -106,6 +106,7 @@ function oc_mount_app(el) {
 					no_of_cuts: 2, no_of_ups: 4,
 					// Flexo-specific
 					reel_width_mm: 0,
+					reel_length_m: 0,
 					product_width_mm: 0, product_length_mm: 0,
 					product_margin_mm: 4, product_gap_mm: 3,
 				},
@@ -1075,10 +1076,18 @@ function oc_mount_app(el) {
 
       <!-- ══ FLEXO: Label & Reel Specs ══ -->
       <div v-if="isFlexo">
-        <div class="oc-divider-label">Material Dimensions (mm)</div>
-        <div class="oc-field">
-          <label class="oc-lbl">Reel Width (mm)</label>
-          <input v-model.number="form.reel_width_mm" type="number" min="0" class="oc-inp" @change="scheduleCalc" />
+        <div class="oc-divider-label">Material Dimensions</div>
+        <div class="oc-2col">
+          <div class="oc-field">
+            <label class="oc-lbl">Reel Width (mm)</label>
+            <input v-model.number="form.reel_width_mm" type="number" min="0" class="oc-inp" @change="scheduleCalc" />
+          </div>
+          <div class="oc-field">
+            <label class="oc-lbl">Reel Length (m) <span class="oc-calc-tag">{{ form.reel_length_m > 0 ? 'manual' : 'auto' }}</span></label>
+            <input type="number" v-model.number="form.reel_length_m" min="0" step="0.01" class="oc-inp"
+              :placeholder="calc.sheet && calc.sheet.reel_length ? fmtQty(calc.sheet.reel_length) : 'auto'"
+              @change="scheduleCalc" />
+          </div>
         </div>
 
         <div class="oc-divider-label">Product / Label Dimensions (mm)</div>
@@ -1391,6 +1400,8 @@ function oc_inject_styles() {
 .oc-group-toggle:hover{background:#f0f4ff;color:#1a3a5c}
 .oc-group-arrow{font-size:9px;color:#9ca3af;transition:transform .15s}
 .oc-chips-label{font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.oc-calc-val{background:#f0f4ff;border:1px solid #dde4f0;border-radius:4px;padding:6px 10px;font-family:monospace;font-size:13px;font-weight:600;color:#1a3a5c;min-height:34px;display:flex;align-items:center}
+.oc-calc-tag{font-size:9px;font-weight:400;background:#e0eaff;color:#3b5bdb;border-radius:3px;padding:1px 5px;margin-left:4px;text-transform:uppercase;letter-spacing:.04em;vertical-align:middle}
 .oc-spec{border-radius:5px;margin-bottom:3px;overflow:hidden;border:1px solid transparent}
 .oc-spec:has(.oc-spec-label.active){border-color:#2c7be5}
 .oc-spec-label{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-radius:5px;background:#f8fafc;transition:background .12s;user-select:none}

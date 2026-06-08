@@ -713,9 +713,12 @@ def _calc_flexo(form):
     material_wastage_width = reel_width - (ups * (prod_w + margin) + printable_margin)
     stickers_per_reel = item_qty / ups
     label_pitch       = prod_l + gap
-    reel_length       = stickers_per_reel * (label_pitch / 1000)
-    reel_width_m      = reel_width / 1000
-    reel_area_net     = reel_length * reel_width_m
+    reel_length_calc  = stickers_per_reel * (label_pitch / 1000)
+    # Allow manual reel length override from form (reel_length_m field)
+    reel_length_override = flt(form.get("reel_length_m", 0))
+    reel_length  = reel_length_override if reel_length_override > 0 else reel_length_calc
+    reel_width_m = reel_width / 1000
+    reel_area_net = reel_length * reel_width_m
 
     _cfg = _get_config()
     _wtable = _cfg["flexo_wastage"]

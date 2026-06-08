@@ -40,17 +40,29 @@ frappe.ui.form.on("Opportunity", {
 });
 
 function create_cost_sheet(frm) {
+	// Carry compliance rows from Inquiry to Cost Sheet
+	var compliance_rows = (frm.doc.custom_compliance || [])
+		.filter(function (c) { return !c.disabled; })
+		.map(function (c) {
+			return {
+				doctype:          "Compliance Details",
+				compliance_type:  c.compliance_type || c.type || "",
+				about_compliance: c.about_compliance || "",
+			};
+		});
+
 	frappe.call({
 		method: "frappe.client.insert",
 		args: {
 			doc: {
-				doctype: "Cost Sheet",
+				doctype:       "Cost Sheet",
 				inquiry:       frm.doc.name,
-				subject:       frm.doc.custom_subject       || frm.doc.name,
-				customer_name: frm.doc.customer_name        || "",
-				colour:        frm.doc.custom_colour        || 0,
-				item_group:    frm.doc.custom_item_group    || "",
-				tiep:          frm.doc.custom_tiep          || "",
+				subject:       frm.doc.custom_subject    || frm.doc.name,
+				customer_name: frm.doc.customer_name     || "",
+				colour:        frm.doc.custom_colour     || 0,
+				item_group:    frm.doc.custom_item_group || "",
+				tiep:          frm.doc.custom_tiep       || "",
+				compliance:    compliance_rows,
 			},
 		},
 		freeze: true,

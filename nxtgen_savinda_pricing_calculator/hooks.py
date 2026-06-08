@@ -48,6 +48,13 @@ doctype_js = {
 	"Opportunity": "public/js/opportunity.js",
 }
 
+jinja = {
+	"methods": [
+		"nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.utils.jinja.get_cb_print_data",
+	],
+	"filters": [],
+}
+
 # include js, css files in header of web template
 # web_include_css = "/assets/nxtgen_savinda_pricing_calculator/css/nxtgen_savinda_pricing_calculator.css"
 # web_include_js = "/assets/nxtgen_savinda_pricing_calculator/js/nxtgen_savinda_pricing_calculator.js"
