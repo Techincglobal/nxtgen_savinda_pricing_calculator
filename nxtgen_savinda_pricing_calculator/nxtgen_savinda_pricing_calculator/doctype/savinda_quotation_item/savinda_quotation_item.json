@@ -5,6 +5,7 @@
  "engine": "InnoDB",
  "field_order": [
   "item_name",
+  "finish_good",
   "finishing_variant",
   "column_break_1",
   "cost_item",
@@ -30,6 +31,15 @@
    "in_list_view": 1,
    "label": "Item Name",
    "reqd": 1
+  },
+  {
+   "fieldname": "finish_good",
+   "fieldtype": "Link",
+   "label": "FG Item",
+   "options": "Item",
+   "in_list_view": 1,
+   "columns": 2,
+   "description": "Linked Finished Good ERPNext Item for this breakdown"
   },
   {
    "columns": 1,

@@ -1,0 +1,65 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:fg_item",
+ "creation": "2026-06-09 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "fg_item",
+  "column_break_1",
+  "pricing_type",
+  "section_break_2",
+  "config_json"
+ ],
+ "fields": [
+  {
+   "fieldname": "fg_item",
+   "fieldtype": "Link",
+   "label": "Finish Good Item",
+   "options": "Item",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1,
+   "bold": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "pricing_type",
+   "fieldtype": "Select",
+   "label": "Pricing Type",
+   "options": "\nOffset\nFlexo"
+  },
+  {
+   "fieldname": "section_break_2",
+   "fieldtype": "Section Break",
+   "label": "Saved Operations Chain"
+  },
+  {
+   "fieldname": "config_json",
+   "fieldtype": "Long Text",
+   "label": "Operations Config (JSON)",
+   "description": "Stores the full BOM Builder operations chain. Managed automatically — do not edit manually.",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-06-09 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "BOM Builder Config",
+ "owner": "Administrator",
+ "permissions": [
+  {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"System Manager","share":1,"write":1},
+  {"create":1,"delete":0,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"Savinda Pricing Manager","share":1,"write":1}
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

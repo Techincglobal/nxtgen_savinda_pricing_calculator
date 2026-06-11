@@ -15,6 +15,7 @@
   "color_capacity",
   "column_break_2",
   "machine_cost_per_hour",
+  "workstation",
   "section_break_setup",
   "basic_setup_time",
   "customer_sample_setup_time",
@@ -80,6 +81,14 @@
    "fieldtype": "Currency",
    "label": "Machine Cost Per Hour (LKR)",
    "reqd": 1
+  },
+  {
+   "fieldname": "workstation",
+   "fieldtype": "Link",
+   "label": "ERPNext Workstation",
+   "options": "Workstation",
+   "description": "Linked ERPNext Workstation for BOM operations allocation",
+   "in_list_view": 1
   },
   {
    "fieldname": "section_break_setup",

@@ -35,6 +35,7 @@ fixtures = [
 	{"dt": "Offset Machine"},
 	{"dt": "Offset Ink"},
 	{"dt": "Flexo Foil"},
+	{"dt": "BOM Builder Config"},
 	{"dt": "Role", "filters": [["name", "in", ["Savinda Pricing Manager", "Savinda Estimator", "Savinda Pricing Viewer"]]]},
 	{"dt": "Print Format", "filters": [["doc_type", "in", ["Cost Sheet", "Calculation Breakdown", "Savinda Quotation"]]]},
 ]
@@ -45,7 +46,8 @@ app_include_js = [
 	]
 
 doctype_js = {
-	"Opportunity": "public/js/opportunity.js",
+	"Opportunity":   "public/js/opportunity.js",
+	"Sales Order":   "public/js/sales_order.js",
 }
 
 jinja = {
