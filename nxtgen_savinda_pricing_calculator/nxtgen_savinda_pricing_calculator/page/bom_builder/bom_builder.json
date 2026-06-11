@@ -1,0 +1,15 @@
+{
+ "doctype": "Page",
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "bom-builder",
+ "page_name": "bom-builder",
+ "restrict_to_domain": "",
+ "roles": [
+  {"role": "System Manager"},
+  {"role": "Savinda Pricing Manager"},
+  {"role": "Manufacturing Manager"},
+  {"role": "Manufacturing User"}
+ ],
+ "standard": "Yes",
+ "title": "BOM Builder"
+}

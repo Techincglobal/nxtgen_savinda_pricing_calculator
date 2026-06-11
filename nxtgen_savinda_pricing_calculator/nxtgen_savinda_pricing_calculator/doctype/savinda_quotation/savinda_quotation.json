@@ -1,7 +1,7 @@
 {
  "actions": [],
  "autoname": "naming_series:",
- "creation": "2026-04-23 00:00:00.000000",
+ "creation": "2026-04-23 00:00:00",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
@@ -43,12 +43,12 @@
    "reqd": 1
   },
   {
+   "bold": 1,
    "fieldname": "inquiry",
    "fieldtype": "Link",
-   "label": "Inquiry",
-   "options": "Opportunity",
    "in_list_view": 1,
-   "bold": 1
+   "label": "Inquiry",
+   "options": "Opportunity"
   },
   {
    "fieldname": "column_break_1",
@@ -57,9 +57,9 @@
   {
    "fieldname": "cost_sheet",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Cost Sheet",
-   "options": "Cost Sheet",
-   "in_list_view": 1
+   "options": "Cost Sheet"
   },
   {
    "fieldname": "section_break_customer",
@@ -67,19 +67,19 @@
    "label": "Customer"
   },
   {
+   "bold": 1,
    "fieldname": "customer",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Customer",
    "options": "Customer",
-   "reqd": 1,
-   "in_list_view": 1,
-   "bold": 1
+   "reqd": 1
   },
   {
+   "fetch_from": "customer.customer_name",
    "fieldname": "customer_name",
    "fieldtype": "Data",
    "label": "Customer Name",
-   "fetch_from": "customer.customer_name",
    "read_only": 1
   },
   {
@@ -93,18 +93,18 @@
    "options": "User"
   },
   {
+   "default": "Today",
    "fieldname": "date",
    "fieldtype": "Date",
+   "in_list_view": 1,
    "label": "Quotation Date",
-   "reqd": 1,
-   "default": "Today",
-   "in_list_view": 1
+   "reqd": 1
   },
   {
    "fieldname": "valid_till",
    "fieldtype": "Date",
-   "label": "Valid Till",
-   "in_list_view": 1
+   "in_list_view": 1,
+   "label": "Valid Till"
   },
   {
    "fieldname": "section_break_items",
@@ -123,16 +123,16 @@
    "label": "One-Time Charges"
   },
   {
+   "description": "Per colour",
    "fieldname": "plate_charges",
    "fieldtype": "Currency",
-   "label": "Plate Charges (LKR)",
-   "description": "Per colour"
+   "label": "Plate Charges (LKR)"
   },
   {
+   "default": "1",
    "fieldname": "plate_per_colour",
    "fieldtype": "Check",
-   "label": "Plate Charges are Per Colour",
-   "default": "1"
+   "label": "Plate Charges are Per Colour"
   },
   {
    "fieldname": "column_break_3",
@@ -149,25 +149,25 @@
    "label": "Terms & Conditions"
   },
   {
+   "default": "01 Month",
    "fieldname": "validity_note",
    "fieldtype": "Select",
    "label": "Validity",
-   "options": "\n07 Days\n01 Month\n02 Months\n03 Months",
-   "default": "01 Month"
+   "options": "\n07 Days\n01 Month\n02 Months\n03 Months"
   },
   {
+   "default": "Duty Free Basis",
    "fieldname": "duty_basis",
    "fieldtype": "Select",
    "label": "Duty Basis",
-   "options": "\nDuty Free Basis\nDuty Paid Basis",
-   "default": "Duty Free Basis"
+   "options": "\nDuty Free Basis\nDuty Paid Basis"
   },
   {
+   "default": "Prices do not include VAT",
    "fieldname": "vat_note",
    "fieldtype": "Select",
    "label": "VAT",
-   "options": "\nPrices do not include VAT\nInclusive of VAT",
-   "default": "Prices do not include VAT"
+   "options": "\nPrices do not include VAT\nInclusive of VAT"
   },
   {
    "fieldname": "column_break_4",
@@ -188,40 +188,81 @@
    "fieldtype": "Section Break"
   },
   {
+   "allow_on_submit": 1,
+   "default": "Draft",
    "fieldname": "status",
    "fieldtype": "Select",
+   "in_list_view": 1,
    "label": "Status",
-   "options": "Draft\nSent\nAccepted\nCancelled",
-   "default": "Draft",
-   "in_list_view": 1
+   "options": "Draft\nSent\nAccepted\nWon\nLost\nCancelled"
   },
   {
    "fieldname": "amended_from",
    "fieldtype": "Link",
    "label": "Amended From",
-   "options": "Savinda Quotation",
    "no_copy": 1,
+   "options": "Savinda Quotation",
    "print_hide": 1,
    "read_only": 1
   }
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-04-23 00:00:00.000000",
+ "modified": "2026-06-09 07:31:38.276092",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Savinda Quotation",
  "naming_rule": "By \"Naming Series\" field",
  "owner": "Administrator",
  "permissions": [
-  {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,
-   "role":"System Manager","share":1,"write":1,"submit":1,"cancel":1,"amend":1},
-  {"create":1,"delete":0,"email":1,"export":1,"print":1,"read":1,"report":1,
-   "role":"Sales User","share":1,"write":1,"submit":1,"cancel":0,"amend":0},
-  {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,
-   "role":"Sales Manager","share":1,"write":1,"submit":1,"cancel":1,"amend":1}
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales User",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
  ],
+ "row_format": "Dynamic",
  "search_fields": "customer_name,inquiry",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
  "title_field": "customer_name",
  "track_changes": 1
 }

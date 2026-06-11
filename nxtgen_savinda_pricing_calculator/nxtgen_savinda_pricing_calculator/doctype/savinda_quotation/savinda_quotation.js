@@ -56,6 +56,73 @@ frappe.ui.form.on("Savinda Quotation", {
 				frappe.set_route("print", "Savinda Quotation", frm.doc.name, "Savinda Quotation Format");
 			}, __("Actions"));
 		}
+
+		// ── Status colour indicator ───────────────────────────
+		var status_colour = {
+			"Draft":     "grey",
+			"Sent":      "blue",
+			"Accepted":  "green",
+			"Won":       "darkgreen",
+			"Lost":      "red",
+			"Cancelled": "grey",
+		};
+		frm.set_indicator_formatter("status", function (doc) {
+			return status_colour[doc.status] || "grey";
+		});
+		if (frm.doc.status) {
+			frm.page.set_indicator(frm.doc.status, status_colour[frm.doc.status] || "grey");
+		}
+
+		// ── Won / Lost actions (available from any active status) ──────────
+		var active = ["Draft", "Sent", "Accepted"];
+		if (!frm.is_new() && active.indexOf(frm.doc.status) > -1) {
+			frm.add_custom_button(__("Mark as Won"), function () {
+				frappe.confirm(
+					"Mark quotation <b>" + frm.doc.name + "</b> as <b style='color:#166534'>Won</b>?",
+					function () {
+						frappe.call({
+							method: "frappe.client.set_value",
+							args:   { doctype: "Savinda Quotation", name: frm.doc.name, fieldname: "status", value: "Won" },
+							callback: function () {
+								frm.reload_doc();
+								frappe.show_alert({ message: "Quotation marked as Won ✓", indicator: "green" });
+							},
+						});
+					}
+				);
+			}, __("Actions"));
+
+			frm.add_custom_button(__("Mark as Lost"), function () {
+				frappe.confirm(
+					"Mark quotation <b>" + frm.doc.name + "</b> as <b style='color:#dc2626'>Lost</b>?",
+					function () {
+						frappe.call({
+							method: "frappe.client.set_value",
+							args:   { doctype: "Savinda Quotation", name: frm.doc.name, fieldname: "status", value: "Lost" },
+							callback: function () {
+								frm.reload_doc();
+								frappe.show_alert({ message: "Quotation marked as Lost.", indicator: "red" });
+							},
+						});
+					}
+				);
+			}, __("Actions"));
+		}
+
+		// ── Manufacturing functions (enabled when Won) ─────────────────────
+		if (!frm.is_new() && frm.doc.status === "Won") {
+			frm.add_custom_button(__("Create / Link FG Items"), function () {
+				_show_create_fg_dialog(frm);
+			}, __("Manufacturing"));
+
+			frm.add_custom_button(__("Create Sales Order"), function () {
+				_show_create_so_dialog(frm);
+			}, __("Manufacturing"));
+
+			frm.add_custom_button(__("BOM Builder"), function () {
+				window.location.href = "/app/bom-builder?quotation=" + encodeURIComponent(frm.doc.name);
+			}, __("Manufacturing"));
+		}
 	},
 
 	// ── Auto-fill when inquiry selected ──────────────────────
@@ -483,3 +550,253 @@ function calculate_all_qty_breaks(frm) {
 // ─────────────────────────────────────────────────────────────
 
 function flt_v(v) { return parseFloat(v || 0) || 0; }
+
+
+// ─────────────────────────────────────────────────────────────
+//  CREATE / LINK FG ITEMS
+//  Groups quotation rows by cost_item; creates FG ERPNext Item
+//  for each unique cost_item that has no finish_good yet.
+// ─────────────────────────────────────────────────────────────
+
+function _show_create_fg_dialog(frm) {
+	// Build unique-per-cost_item list (skip rows that already have finish_good)
+	var seen = {}, pending = [], already_done = 0;
+	(frm.doc.items || []).forEach(function (row) {
+		var key = row.cost_item || row.item_name;
+		if (!seen[key]) {
+			seen[key] = true;
+			if (row.finish_good) {
+				already_done++;
+			} else {
+				pending.push(row);
+			}
+		}
+	});
+
+	if (!pending.length) {
+		frappe.msgprint({ title: "FG Items", message: "All items already have FG items linked (" + already_done + " linked).", indicator: "green" });
+		return;
+	}
+
+	_create_fg_for_item(frm, pending, 0);
+}
+
+function _create_fg_for_item(frm, pending_rows, idx) {
+	if (idx >= pending_rows.length) {
+		frm.save(null, function () {
+			frappe.show_alert({ message: "All FG items created and linked.", indicator: "green" });
+			frm.refresh();
+		});
+		return;
+	}
+
+	var row = pending_rows[idx];
+	var suggested_name = (row.item_name || "FG").substring(0, 60);
+	var suggested_desc = [row.size, row.material, row.finishing].filter(Boolean).join(" | ");
+
+	var d = new frappe.ui.Dialog({
+		title: "Create FG — " + (idx + 1) + " of " + pending_rows.length + ": " + row.item_name,
+		fields: [
+			{
+				fieldtype: "HTML",
+				options: "<div style='padding:6px 10px;background:#f0f4ff;border-radius:4px;font-size:12px;color:#1a3a5c;margin-bottom:6px'>"
+					+ "Creating Finished Good item for: <b>" + row.item_name + "</b><br>"
+					+ "You can also link an existing item using the field below.</div>",
+			},
+			{
+				fieldtype: "Link", fieldname: "existing_item",
+				label: "Link Existing Item (optional)", options: "Item",
+				description: "Leave blank to create a new item",
+			},
+			{ fieldtype: "Section Break", label: "New Item Details" },
+			{
+				fieldtype: "Data", fieldname: "item_name_field",
+				label: "Item Name", reqd: 1,
+				default: suggested_name,
+				description: "Item code is auto-generated by the system",
+			},
+			{
+				fieldtype: "Small Text", fieldname: "description",
+				label: "Description",
+				default: suggested_desc,
+			},
+			{ fieldtype: "Column Break" },
+			{
+				fieldtype: "Link", fieldname: "item_group",
+				label: "Item Group", options: "Item Group",
+				reqd: 1, default: "Finished Goods",
+			},
+			{
+				fieldtype: "Link", fieldname: "department",
+				label: "Department", options: "Department",
+				reqd: 1,
+				description: "Required — abbreviation is auto-resolved",
+			},
+			{
+				fieldtype: "Link", fieldname: "stock_uom",
+				label: "UOM", options: "UOM",
+				reqd: 1, default: "Nos",
+			},
+		],
+		primary_action_label: "Create & Next",
+		secondary_action_label: "Skip",
+		secondary_action: function () {
+			d.hide();
+			_create_fg_for_item(frm, pending_rows, idx + 1);
+		},
+		primary_action: function (vals) {
+			d.hide();
+
+			if (vals.existing_item) {
+				// Link existing item
+				_link_fg_to_rows(frm, row.cost_item || row.item_name, vals.existing_item);
+				_create_fg_for_item(frm, pending_rows, idx + 1);
+				return;
+			}
+
+			// Create new Item via backend API — resolves abbreviation fields automatically
+			frappe.call({
+				method: "nxtgen_savinda_pricing_calculator.api.manufacturing.create_fg_item",
+				args: {
+					item_name:   vals.item_name_field,
+					description: vals.description || vals.item_name_field,
+					item_group:  vals.item_group || "Finished Goods",
+					department:  vals.department,
+					stock_uom:   vals.stock_uom || "Nos",
+				},
+				freeze: true,
+				freeze_message: "Creating FG item...",
+				callback: function (r) {
+					if (!r.message) return;
+					frappe.show_alert({ message: "Created: " + r.message.item_code, indicator: "green" });
+					_link_fg_to_rows(frm, row.cost_item || row.item_name, r.message.item_code);
+					_create_fg_for_item(frm, pending_rows, idx + 1);
+				},
+			});
+		},
+	});
+	d.show();
+}
+
+function _link_fg_to_rows(frm, cost_item_key, fg_item_code) {
+	(frm.doc.items || []).forEach(function (row) {
+		var key = row.cost_item || row.item_name;
+		if (key === cost_item_key && !row.finish_good) {
+			frappe.model.set_value(row.doctype, row.name, "finish_good", fg_item_code);
+		}
+	});
+}
+
+
+// ─────────────────────────────────────────────────────────────
+//  CREATE SALES ORDER FROM WON QUOTATION
+//  One SO for multiple FG items — user sets qty per FG
+// ─────────────────────────────────────────────────────────────
+
+function _show_create_so_dialog(frm) {
+	// Collect unique FG items (one per cost_item group)
+	var fg_map = {}, fg_list = [];
+	(frm.doc.items || []).forEach(function (row) {
+		var key = row.finish_good;
+		if (!key) return;
+		if (!fg_map[key]) {
+			fg_map[key] = {
+				item_code:              row.finish_good,
+				item_name:              row.item_name,
+				qty:                    row.qty,
+				rate:                   flt_v(row.selling_price),
+				calculation_breakdown:  row.calculation_breakdown,
+				cost_item:              row.cost_item,
+			};
+			fg_list.push(fg_map[key]);
+		}
+	});
+
+	if (!fg_list.length) {
+		frappe.msgprint({ title: "No FG Items", message: "No FG items are linked yet. Use Manufacturing → Create / Link FG Items first.", indicator: "orange" });
+		return;
+	}
+
+	var fields = [
+		{
+			fieldtype: "Link", fieldname: "customer",
+			label: "Customer", options: "Customer",
+			reqd: 1, default: frm.doc.customer,
+		},
+		{
+			fieldtype: "Date", fieldname: "delivery_date",
+			label: "Required Delivery Date", reqd: 1,
+		},
+		{
+			fieldtype: "Section Break",
+			label: "Select FG Items to include in Sales Order",
+		},
+	];
+
+	fg_list.forEach(function (item, i) {
+		fields.push({
+			fieldtype: "Check", fieldname: "sel_" + i,
+			label: item.item_code + " — " + item.item_name,
+			default: 1,
+		});
+		fields.push({
+			fieldtype: "Float", fieldname: "qty_" + i,
+			label: "Quantity", default: item.qty,
+			depends_on: "eval:doc.sel_" + i,
+		});
+		fields.push({
+			fieldtype: "Currency", fieldname: "rate_" + i,
+			label: "Rate (LKR/unit)", default: item.rate,
+			depends_on: "eval:doc.sel_" + i,
+		});
+		if (i < fg_list.length - 1) {
+			fields.push({ fieldtype: "Column Break" });
+		}
+	});
+
+	var d = new frappe.ui.Dialog({
+		title: "Create Sales Order — " + frm.doc.name,
+		fields: fields,
+		primary_action_label: "Create Sales Order",
+		primary_action: function (vals) {
+			d.hide();
+
+			var so_items = fg_list
+				.filter(function (item, i) { return vals["sel_" + i]; })
+				.map(function (item, i) {
+					// Find original index for qty/rate fields
+					var orig_i = fg_list.indexOf(item);
+					return {
+						doctype:   "Sales Order Item",
+						item_code: item.item_code,
+						item_name: item.item_name,
+						qty:       flt_v(vals["qty_" + orig_i]) || item.qty,
+						rate:      flt_v(vals["rate_" + orig_i]) || item.rate,
+					delivery_date: vals.delivery_date,
+				};
+			});
+
+			frappe.call({
+				method: "frappe.client.insert",
+				args: {
+					doc: {
+						doctype:           "Sales Order",
+						customer:          vals.customer,
+						transaction_date:  frappe.datetime.get_today(),
+						delivery_date:     vals.delivery_date,
+						items:             so_items,
+						status:            "Draft",
+					},
+				},
+				freeze: true,
+				freeze_message: "Creating Sales Order...",
+				callback: function (r) {
+					if (!r.message) return;
+					frappe.show_alert({ message: "Sales Order created: " + r.message.name, indicator: "green" });
+					frappe.set_route("Form", "Sales Order", r.message.name);
+				},
+			});
+		},
+	});
+	d.show();
+}
