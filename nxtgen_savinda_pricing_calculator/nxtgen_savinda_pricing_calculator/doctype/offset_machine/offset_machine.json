@@ -8,6 +8,7 @@
  "field_order": [
   "machine_name",
   "is_printing_machine",
+  "allow_ink_assignment",
   "column_break_1",
   "can_run_parallel",
   "section_break_output",
@@ -43,6 +44,12 @@
    "description": "Uses printing makeready formula (basic setup + extra colors above 4)"
   },
   {
+   "fieldname": "allow_ink_assignment",
+   "fieldtype": "Check",
+   "label": "Allow Ink Assignment",
+   "description": "Show ink/varnish assignment in Production Assignment dialog for this machine (e.g. UV Varnish, WB Varnish). Enables ink BOM materials without printing makeready formula."
+  },
+  {
    "fieldname": "column_break_1",
    "fieldtype": "Column Break"
   },
@@ -63,7 +70,7 @@
    "fieldtype": "Float",
    "label": "Max Output Per Hour",
    "reqd": 1,
-   "description": "Sheets, cuts, pcs, impressions — depends on the operation unit"
+   "description": "Sheets, cuts, pcs, impressions \u2014 depends on the operation unit"
   },
   {
    "fieldname": "color_capacity",
@@ -153,7 +160,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-04 00:00:00.000000",
+ "modified": "2026-06-12 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Offset Machine",
