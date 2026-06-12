@@ -63,6 +63,7 @@ def _enrich_spec(spec):
             machines.append({
                 "machine":                     m.name,
                 "is_printing_machine":         cint(m.is_printing_machine),
+                "allow_ink_assignment":        cint(getattr(m, "allow_ink_assignment", 0)),
                 "color_capacity":              cint(m.color_capacity or 1),
                 "max_output_per_hour":         flt(m.max_output_per_hour),
                 "can_run_parallel":            cint(m.can_run_parallel),
@@ -931,9 +932,10 @@ def _process_spec(spec, form, sheet, item_qty, no_of_colors, material_rate,
                 all_rows.append(machine_row)
                 prod += machine_cost
 
-                # Offset ink cost — only for offset printing machines
+                # Offset ink cost — for printing machines and machines with allow_ink_assignment
                 pricing_t = (form.get("pricing_type") or "Offset").strip()
-                if pricing_t == "Offset" and cint(m_data.get("is_printing_machine")) and machine_assignment.get("inks"):
+                show_inks = cint(m_data.get("is_printing_machine")) or cint(m_data.get("allow_ink_assignment", 0))
+                if pricing_t == "Offset" and show_inks and machine_assignment.get("inks"):
                     cycles = max(cint(machine_assignment.get("cycles", 1)), 1)
                     ink_rows, ink_cost = _calc_spec_ink_cost(
                         spec.get("spec_name", ""), machine_assignment, form, sheet, cycles

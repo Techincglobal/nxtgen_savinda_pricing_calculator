@@ -20,7 +20,12 @@
   "section_break_mach_list",
   "machines",
   "section_break_facts",
-  "cost_facts"
+  "cost_facts",
+  "section_break_mfg",
+  "bom_include",
+  "column_break_mfg",
+  "bom_operation",
+  "bom_qi_template"
  ],
  "fields": [
   {
@@ -133,6 +138,38 @@
    "fieldtype": "Table",
    "label": "Cost Facts",
    "options": "Offset Spec Cost Fact"
+  },
+  {
+   "fieldname": "section_break_mfg",
+   "fieldtype": "Section Break",
+   "label": "Manufacturing / BOM",
+   "collapsible": 1,
+   "description": "Controls how this specification appears in the BOM Builder."
+  },
+  {
+   "fieldname": "bom_include",
+   "fieldtype": "Check",
+   "label": "Include in BOM Chain",
+   "default": "1",
+   "description": "Uncheck to exclude this spec from BOM chain by default (e.g. Proof Board, samples)."
+  },
+  {
+   "fieldname": "column_break_mfg",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "bom_operation",
+   "fieldtype": "Link",
+   "label": "ERPNext Operation",
+   "options": "Operation",
+   "description": "Default ERPNext Operation used in BOM. Can be overridden in BOM Builder."
+  },
+  {
+   "fieldname": "bom_qi_template",
+   "fieldtype": "Link",
+   "label": "Quality Inspection Template",
+   "options": "Quality Inspection Template",
+   "description": "If set, QI will be required on the output SFG of this operation."
   }
  ],
  "links": [],

@@ -210,10 +210,26 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item=""):
 		ma        = spec.get("machine_assignment") or {}
 		machine   = ma.get("machine", "")
 
+		# ── Fetch manufacturing settings from Offset Spec master ──────────
+		spec_bom_include  = 1
+		spec_bom_operation = ""
+		spec_bom_qi       = ""
+		if spec_name:
+			try:
+				sd = frappe.get_cached_doc("Offset Spec", spec_name)
+				spec_bom_include   = cint(getattr(sd, "bom_include", 1))
+				spec_bom_operation = (getattr(sd, "bom_operation", "") or "").strip()
+				spec_bom_qi        = (getattr(sd, "bom_qi_template", "") or "").strip()
+			except Exception:
+				pass
+
 		# Workstation from machine
 		workstation = ""
 		if machine:
 			workstation = frappe.db.get_value("Offset Machine", machine, "workstation") or ""
+		# If spec has an ERPNext Operation set, try to fill workstation from it
+		if spec_bom_operation and not workstation:
+			workstation = frappe.db.get_value("Operation", spec_bom_operation, "workstation") or ""
 
 		# Time estimate from calc row attribute_values
 		time_mins = 60.0
@@ -255,8 +271,10 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item=""):
 				for ci, ink_row in enumerate(ma_inks):
 					ink_name = (ink_row.get("ink_name") or "").strip()
 					ink_pct  = flt(ink_row.get("percentage", 100))
-					# Get Offset Ink item to use as ERPNext item reference
-					ink_item = frappe.db.get_value("Offset Ink", ink_name, "name") if ink_name else ""
+					if not ink_name:
+						continue
+					# Get linked ERPNext Item from Offset Ink master (may be empty)
+					ink_erp_item = (frappe.db.get_value("Offset Ink", ink_name, "ink_item") or "").strip()
 					# Qty from CB cost row for this ink
 					ink_qty = 0
 					for cr in cost_rows:
@@ -264,24 +282,24 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item=""):
 								and (cr.get("cost_group") or "").lower() == "material"
 								and cr.get("selected_item") != base_mat
 								and (cr.get("selected_item_name") == ink_name
-								     or cr.get("selected_item") == ink_item)):
+								     or cr.get("selected_item") == ink_erp_item)):
 							ink_qty = flt(cr.get("req_qty", 0))
 							break
-					# Fallback: calculate from consumption_per_sqinch
-					if ink_qty == 0 and ink_item and pricing_type == "Offset":
-						consumption = flt(frappe.db.get_value("Offset Ink", ink_item, "consumption_per_sqinch") or 0)
+					# Fallback: calculate from consumption_per_sqinch (Offset)
+					if ink_qty == 0 and pricing_type == "Offset":
+						consumption = flt(frappe.db.get_value("Offset Ink", ink_name, "consumption_per_sqinch") or 0)
 						if consumption:
 							cs_l   = flt(form.get("cut_sheet_l", 0))
 							cs_w   = flt(form.get("cut_sheetw", 0)) or flt(form.get("cut_sheet_w", 0))
 							cs_qty = flt(sheet.get("cut_sheet_qty", 0))
 							ink_qty = cs_l * cs_w * cs_qty * consumption * (ink_pct / 100)
-					# Fallback: consumption_per_sqm for Flexo
-					if ink_qty == 0 and ink_item and pricing_type == "Flexo":
-						consumption = flt(frappe.db.get_value("Offset Ink", ink_item, "consumption_per_sqm") or 0)
+					# Fallback: consumption_per_sqm (Flexo)
+					if ink_qty == 0 and pricing_type == "Flexo":
+						consumption = flt(frappe.db.get_value("Offset Ink", ink_name, "consumption_per_sqm") or 0)
 						if consumption:
 							ink_qty = flt(sheet.get("reel_area", 0)) * consumption * (ink_pct / 100)
 					op_materials.append({
-						"item_code": ink_item or "",
+						"item_code": ink_erp_item,
 						"item_name": ink_name,
 						"qty":       round(ink_qty, 8),
 						"uom":       "KG",
@@ -347,26 +365,69 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item=""):
 							"label":     cf_name,
 						})
 
+			# Non-print ops: also include inks from Production Assignment (e.g. UV/WB Varnish)
+			if not is_print:
+				np_inks = ma.get("inks", [])
+				for ci, ink_row in enumerate(np_inks):
+					ink_name = (ink_row.get("ink_name") or "").strip()
+					ink_pct  = flt(ink_row.get("percentage", 100))
+					if not ink_name:
+						continue
+					ink_erp_item = (frappe.db.get_value("Offset Ink", ink_name, "ink_item") or "").strip()
+					ink_qty = 0
+					for cr in cost_rows:
+						if (cr.get("spec_name") == spec_name
+								and (cr.get("cost_group") or "").lower() == "material"
+								and (cr.get("selected_item_name") == ink_name
+								     or cr.get("selected_item") == ink_erp_item)):
+							ink_qty = flt(cr.get("req_qty", 0))
+							break
+					if ink_qty == 0 and pricing_type == "Offset":
+						consumption = flt(frappe.db.get_value("Offset Ink", ink_name, "consumption_per_sqinch") or 0)
+						if consumption:
+							cs_l   = flt(form.get("cut_sheet_l", 0))
+							cs_w   = flt(form.get("cut_sheetw", 0)) or flt(form.get("cut_sheet_w", 0))
+							cs_qty = flt(sheet.get("cut_sheet_qty", 0))
+							ink_qty = cs_l * cs_w * cs_qty * consumption * (ink_pct / 100)
+					if ink_qty == 0 and pricing_type == "Flexo":
+						consumption = flt(frappe.db.get_value("Offset Ink", ink_name, "consumption_per_sqm") or 0)
+						if consumption:
+							ink_qty = flt(sheet.get("reel_area", 0)) * consumption * (ink_pct / 100)
+					op_materials.append({
+						"item_code": ink_erp_item,
+						"item_name": ink_name,
+						"qty":       round(ink_qty, 8),
+						"uom":       "KG",
+						"cost_fact": f"Ink - {ink_name}",
+						"include":   True,
+						"label":     f"🎨 {ink_name} ({ink_pct}%)",
+					})
+
 		sfg_code = _sfg_code(fg_item, spec_name)
 		sfg_name = _sfg_name(fg_item, fg_iname, spec_name)
 
 		operations.append({
-			"spec_name":           spec_name,
-			"machine":             machine,
-			"workstation":         workstation,
-			"time_in_mins":        time_mins,
-			"input_item_code":     "",
-			"input_item_name":     "",
-			"input_qty":           round(input_qty, 4),
-			"input_uom":           input_uom,
-			"sfg_code":            sfg_code,
-			"sfg_name":            sfg_name,
-			"output_qty":          round(output_qty, 4),
-			"output_uom":          output_uom,
-			"materials":           op_materials,
-			"is_print":            is_print,
-			"no_of_colors":        no_of_colors if is_print else 0,
-			"split_to_item_unit":  False,   # user sets ONE op as the split point
+			"spec_name":                   spec_name,
+			"machine":                     machine,
+			"workstation":                 workstation,
+			"time_in_mins":                time_mins,
+			"input_item_code":             "",
+			"input_item_name":             "",
+			"input_qty":                   round(input_qty, 4),
+			"input_uom":                   input_uom,
+			"sfg_code":                    sfg_code,
+			"sfg_name":                    sfg_name,
+			"output_qty":                  round(output_qty, 4),
+			"output_uom":                  output_uom,
+			"materials":                   op_materials,
+			"is_print":                    is_print,
+			"no_of_colors":                no_of_colors if is_print else 0,
+			"split_to_item_unit":          False,
+			# Manufacturing defaults from Offset Spec — can be overridden in BOM Builder
+			"exclude_from_bom":            not bool(spec_bom_include),
+			"erp_operation":               spec_bom_operation,
+			"has_quality_inspection":      bool(spec_bom_qi),
+			"quality_inspection_template": spec_bom_qi,
 		})
 
 	# ── Input chain is built by JS syncChain() AFTER sorting ─────
@@ -418,19 +479,64 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 
 	created_boms = []
 
-	# ── Step 1: ensure SFG items exist ───────────────────────
+	# ── Build active_ops: exclude flagged ops and re-link chain ──
+	# Collect excluded SFG codes so downstream inputs can be re-linked
+	excluded_sfg_codes = {
+		(op.get("sfg_code") or "").strip()
+		for op in operations
+		if op.get("exclude_from_bom") and op.get("sfg_code")
+	}
+	# Original base material = input of first op (set by JS syncChain after sort)
+	orig_first_input_code = (operations[0].get("input_item_code") or "").strip() if operations else ""
+	orig_first_input_name = (operations[0].get("input_item_name") or "").strip() if operations else ""
+
+	active_ops = []
+	last_sfg_code = None
+	last_sfg_name = None
 	for op in operations:
+		if op.get("exclude_from_bom"):
+			continue
+		op_copy = dict(op)
+		# Re-link input if it pointed at an excluded op's SFG
+		if op_copy.get("input_item_code") in excluded_sfg_codes:
+			if last_sfg_code:
+				op_copy["input_item_code"] = last_sfg_code
+				op_copy["input_item_name"] = last_sfg_name or last_sfg_code
+			else:
+				# First active op: trace back to original base material
+				op_copy["input_item_code"] = orig_first_input_code
+				op_copy["input_item_name"] = orig_first_input_name
+		active_ops.append(op_copy)
+		last_sfg_code = op_copy.get("sfg_code")
+		last_sfg_name = op_copy.get("sfg_name")
+
+	if not active_ops:
+		frappe.throw("All operations are excluded from BOM. Include at least one operation.")
+
+	# ── Step 1: ensure SFG items exist (active ops only) ─────
+	for op in active_ops:
 		sfg_code = (op.get("sfg_code") or "").strip()
 		sfg_name = (op.get("sfg_name") or sfg_code).strip()
 		if not sfg_code:
 			continue
 		if not frappe.db.exists("Item", sfg_code):
 			_create_sfg_item(sfg_code, sfg_name, fg_item=fg_item)
+		# Set Quality Inspection Template on the SFG Item if required
+		if op.get("has_quality_inspection") and op.get("quality_inspection_template"):
+			try:
+				frappe.db.set_value("Item", sfg_code, "quality_inspection_template",
+				                    op["quality_inspection_template"])
+			except Exception:
+				pass
 
 	# ── Step 2: create sub-assembly BOM for each SFG ─────────
-	for i, op in enumerate(operations):
+	# Track previous op's QI template so we can set it on the input row of the consuming BOM
+	prev_qi_template = None
+
+	for i, op in enumerate(active_ops):
 		sfg_code = (op.get("sfg_code") or "").strip()
 		if not sfg_code:
+			prev_qi_template = op.get("quality_inspection_template") if op.get("has_quality_inspection") else None
 			continue
 
 		sfg_uom = frappe.db.get_value("Item", sfg_code, "stock_uom") or "Nos"
@@ -445,6 +551,7 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 			# Reuse if qty matches; otherwise deactivate old and recreate
 			if abs(flt(existing_row.quantity) - op_qty) < 0.01:
 				created_boms.append({"bom_name": existing_row.name, "item": sfg_code, "reused": True})
+				prev_qi_template = op.get("quality_inspection_template") if op.get("has_quality_inspection") else None
 				continue
 			else:
 				# Qty changed — deactivate old BOM so we can create updated one
@@ -471,13 +578,21 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 
 		if input_code:
 			item_uom = frappe.db.get_value("Item", input_code, "stock_uom") or input_uom
-			sfg_bom.append("items", {
+			input_row = {
 				"item_code": input_code,
 				"item_name": op.get("input_item_name") or input_code,
 				"qty":       input_qty,
 				"uom":       item_uom,
 				"stock_uom": item_uom,
-			})
+			}
+			# If the PREVIOUS operation had QI, set its template on this input row
+			# (QI is inspected at the point of consumption — standard ERPNext pattern)
+			if prev_qi_template:
+				try:
+					input_row["quality_inspection_template"] = prev_qi_template
+				except Exception:
+					pass
+			sfg_bom.append("items", input_row)
 
 		# Add per-operation materials (inks, foils, lamination material, etc.)
 		op_mats = op.get("materials") or []
@@ -499,9 +614,10 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 				"rate":      flt(mat.get("rate", 0)),
 			})
 
-		# Operation
+		# Operation — use explicitly selected ERPNext Operation, or auto-create from spec name
 		if op.get("workstation"):
-			op_name = _get_or_create_operation(op.get("spec_name", sfg_code))
+			op_name_key = (op.get("erp_operation") or "").strip() or op.get("spec_name", sfg_code)
+			op_name = _get_or_create_operation(op_name_key)
 			sfg_bom.append("operations", {
 				"operation":    op_name,
 				"workstation":  op["workstation"],
@@ -513,8 +629,10 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 		sfg_bom.submit()
 		frappe.db.commit()
 		created_boms.append({"bom_name": sfg_bom.name, "item": sfg_code, "reused": False})
+		# Pass this op's QI template to the next op's input row
+		prev_qi_template = op.get("quality_inspection_template") if op.get("has_quality_inspection") else None
 
-	# ── Step 3: FG BOM — raw material = last SFG ─────────────
+	# ── Step 3: FG BOM — raw material = last ACTIVE SFG ─────
 	existing_fg = frappe.db.get_value("BOM", {"item": fg_item, "docstatus": 1, "is_active": 1}, "name")
 	if existing_fg:
 		frappe.throw(
@@ -522,7 +640,7 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 			frappe.ValidationError,
 		)
 
-	last_op  = operations[-1]
+	last_op  = active_ops[-1]
 	last_sfg = (last_op.get("sfg_code") or "").strip()
 	last_sfg_uom = frappe.db.get_value("Item", last_sfg, "stock_uom") or "Nos" if last_sfg else fg_uom
 
@@ -538,13 +656,20 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 	})
 
 	if last_sfg:
-		fg_bom.append("items", {
+		fg_item_row = {
 			"item_code": last_sfg,
 			"item_name": last_op.get("sfg_name") or last_sfg,
 			"qty":       flt(last_op.get("output_qty") or mfg_qty),
 			"uom":       last_sfg_uom,
 			"stock_uom": last_sfg_uom,
-		})
+		}
+		# If the last operation had QI, set it on the FG BOM's SFG input row
+		if prev_qi_template:
+			try:
+				fg_item_row["quality_inspection_template"] = prev_qi_template
+			except Exception:
+				pass
+		fg_bom.append("items", fg_item_row)
 
 	fg_bom.insert(ignore_permissions=True)
 	fg_bom.submit()
@@ -671,6 +796,21 @@ def disable_bom(bom_name):
 	frappe.db.set_value("BOM", bom_name, "is_active", 0)
 	frappe.db.commit()
 	return {"disabled": bom_name}
+
+
+@frappe.whitelist()
+def get_erpnext_operations(search_term=""):
+	"""Return ERPNext Operation list for the BOM Builder operation picker."""
+	filters = {}
+	if search_term:
+		filters["name"] = ["like", f"%{search_term}%"]
+	return frappe.get_all(
+		"Operation",
+		filters=filters,
+		fields=["name", "workstation"],
+		order_by="name asc",
+		limit=50,
+	)
 
 
 # keep old create_bom for backward compat (single-level BOM)

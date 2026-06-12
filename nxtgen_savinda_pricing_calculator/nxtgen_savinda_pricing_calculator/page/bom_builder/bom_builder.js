@@ -243,11 +243,16 @@ function bb_mount_app(el) {
 								self.operations.forEach(function (op) {
 									var saved = savedOps.find(function(s){ return s.spec_name === op.spec_name; });
 									if (!saved) return;
-									if (saved.sfg_code)         op.sfg_code         = saved.sfg_code;
-									if (saved.sfg_name)         op.sfg_name         = saved.sfg_name;
+									if (saved.sfg_code)          op.sfg_code = saved.sfg_code;
+									if (saved.sfg_name)          op.sfg_name = saved.sfg_name;
 									if (saved.split_to_item_unit) op.split_to_item_unit = true;
 									if (Array.isArray(saved.materials) && saved.materials.length)
 										op.materials = saved.materials;
+									// Use 'in' so explicit false/empty from saved config wins over spec defaults
+									if ('exclude_from_bom' in saved)            op.exclude_from_bom            = saved.exclude_from_bom;
+									if ('erp_operation' in saved)               op.erp_operation               = saved.erp_operation;
+									if ('has_quality_inspection' in saved)      op.has_quality_inspection      = saved.has_quality_inspection;
+									if ('quality_inspection_template' in saved) op.quality_inspection_template = saved.quality_inspection_template;
 								});
 								self.syncChain();
 								frappe.show_alert({ message: '✓ Customisations restored from saved config', indicator: 'blue' }, 3);
@@ -264,8 +269,12 @@ function bb_mount_app(el) {
 				var afterSplit = false;
 
 				self.operations.forEach(function (op, i) {
-					if (!Array.isArray(op.materials))  op.materials = [];
-					if (!('split_to_item_unit' in op)) op.split_to_item_unit = false;
+					if (!Array.isArray(op.materials))           op.materials = [];
+					if (!('split_to_item_unit' in op))          op.split_to_item_unit = false;
+					if (!('exclude_from_bom' in op))            op.exclude_from_bom = false;
+					if (!('erp_operation' in op))               op.erp_operation = '';
+					if (!('has_quality_inspection' in op))      op.has_quality_inspection = false;
+					if (!('quality_inspection_template' in op)) op.quality_inspection_template = '';
 
 					// Auto-generate SFG names
 					if (!op.sfg_code && self.selectedFG)
@@ -360,6 +369,38 @@ function bb_mount_app(el) {
 				}, 'Select Item', 'Set');
 			},
 
+			pickOperation(op) {
+				frappe.prompt([{
+					fieldtype: 'Link', fieldname: 'operation', label: 'ERPNext Operation',
+					options: 'Operation', reqd: 0,
+					default: op.erp_operation || op.spec_name,
+					description: 'Select from Manufacturing › Operation. Leave blank to auto-create from spec name.',
+				}], function (v) {
+					if (!v.operation) return;
+					op.erp_operation = v.operation;
+					// Auto-fill workstation from the selected operation if not already set
+					frappe.call({
+						method: 'frappe.client.get_value',
+						args: { doctype: 'Operation', fieldname: 'workstation', filters: { name: v.operation } },
+						callback: function (r) {
+							if (r.message && r.message.workstation && !op.workstation)
+								op.workstation = r.message.workstation;
+						},
+					});
+				}, 'Select ERPNext Operation', 'Set');
+			},
+
+			pickQITemplate(op) {
+				frappe.prompt([{
+					fieldtype: 'Link', fieldname: 'template', label: 'Quality Inspection Template',
+					options: 'Quality Inspection Template', reqd: 0,
+					default: op.quality_inspection_template || '',
+					description: 'Will be set on the SFG Item master when BOM chain is created.',
+				}], function (v) {
+					if (v.template) op.quality_inspection_template = v.template;
+				}, 'Quality Inspection Template', 'Set');
+			},
+
 			// ── Create BOM chain ──
 			createBOM() {
 				var self = this;
@@ -407,9 +448,14 @@ function bb_mount_app(el) {
 
 			_doCreateBOM() {
 				var self = this;
-				var missing_ws = self.operations.filter(function (op) { return !op.workstation; });
-				var msg = 'Create <b>' + self.operations.length + ' SFG BOM(s)</b> + 1 FG BOM for <b>'
+				var active_ops = self.operations.filter(function (op) { return !op.exclude_from_bom; });
+				var excluded_count = self.operations.length - active_ops.length;
+				var missing_ws = active_ops.filter(function (op) { return !op.workstation; });
+				var msg = 'Create <b>' + active_ops.length + ' SFG BOM(s)</b> + 1 FG BOM for <b>'
 					+ self.selectedFG + '</b>?<br>Mfg Qty: <b>' + self.mfgQty + '</b>';
+				if (excluded_count) {
+					msg += '<br><span style="color:#6b7280">ℹ ' + excluded_count + ' operation(s) excluded from BOM chain.</span>';
+				}
 				if (missing_ws.length) {
 					msg += '<br><span style="color:#b45309">⚠ ' + missing_ws.length + ' operation(s) without Workstation — those SFG BOMs will have no operations entry.</span>';
 				}
@@ -586,7 +632,10 @@ function bb_mount_app(el) {
           <span class="bb-leg-out">SFG Output ▶</span>
         </div>
 
-        <div v-for="(op, i) in operations" :key="i" :class="['bb-op-block', op.split_to_item_unit ? 'bb-split-block' : '']">
+        <div v-for="(op, i) in operations" :key="i" :class="['bb-op-block', op.split_to_item_unit ? 'bb-split-block' : '', op.exclude_from_bom ? 'bb-op-excluded' : '']">
+        <div v-if="op.exclude_from_bom" class="bb-op-excluded-banner">
+          🚫 Excluded from BOM — this operation is skipped during BOM chain creation
+        </div>
         <div v-if="op.split_to_item_unit" class="bb-split-banner">
           🔀 Split to Item Unit — output qty becomes <b>{{ (itemQty || mfgQty) | 0 }}</b> (order qty)
         </div>
@@ -622,12 +671,36 @@ function bb_mount_app(el) {
             <div class="bb-op-machine">{{ op.machine }}</div>
             <div v-if="op.workstation" class="bb-ws-badge">{{ op.workstation }}</div>
             <div v-else class="bb-no-ws">⚠ no workstation</div>
+            <!-- ERPNext Operation override -->
+            <div class="bb-op-erp-row">
+              <span style="font-size:9px;color:#888;flex-shrink:0">Op:</span>
+              <input type="text" v-model="op.erp_operation" class="bb-inp"
+                style="width:84px;padding:2px 5px;font-size:10px"
+                :placeholder="op.spec_name.substring(0,12)" />
+              <button class="bb-btn-link" @click="pickOperation(op)" title="Pick from ERPNext Operations">🔍</button>
+            </div>
             <!-- Split to item unit button -->
             <button :class="['bb-split-btn', op.split_to_item_unit ? 'bb-split-on' : '']"
               @click="setSplitPoint(i)"
               :title="op.split_to_item_unit ? 'Click to remove split point' : 'Set as split-to-item-unit: qty changes to order qty after this op'">
               {{ op.split_to_item_unit ? '🔀 Split ✓' : '🔀 Split' }}
             </button>
+            <!-- Exclude from BOM toggle -->
+            <button :class="['bb-excl-btn', op.exclude_from_bom ? 'bb-excl-on' : '']"
+              @click="op.exclude_from_bom = !op.exclude_from_bom"
+              :title="op.exclude_from_bom ? 'Excluded — click to re-include in BOM chain' : 'Exclude this spec from BOM chain (e.g. Proof Board)'">
+              {{ op.exclude_from_bom ? '🚫 Excluded' : '⊘ Exclude' }}
+            </button>
+            <!-- Quality Inspection -->
+            <label class="bb-chk-lbl" style="font-size:10px;justify-content:center;margin-top:4px">
+              <input type="checkbox" v-model="op.has_quality_inspection" style="margin-right:3px" />
+              QI Required
+            </label>
+            <div v-if="op.has_quality_inspection" class="bb-op-erp-row" style="margin-top:2px">
+              <input type="text" v-model="op.quality_inspection_template" class="bb-inp"
+                style="width:84px;padding:2px 5px;font-size:10px" placeholder="QI Template" />
+              <button class="bb-btn-link" @click="pickQITemplate(op)" title="Pick Quality Inspection Template">🔍</button>
+            </div>
             <div class="bb-op-time">
               <input type="number" v-model.number="op.time_in_mins" min="0" step="1" class="bb-inp bb-inp-xs" />
               <span style="font-size:10px;color:#888">mins</span>
@@ -827,6 +900,17 @@ function bb_inject_styles() {
 .bb-mat-item{flex:1;padding:4px 8px;background:#fff;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;font-size:12px;min-width:120px}
 .bb-mat-item:hover{border-color:#1a3a5c;background:#f0f4ff}
 .bb-mat-item-empty{color:#9ca3af;font-style:italic}
+/* Exclude from BOM */
+.bb-excl-btn{border:1px solid #d1d5db;background:#f9fafb;color:#6b7280;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:10px;margin-top:4px;font-weight:600}
+.bb-excl-btn:hover{background:#fee2e2;border-color:#fca5a5;color:#dc2626}
+.bb-excl-on{background:#fee2e2!important;color:#dc2626!important;border-color:#fca5a5!important}
+.bb-op-excluded .bb-op-row{opacity:0.45;background:#f9fafb}
+.bb-op-excluded .bb-op-mats,.bb-op-excluded .bb-op-mats-empty{opacity:0.4}
+.bb-op-excluded-banner{background:#fee2e2;color:#991b1b;font-size:11px;font-weight:600;padding:4px 14px;border-bottom:1px solid #fca5a5}
+/* ERPNext Operation / QI row */
+.bb-op-erp-row{display:flex;align-items:center;gap:3px;margin-top:3px;width:100%}
+.bb-btn-link{background:none;border:none;cursor:pointer;color:#1a3a5c;font-size:13px;padding:0 2px;line-height:1;flex-shrink:0}
+.bb-btn-link:hover{color:#2c5f8a}
 `;
 	document.head.appendChild(s);
 }

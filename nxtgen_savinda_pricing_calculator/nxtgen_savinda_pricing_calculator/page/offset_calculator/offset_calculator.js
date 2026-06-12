@@ -161,6 +161,12 @@ function oc_mount_app(el) {
 				var mData = mList.find(function (m) { return m.machine === this.inkDialogState.machine; }, this);
 				return mData ? !!mData.is_printing_machine : false;
 			},
+			isDialogMachineInkAllowed() {
+				if (!this.inkDialog || !this.inkDialogState.machine) return false;
+				var mList = this.inkDialog.machines || [];
+				var mData = mList.find(function (m) { return m.machine === this.inkDialogState.machine; }, this);
+				return mData ? !!mData.allow_ink_assignment : false;
+			},
 
 			// Auto-include material row check
 			materialReady() {
@@ -870,9 +876,9 @@ function oc_mount_app(el) {
           <input type="number" v-model.number="inkDialogState.cycles" min="1" class="oc-inp" placeholder="Number of cycles" />
           <div class="oc-hint">Multiplies make-ready and production time.</div>
         </div>
-        <!-- Offset: CSC + Inks -->
-        <template v-if="!isFlexoDialog && isDialogMachinePrinting">
-          <div class="oc-field">
+        <!-- Offset: CSC (printing machines only) + Inks (printing OR allow_ink_assignment) -->
+        <template v-if="!isFlexoDialog && (isDialogMachinePrinting || isDialogMachineInkAllowed)">
+          <div v-if="isDialogMachinePrinting" class="oc-field">
             <label class="oc-chk-lbl">
               <input type="checkbox" v-model="inkDialogState.csc" class="oc-chk" />
               <span>Customer Sample Colors</span>

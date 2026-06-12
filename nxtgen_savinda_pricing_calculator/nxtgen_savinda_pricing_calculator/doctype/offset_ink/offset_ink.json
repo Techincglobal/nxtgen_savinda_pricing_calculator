@@ -9,6 +9,8 @@
   "ink_name",
   "column_break_1",
   "is_active",
+  "section_break_bom",
+  "ink_item",
   "section_break_pricing",
   "price_per_kg",
   "consumption_per_sqinch",
@@ -35,6 +37,19 @@
    "fieldtype": "Check",
    "label": "Is Active",
    "default": "1",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "section_break_bom",
+   "fieldtype": "Section Break",
+   "label": "BOM / Manufacturing"
+  },
+  {
+   "fieldname": "ink_item",
+   "fieldtype": "Link",
+   "label": "ERPNext Item (for BOM)",
+   "options": "Item",
+   "description": "Linked ERPNext inventory item. Used as item_code in BOM materials when building BOM chain.",
    "in_list_view": 1
   },
   {
@@ -83,7 +98,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-07 00:00:00.000000",
+ "modified": "2026-06-12 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Offset Ink",
