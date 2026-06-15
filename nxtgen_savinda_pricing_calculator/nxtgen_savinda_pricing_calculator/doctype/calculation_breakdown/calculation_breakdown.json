@@ -13,7 +13,9 @@
   "ref",
   "price_list",
   "section_break_cxhe",
+  "material_type",
   "base_material",
+  "custom_material_name",
   "full_sheet_l",
   "cut_sheet_l",
   "column_break_dgmv",
@@ -99,10 +101,25 @@
    "fieldtype": "Section Break"
   },
   {
+   "fieldname": "material_type",
+   "fieldtype": "Select",
+   "label": "Material Type",
+   "options": "Existing\nCustom",
+   "default": "Existing",
+   "description": "Existing = select from ERPNext Item master. Custom = manually enter name and rate."
+  },
+  {
    "fieldname": "base_material",
    "fieldtype": "Link",
    "label": "Base Material ",
    "options": "Item"
+  },
+  {
+   "fieldname": "custom_material_name",
+   "fieldtype": "Data",
+   "label": "Custom Material Name",
+   "depends_on": "eval:doc.material_type=='Custom'",
+   "description": "Free-text material name for non-stock or non-existing boards/reels."
   },
   {
    "fieldname": "full_sheet_l",
@@ -294,7 +311,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-04-15 00:00:00.000000",
+ "modified": "2026-06-14 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Calculation Breakdown",

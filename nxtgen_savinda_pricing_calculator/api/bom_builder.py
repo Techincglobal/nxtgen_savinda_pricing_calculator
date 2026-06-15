@@ -171,9 +171,15 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item=""):
 	cost_rows  = calc_result.get("cost_rows", []) or []
 
 	# ── Base material ─────────────────────────────────────────
-	base_mat       = form.get("base_material", "")
-	base_mat_name  = frappe.db.get_value("Item", base_mat, "item_name") or base_mat if base_mat else ""
-	base_mat_uom   = frappe.db.get_value("Item", base_mat, "stock_uom") or "Nos" if base_mat else "Nos"
+	mat_type = (form.get("material_type") or "Existing").strip()
+	if mat_type == "Custom":
+		base_mat      = ""
+		base_mat_name = (form.get("custom_material_name") or "").strip()
+		base_mat_uom  = "Nos"
+	else:
+		base_mat      = form.get("base_material", "")
+		base_mat_name = frappe.db.get_value("Item", base_mat, "item_name") or base_mat if base_mat else ""
+		base_mat_uom  = frappe.db.get_value("Item", base_mat, "stock_uom") or "Nos" if base_mat else "Nos"
 
 	if pricing_type == "Flexo":
 		base_input_qty = flt(sheet.get("reel_area") or 0)

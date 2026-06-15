@@ -21,6 +21,8 @@
   "machines",
   "section_break_facts",
   "cost_facts",
+  "section_break_allowed_inks",
+  "allowed_inks",
   "section_break_mfg",
   "bom_include",
   "column_break_mfg",
@@ -140,6 +142,20 @@
    "options": "Offset Spec Cost Fact"
   },
   {
+   "fieldname": "section_break_allowed_inks",
+   "fieldtype": "Section Break",
+   "label": "Ink Filter",
+   "collapsible": 1,
+   "description": "If inks are listed here, only those inks will appear in the Production Assignment dialog for this spec. Leave empty to show all inks."
+  },
+  {
+   "fieldname": "allowed_inks",
+   "fieldtype": "Table",
+   "label": "Allowed Inks",
+   "options": "Offset Spec Allowed Ink",
+   "description": "Leave empty to show all active inks. Populate to restrict ink selection for this spec."
+  },
+  {
    "fieldname": "section_break_mfg",
    "fieldtype": "Section Break",
    "label": "Manufacturing / BOM",
@@ -173,7 +189,7 @@
   }
  ],
  "links": [],
- "modified": "2026-05-24 00:00:00.000000",
+ "modified": "2026-06-14 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Offset Spec",

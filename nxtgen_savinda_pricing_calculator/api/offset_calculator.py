@@ -93,6 +93,11 @@ def _enrich_spec(spec):
             }
             for row in (doc.cost_facts or [])
         ],
+        "allowed_inks": [
+            row.ink_name
+            for row in (getattr(doc, "allowed_inks", None) or [])
+            if row.ink_name
+        ],
     }
 
 
@@ -239,12 +244,25 @@ def calculate(payload):
     mat_total = prep_total = prod_total = 0.0
 
     # 1. Material (auto)
-    auto_qty = reel_area if pricing_type == "Flexo" else full_sheet_qty
-    if form.get("base_material") and material_rate and auto_qty:
+    auto_qty      = reel_area if pricing_type == "Flexo" else full_sheet_qty
+    material_type = (form.get("material_type") or "Existing").strip()
+    label         = "Paper / Board" if pricing_type == "Offset" else "Reel Material"
+    if material_type == "Custom":
+        custom_name = (form.get("custom_material_name") or "").strip()
+        if custom_name and material_rate and auto_qty:
+            amt = round(auto_qty * material_rate, 2)
+            mat_total += amt
+            cost_rows.append({
+                "section": "Material", "spec_name": "Base Material",
+                "cost_fact": label, "cost_group": "Material",
+                "selected_item": "", "selected_item_name": custom_name,
+                "attribute_values": {}, "req_qty": round(auto_qty, 4),
+                "rate": material_rate, "amount": amt, "is_auto": True,
+            })
+    elif form.get("base_material") and material_rate and auto_qty:
         iname = frappe.db.get_value("Item", form["base_material"], "item_name") or form["base_material"]
         amt   = round(auto_qty * material_rate, 2)
         mat_total += amt
-        label = "Paper / Board" if pricing_type == "Offset" else "Reel Material"
         cost_rows.append({
             "section": "Material", "spec_name": "Base Material",
             "cost_fact": label, "cost_group": "Material",
@@ -341,7 +359,17 @@ def save_costing(payload):
     doc.ref           = form.get("ref", "")
     doc.price_list    = form.get("price_list", "")
     doc.pricing_type  = form.get("pricing_type", "Offset")
-    doc.base_material = form.get("base_material", "")
+    mat_type = (form.get("material_type") or "Existing").strip()
+    if hasattr(doc, "material_type"):
+        doc.material_type = mat_type
+    if mat_type == "Custom":
+        doc.base_material = ""
+        if hasattr(doc, "custom_material_name"):
+            doc.custom_material_name = (form.get("custom_material_name") or "").strip()
+    else:
+        doc.base_material = form.get("base_material", "")
+        if hasattr(doc, "custom_material_name"):
+            doc.custom_material_name = ""
     doc.material_rate = flt(form.get("material_rate", 0))
     doc.carton_size   = form.get("carton_size", "")
     doc.full_sheet_l  = flt(form.get("full_sheet_l", 0))
@@ -443,8 +471,10 @@ def load_costing(name):
         "ref":           doc.ref or "",
         "price_list":    doc.price_list or "",
         "carton_size":   doc.carton_size or "",
-        "base_material": doc.base_material or "",
-        "material_rate": flt(doc.material_rate),
+        "material_type":          (getattr(doc, "material_type", None) or "Existing"),
+        "base_material":          doc.base_material or "",
+        "custom_material_name":   (getattr(doc, "custom_material_name", None) or ""),
+        "material_rate":          flt(doc.material_rate),
         "full_sheet_l":  flt(doc.full_sheet_l),
         "full_sheet_w":  flt(doc.full_sheet_w),
         "cut_sheet_l":   flt(doc.cut_sheet_l),

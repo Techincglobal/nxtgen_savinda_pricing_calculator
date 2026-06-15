@@ -97,7 +97,7 @@ function oc_mount_app(el) {
 					// Common
 					pricing_type: 'Offset',
 					customer_name: '', ref: '', price_list: '', carton_size: '',
-					base_material: '', material_rate: 0,
+					material_type: 'Existing', base_material: '', custom_material_name: '', material_rate: 0,
 					no_of_colors: 4, item_qty: 1000,
 					profit_margin: 15, tax_sscl: false, tax_vat: false,
 					// Offset-specific
@@ -167,11 +167,24 @@ function oc_mount_app(el) {
 				var mData = mList.find(function (m) { return m.machine === this.inkDialogState.machine; }, this);
 				return mData ? !!mData.allow_ink_assignment : false;
 			},
+			// Filtered ink list for the current dialog spec
+			dialogInkList() {
+				var allowed = this.inkDialog && this.inkDialog.allowed_inks;
+				if (allowed && allowed.length) {
+					var self = this;
+					return self.allInks.filter(function (ink) { return allowed.indexOf(ink.ink_name) !== -1; });
+				}
+				return this.allInks;
+			},
 
 			// Auto-include material row check
 			materialReady() {
-				return !!(this.form.base_material && this.form.material_rate && this.form.item_qty);
+				var matOk = this.form.material_type === 'Custom'
+					? !!(this.form.custom_material_name && this.form.custom_material_name.trim())
+					: !!(this.form.base_material);
+				return !!(matOk && this.form.material_rate && this.form.item_qty);
 			},
+			isCustomMaterial() { return this.form.material_type === 'Custom'; },
 
 			// Flexo reel requirements card — show when flexo calc done
 			flexoReady() {
@@ -840,7 +853,7 @@ function oc_mount_app(el) {
 				}
 			},
 			clearMaterial() {
-				this.form.base_material = ''; this.form.material_rate = 0;
+				this.form.base_material = ''; this.form.custom_material_name = ''; this.form.material_rate = 0;
 				this.matSearch = ''; this.matResults = []; this.matOpen = false;
 				this.scheduleCalc();
 			},
@@ -897,7 +910,7 @@ function oc_mount_app(el) {
             <div class="oc-add-ink">
               <select v-model="inkNewInk" class="oc-inp oc-sel oc-ink-sel">
                 <option value="">Select Ink</option>
-                <option v-for="ink in allInks" :key="ink.ink_name" :value="ink.ink_name">{{ ink.ink_name }}</option>
+                <option v-for="ink in dialogInkList" :key="ink.ink_name" :value="ink.ink_name">{{ ink.ink_name }}</option>
               </select>
               <input type="number" v-model.number="inkNewPct" min="1" max="100" class="oc-inp oc-pct-inp" />
               <span class="oc-pct-sym">%</span>
@@ -943,7 +956,7 @@ function oc_mount_app(el) {
           <div class="oc-add-ink" style="margin-top:6px">
             <select v-model="inkNewInk" class="oc-inp oc-sel oc-ink-sel">
               <option value="">Select Ink</option>
-              <option v-for="ink in allInks" :key="ink.ink_name" :value="ink.ink_name">{{ ink.ink_name }}</option>
+              <option v-for="ink in dialogInkList" :key="ink.ink_name" :value="ink.ink_name">{{ ink.ink_name }}</option>
             </select>
             <button @click="addDialogInk" class="oc-btn oc-btn-blue oc-btn-sm">Add</button>
           </div>
@@ -995,7 +1008,18 @@ function oc_mount_app(el) {
           {{ isFlexo ? 'Reel Material' : 'Base Material' }}
           <span v-if="materialReady" class="oc-auto-ok">✓ auto-included</span>
         </div>
+        <!-- Material type toggle -->
         <div class="oc-field">
+          <label class="oc-lbl">Material Type</label>
+          <div class="oc-type-toggle" style="margin-top:2px">
+            <button class="oc-type-btn" :class="{active: !isCustomMaterial}"
+              @click="form.material_type='Existing'; scheduleCalc()">Existing Item</button>
+            <button class="oc-type-btn" :class="{active: isCustomMaterial}"
+              @click="form.material_type='Custom'; scheduleCalc()">Custom / Non-stock</button>
+          </div>
+        </div>
+        <!-- Existing: Item link-field -->
+        <div v-if="!isCustomMaterial" class="oc-field">
           <label class="oc-lbl oc-lbl-blue">{{ isFlexo ? 'Reel Material (Item)' : 'Item' }}</label>
           <div class="mlf">
             <div class="mlf-row">
@@ -1025,6 +1049,14 @@ function oc_mount_app(el) {
               </div>
             </div>
           </div>
+        </div>
+        <!-- Custom: free-text name -->
+        <div v-if="isCustomMaterial" class="oc-field">
+          <label class="oc-lbl oc-lbl-blue">{{ isFlexo ? 'Reel Material Name' : 'Board / Paper Name' }}</label>
+          <input v-model="form.custom_material_name" type="text" class="oc-inp"
+            placeholder="e.g. 300gsm Art Board (unregistered)"
+            @input="scheduleCalc" />
+          <div class="oc-hint" style="margin-top:3px">This name will appear in the cost breakdown and print format.</div>
         </div>
         <div class="oc-field">
           <label class="oc-lbl">Rate (LKR / {{ isFlexo ? 'm²' : 'full sheet' }})</label>
