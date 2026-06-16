@@ -99,7 +99,7 @@ function oc_mount_app(el) {
 					customer_name: '', ref: '', price_list: '', carton_size: '',
 					material_type: 'Existing', base_material: '', custom_material_name: '', material_rate: 0,
 					no_of_colors: 4, item_qty: 1000,
-					profit_margin: 15, tax_sscl: false, tax_vat: false,
+					profit_margin: 15, extra_prod_cost_pct: 0, tax_sscl: false, tax_vat: false,
 					// Offset-specific
 					full_sheet_l: 0, full_sheet_w: 0,
 					cut_sheet_l: 0, cut_sheet_w: 0,
@@ -121,7 +121,7 @@ function oc_mount_app(el) {
 				allInks: [],
 				allFoils: [],
 				inkDialog: null,
-				inkDialogState: { machine: '', cycles: 1, csc: false, inks: [], foils: [] },
+				inkDialogState: { machine: '', cycles: 1, csc: false, inks: [], foils: [], manual_process: false, manual_unit: 'Fixed Amount', manual_unit_cost: 0 },
 				inkNewInk: '', inkNewPct: 100,
 				foilNewName: '', foilNewGroup: 'COLD', foilNewPct: 100,
 			};
@@ -214,11 +214,14 @@ function oc_mount_app(el) {
 						skip_machine_if_spec: spec.skip_machine_if_spec || '',
 						machines: spec.machines || [],
 						machine_assignment: {
-							machine: st._machine || '',
-							cycles: parseInt(st._cycles || 1),
+							machine:                st._machine    || '',
+							cycles:                 parseInt(st._cycles || 1),
 							customer_sample_colors: !!(st._csc),
-							inks: st._inks || [],
-							foils: st._foils || [],
+							inks:                   st._inks   || [],
+							foils:                  st._foils  || [],
+							manual_process:         !!(st._manual_process),
+							manual_unit:            st._manual_unit      || 'Fixed Amount',
+							manual_unit_cost:       parseFloat(st._manual_unit_cost || 0),
 						},
 						cost_facts: facts,
 					};
@@ -488,11 +491,14 @@ function oc_mount_app(el) {
 				var st = this.specState[spec.spec_name] || {};
 				this.inkDialog = spec;
 				this.inkDialogState = {
-					machine: st._machine || '',
-					cycles: parseInt(st._cycles || 1),
-					csc: !!(st._csc),
-					inks:  JSON.parse(JSON.stringify(st._inks  || [])),
-					foils: JSON.parse(JSON.stringify(st._foils || [])),
+					machine:      st._machine      || '',
+					cycles:       parseInt(st._cycles || 1),
+					csc:          !!(st._csc),
+					inks:         JSON.parse(JSON.stringify(st._inks  || [])),
+					foils:        JSON.parse(JSON.stringify(st._foils || [])),
+					manual_process:   !!(st._manual_process),
+					manual_unit:      st._manual_unit      || 'Fixed Amount',
+					manual_unit_cost: parseFloat(st._manual_unit_cost || 0),
 				};
 				this.inkNewInk = '';
 				this.inkNewPct = 100;
@@ -504,11 +510,14 @@ function oc_mount_app(el) {
 				if (!this.inkDialog) return;
 				var st = this.specState[this.inkDialog.spec_name];
 				if (!st) return;
-				st._machine = this.inkDialogState.machine;
-				st._cycles  = this.inkDialogState.cycles;
-				st._csc     = this.inkDialogState.csc;
-				st._inks    = JSON.parse(JSON.stringify(this.inkDialogState.inks));
-				st._foils   = JSON.parse(JSON.stringify(this.inkDialogState.foils));
+				st._machine          = this.inkDialogState.machine;
+				st._cycles           = this.inkDialogState.cycles;
+				st._csc              = this.inkDialogState.csc;
+				st._inks             = JSON.parse(JSON.stringify(this.inkDialogState.inks));
+				st._foils            = JSON.parse(JSON.stringify(this.inkDialogState.foils));
+				st._manual_process   = this.inkDialogState.manual_process;
+				st._manual_unit      = this.inkDialogState.manual_unit;
+				st._manual_unit_cost = this.inkDialogState.manual_unit_cost;
 				this.inkDialog = null;
 				this.scheduleCalc();
 			},
@@ -717,6 +726,9 @@ function oc_mount_app(el) {
 										}
 									},
 								});
+							} else if (d.form.material_type === 'Custom' && d.form.custom_material_name && d.form.material_rate) {
+								// Custom material with rate already saved — trigger calculation immediately
+								self.scheduleCalc();
 							}
 						}
 						// Restore machine
@@ -877,6 +889,17 @@ function oc_mount_app(el) {
     <div class="oc-pa-dialog">
       <div class="oc-pa-hdr">Production Assignment: <b>{{ inkDialog.spec_name }}</b></div>
       <div class="oc-pa-body">
+        <!-- Manual Process toggle -->
+        <div class="oc-field">
+          <label class="oc-chk-lbl" style="font-weight:600">
+            <input type="checkbox" v-model="inkDialogState.manual_process" class="oc-chk" />
+            <span>Manual Process</span>
+          </label>
+          <div class="oc-hint">When checked, skips machine cost formulas and uses a fixed manual cost instead.</div>
+        </div>
+
+        <!-- Machine + Cycles (hidden when Manual Process) -->
+        <template v-if="!inkDialogState.manual_process">
         <div class="oc-field">
           <label class="oc-sublbl">Select Machine</label>
           <select v-model="inkDialogState.machine" class="oc-inp oc-sel">
@@ -889,6 +912,25 @@ function oc_mount_app(el) {
           <input type="number" v-model.number="inkDialogState.cycles" min="1" class="oc-inp" placeholder="Number of cycles" />
           <div class="oc-hint">Multiplies make-ready and production time.</div>
         </div>
+        </template>
+
+        <!-- Manual cost fields (shown when Manual Process) -->
+        <template v-if="inkDialogState.manual_process">
+        <div class="oc-field">
+          <label class="oc-sublbl">Manual Calculation Unit</label>
+          <select v-model="inkDialogState.manual_unit" class="oc-inp oc-sel">
+            <option value="Per Item">Per Item</option>
+            <option value="Per Cut Sheet">Per Cut Sheet</option>
+            <option value="Per Full Sheet">Per Full Sheet</option>
+            <option value="Fixed Amount">Fixed Amount</option>
+          </select>
+        </div>
+        <div class="oc-field">
+          <label class="oc-sublbl">Unit Cost (Rs.)</label>
+          <input type="number" v-model.number="inkDialogState.manual_unit_cost" min="0" class="oc-inp" placeholder="0.00" />
+        </div>
+        </template>
+
         <!-- Offset: CSC (printing machines only) + Inks (printing OR allow_ink_assignment) -->
         <template v-if="!isFlexoDialog && (isDialogMachinePrinting || isDialogMachineInkAllowed)">
           <div v-if="isDialogMachinePrinting" class="oc-field">
@@ -1109,6 +1151,7 @@ function oc_mount_app(el) {
             </div>
           </div>
           <div class="oc-field"><label class="oc-lbl">Profit Margin (%)</label><input v-model.number="form.profit_margin" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
+          <div class="oc-field"><label class="oc-lbl">Extra Production Cost (%)</label><input v-model.number="form.extra_prod_cost_pct" type="number" min="0" step="0.5" class="oc-inp" @change="scheduleCalc" /><div class="oc-hint">Added on top of total production cost before profit margin.</div></div>
         </div>
       </div>
 
@@ -1143,6 +1186,7 @@ function oc_mount_app(el) {
         </div>
         <div class="oc-2col">
           <div class="oc-field"><label class="oc-lbl">Profit Margin (%)</label><input v-model.number="form.profit_margin" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
+          <div class="oc-field"><label class="oc-lbl">Extra Production Cost (%)</label><input v-model.number="form.extra_prod_cost_pct" type="number" min="0" step="0.5" class="oc-inp" @change="scheduleCalc" /></div>
         </div>
       </div>
       <div class="oc-field">

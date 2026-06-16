@@ -43,6 +43,7 @@
   "cost_facts",
   "section_break_udrq",
   "profit_margin",
+  "extra_prod_cost_pct",
   "column_break_vjaw",
   "tax_sscl",
   "tax_vat",
@@ -256,6 +257,13 @@
    "fieldname": "profit_margin",
    "fieldtype": "Float",
    "label": "Profit Margin (%)"
+  },
+  {
+   "fieldname": "extra_prod_cost_pct",
+   "fieldtype": "Float",
+   "label": "Extra Production Cost (%)",
+   "default": "0",
+   "description": "Added on top of production total before profit margin"
   },
   {
    "fieldname": "column_break_vjaw",

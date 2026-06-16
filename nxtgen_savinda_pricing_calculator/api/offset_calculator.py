@@ -102,15 +102,20 @@ def _enrich_spec(spec):
 
 
 def _get_unit_qty(units, form, sheet):
-    """Convert spec unit type to a calculated quantity."""
+    """Convert spec unit type to a calculated quantity.
+    Cut sheet / Sqinch use req_cut_sheets (net + wastage) because every sheet — including
+    wastage — runs through the press or finishing operation.
+    Full sheet is already correct: full_sheet_qty = ceil(req_cut_sheets / no_cuts).
+    """
     if units == "Full sheet":
         return sheet.get("full_sheet_qty", 0)
     if units == "Cut sheet":
-        return sheet.get("cut_sheet_qty", 0)
+        return sheet.get("req_cut_sheets", 0) or sheet.get("cut_sheet_qty", 0)
     if units == "Sqinch":
         cut_l = flt(form.get("cut_sheet_l", 0))
         cut_w = flt(form.get("cut_sheetw", 0)) or flt(form.get("cut_sheet_w", 0))
-        return cut_l * cut_w * sheet.get("cut_sheet_qty", 0)
+        total_sheets = sheet.get("req_cut_sheets", 0) or sheet.get("cut_sheet_qty", 0)
+        return cut_l * cut_w * total_sheets
     if units == "Pcs":
         return flt(form.get("item_qty", 0))
     if units == "Impressions":
@@ -136,11 +141,13 @@ def _calc_spec_machine_cost(spec_name, m_data, machine_assignment, form, sheet,
     qty_formula  = m_data.get("qty_formula",  "")
     rate_formula = m_data.get("rate_formula", "")
 
-    unit_qty = _get_unit_qty(units, form, sheet)
-
     if is_printing:
+        # Printing press throughput is measured in cut sheets per hour.
+        # Use req_cut_sheets (net + wastage) — every sheet including wastage runs through the press.
+        unit_qty   = sheet.get("req_cut_sheets", 0) or sheet.get("cut_sheet_qty", 0)
         pass_count = math.ceil(no_of_colors / color_cap) if color_cap else 1
     else:
+        unit_qty    = _get_unit_qty(units, form, sheet)
         ops_sharing = machine_count_map.get(machine_name, 1)
         pass_count  = 1 if can_parallel else ops_sharing
 
@@ -167,9 +174,10 @@ def _calc_spec_machine_cost(spec_name, m_data, machine_assignment, form, sheet,
         "machine_cost_per_hour": cost_ph,
         "no_of_colors":        no_of_colors,
         "item_qty":            item_qty,
-        "full_sheet_qty":      sheet.get("full_sheet_qty", 0),
-        "cut_sheet_qty":       sheet.get("cut_sheet_qty",  0),
-        "cut_sheet_ups":       sheet.get("cut_sheet_ups",  1),
+        "full_sheet_qty":      sheet.get("full_sheet_qty",  0),
+        "cut_sheet_qty":       sheet.get("cut_sheet_qty",   0),
+        "req_cut_sheets":      sheet.get("req_cut_sheets",  sheet.get("cut_sheet_qty", 0)),
+        "cut_sheet_ups":       sheet.get("cut_sheet_ups",   1),
         "cut_sheet_area":      flt(form.get("cut_sheet_l", 0)) * (flt(form.get("cut_sheetw", 0)) or flt(form.get("cut_sheet_w", 0))),
         "reel_area":           sheet.get("reel_area",   0),
         "reel_length":         sheet.get("reel_length", 0),
@@ -302,6 +310,25 @@ def calculate(payload):
         cost_rows.extend(rows)
         mat_total += mt; prep_total += pp; prod_total += pr
 
+    # Extra production cost (user-defined %)
+    extra_prod_pct = flt(form.get("extra_prod_cost_pct", 0))
+    if extra_prod_pct > 0 and prod_total > 0:
+        extra_prod_amt = round(prod_total * extra_prod_pct / 100, 2)
+        cost_rows.append({
+            "section":            "Spec",
+            "spec_name":          "Extra Production Cost",
+            "cost_fact":          f"Extra Production Cost ({extra_prod_pct}%)",
+            "cost_group":         "Production",
+            "selected_item":      "",
+            "selected_item_name": f"Extra Production Cost ({extra_prod_pct}%)",
+            "attribute_values":   {},
+            "req_qty":            round(extra_prod_pct, 4),
+            "rate":               round(prod_total / 100, 4),
+            "amount":             extra_prod_amt,
+            "is_auto":            True,
+        })
+        prod_total += extra_prod_amt
+
     grand = mat_total + prep_total + prod_total
     pm    = flt(form.get("profit_margin", 0)) / 100
     uc    = grand / item_qty if item_qty else 0
@@ -405,11 +432,12 @@ def save_costing(payload):
                 setattr(doc, field, flt(sheet.get(key, 0)))
 
     for f, v in [
-        ("profit_margin", flt(form.get("profit_margin", 0))),
-        ("tax_sscl",      1 if form.get("tax_sscl") else 0),
-        ("tax_vat",       1 if form.get("tax_vat")  else 0),
-        ("unit_cost",     flt(pricing.get("unit_cost", 0))),
-        ("selling_price", flt(pricing.get("sell_total", 0))),
+        ("profit_margin",      flt(form.get("profit_margin", 0))),
+        ("extra_prod_cost_pct", flt(form.get("extra_prod_cost_pct", 0))),
+        ("tax_sscl",           1 if form.get("tax_sscl") else 0),
+        ("tax_vat",            1 if form.get("tax_vat")  else 0),
+        ("unit_cost",          flt(pricing.get("unit_cost", 0))),
+        ("selling_price",      flt(pricing.get("sell_total", 0))),
     ]:
         if hasattr(doc, f):
             setattr(doc, f, v)
@@ -483,9 +511,10 @@ def load_costing(name):
         "no_of_ups":     cint(doc.no_of_ups),
         "no_of_colors":  cint(doc.no_of_colors),
         "item_qty":      flt(doc.item_qty),
-        "profit_margin": flt(getattr(doc, "profit_margin", 0)),
-        "tax_sscl":      cint(getattr(doc, "tax_sscl", 0)),
-        "tax_vat":       cint(getattr(doc, "tax_vat",  0)),
+        "profit_margin":       flt(getattr(doc, "profit_margin", 0)),
+        "extra_prod_cost_pct": flt(getattr(doc, "extra_prod_cost_pct", 0)),
+        "tax_sscl":            cint(getattr(doc, "tax_sscl", 0)),
+        "tax_vat":             cint(getattr(doc, "tax_vat",  0)),
     }
     return {"doc_name": doc.name, "status": doc.docstatus,
             "form": form, "machine_spec": None, "selected_specs": [],
@@ -611,14 +640,15 @@ def get_offset_inks():
 
 def _calc_spec_ink_cost(spec_name, machine_assignment, form, sheet, cycles):
     """Calculate ink costs for all inks assigned to a printing spec.
-    Formula: qty_kg = cut_sheet_area × cut_sheet_qty × consumption_per_sqinch × (pct/100) × cycles
+    Formula: qty_kg = cut_sheet_area × req_cut_sheets × consumption_per_sqinch × (pct/100) × cycles
+    Uses req_cut_sheets (net + wastage) because ink is consumed on every sheet run through the press.
     """
     inks = machine_assignment.get("inks", [])
     if not inks:
         return [], 0.0
 
     cut_sheet_area = flt(form.get("cut_sheet_l", 0)) * (flt(form.get("cut_sheetw", 0)) or flt(form.get("cut_sheet_w", 0)))
-    cut_sheet_qty  = sheet.get("cut_sheet_qty", 0)
+    cut_sheet_qty  = sheet.get("req_cut_sheets", 0) or sheet.get("cut_sheet_qty", 0)
 
     rows = []
     total_cost = 0.0
@@ -649,7 +679,7 @@ def _calc_spec_ink_cost(spec_name, machine_assignment, form, sheet, cycles):
         rows.append({
             "spec_name":          spec_name,
             "cost_fact":          f"{spec_name} - Ink ({ink_name})",
-            "cost_group":         "Production",
+            "cost_group":         "Material",
             "selected_item":      ink_name,
             "selected_item_name": ink_name,
             "attribute_values":   {"ink": ink_name, "percentage": flt(ink_row.get("percentage", 100))},
@@ -914,6 +944,37 @@ def _process_spec(spec, form, sheet, item_qty, no_of_colors, material_rate,
 
     # Build foil count context from machine_assignment (used in Flexo formulas)
     machine_assignment = spec.get("machine_assignment") or {}
+
+    # ── Manual Process override ────────────────────────────────────────────────
+    if machine_assignment.get("manual_process"):
+        manual_unit      = (machine_assignment.get("manual_unit") or "Fixed Amount").strip()
+        manual_unit_cost = flt(machine_assignment.get("manual_unit_cost", 0))
+        if manual_unit_cost:
+            if manual_unit == "Per Item":
+                req_qty = flt(item_qty)
+            elif manual_unit == "Per Cut Sheet":
+                req_qty = flt(cut_sheet_qty) or flt(sheet.get("cut_sheet_qty", 0))
+            elif manual_unit == "Per Full Sheet":
+                req_qty = flt(full_sheet_qty) or flt(sheet.get("full_sheet_qty", 0))
+            else:  # Fixed Amount
+                req_qty = 1.0
+            amt = round(req_qty * manual_unit_cost, 2)
+            all_rows.append({
+                "section":            section,
+                "spec_name":          spec.get("spec_name", ""),
+                "cost_fact":          spec.get("spec_name", ""),
+                "cost_group":         "Production",
+                "selected_item":      "",
+                "selected_item_name": f"Manual — {manual_unit}",
+                "attribute_values":   {"unit": manual_unit},
+                "req_qty":            round(req_qty, 4),
+                "rate":               round(manual_unit_cost, 4),
+                "amount":             amt,
+                "is_auto":            is_auto,
+            })
+            prod += amt
+        return all_rows, mat, prep, prod
+    # ──────────────────────────────────────────────────────────────────────────
     foils_list = machine_assignment.get("foils", []) or []
     cold_foil_count = sum(1 for f in foils_list if (f.get("foil_group") or "").upper() == "COLD")
     hot_foil_count  = sum(1 for f in foils_list if (f.get("foil_group") or "").upper() == "HOT")
@@ -1091,9 +1152,10 @@ def _build_row(cf_row, spec_name, form, sheet, item_qty, no_of_colors,
         item_rate = _get_item_rate(sel_item, price_list) if sel_item else material_rate
 
     eval_ctx = {
-        "full_sheet_qty":  full_sheet_qty,
-        "cut_sheet_qty":   cut_sheet_qty,
-        "cut_sheet_area":  cut_sheet_area,
+        "full_sheet_qty":   full_sheet_qty,
+        "cut_sheet_qty":    cut_sheet_qty,
+        "req_cut_sheets":   sheet.get("req_cut_sheets", cut_sheet_qty),
+        "cut_sheet_area":   cut_sheet_area,
         "no_of_cuts":      cint(form.get("no_of_cuts", 1)),
         "no_of_ups":       cint(form.get("no_of_ups",  1)),
         "cut_sheet_ups":   sheet.get("cut_sheet_ups",  1),

@@ -451,8 +451,31 @@ function show_add_calc_popup(frm, cdt, cdn, item_name) {
 						+ "in the calculator that opens next.</div>",
 				},
 				{
+					fieldtype: "Select", fieldname: "material_type",
+					label: "Material Type",
+					options: "Existing\nCustom",
+					default: "Existing",
+					description: "Existing = select from Item master. Custom = enter name manually (non-stock/unregistered board).",
+				},
+				{
 					fieldtype: "Link", fieldname: "base_material",
-					label: "Base Material", options: "Item", reqd: 1,
+					label: "Base Material (Item)", options: "Item",
+					depends_on: "eval:doc.material_type !== 'Custom'",
+					mandatory_depends_on: "eval:doc.material_type !== 'Custom'",
+				},
+				{
+					fieldtype: "Data", fieldname: "custom_material_name",
+					label: "Material Name",
+					depends_on: "eval:doc.material_type === 'Custom'",
+					mandatory_depends_on: "eval:doc.material_type === 'Custom'",
+					description: "e.g. 300gsm Chrome Board (unregistered) — will appear on cost breakdown",
+				},
+				{
+					fieldtype: "Currency", fieldname: "material_rate",
+					label: "Material Rate (LKR / full sheet)",
+					depends_on: "eval:doc.material_type === 'Custom'",
+					mandatory_depends_on: "eval:doc.material_type === 'Custom'",
+					description: "Rate per full sheet for this custom material.",
 				},
 			];
 
@@ -545,12 +568,16 @@ function create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pric
 		});
 	}
 
+	var matType = (vals.material_type || "Existing");
 	var cbDoc = {
 		doctype: "Calculation Breakdown",
 		customer_name: frm.doc.customer_name || "",
 		ref: frm.doc.inquiry || "",
 		pricing_type: pricingType || "Offset",
-		base_material: vals.base_material,
+		material_type: matType,
+		base_material: matType === "Custom" ? "" : (vals.base_material || ""),
+		custom_material_name: matType === "Custom" ? (vals.custom_material_name || "") : "",
+		material_rate: matType === "Custom" ? (parseFloat(vals.material_rate) || 0) : 0,
 		item_qty: vals.item_qty,
 		no_of_colors: vals.no_of_colors,
 	};
