@@ -13,6 +13,7 @@ class CostSheet(Document):
 	def before_insert(self):
 		if self.inquiry:
 			self._fetch_inquiry_fields()
+			self._copy_inquiry_child_tables()
 
 	def validate(self):
 		self._calc_pricing_list_amounts()
@@ -63,6 +64,30 @@ class CostSheet(Document):
 		if not self.amended_from:
 			return
 		_amend_linked_cbs(self)
+
+	# ── Copy child tables (operations, compliance) from Inquiry ──
+	def _copy_inquiry_child_tables(self):
+		"""Called only on before_insert. Copies from Inquiry when Cost Sheet tables are empty."""
+		try:
+			opp = frappe.get_doc("Opportunity", self.inquiry)
+		except frappe.DoesNotExistError:
+			return
+
+		if not self.get("operations"):
+			for row in (opp.get("custom_operations") or []):
+				if row.disabled:
+					continue
+				self.append("operations", {
+					"operation": row.operation,
+					"remarks":   row.remarks or "",
+				})
+
+		if not self.get("compliance"):
+			for row in (opp.get("custom_compliance") or []):
+				val = row.get("type") or row.get("compliance_type") or ""
+				if not val:
+					continue
+				self.append("compliance", {"type": val})
 
 	# ── Fetch header fields from linked Inquiry ────────────────
 	def _fetch_inquiry_fields(self):

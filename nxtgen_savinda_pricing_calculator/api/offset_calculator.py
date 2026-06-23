@@ -125,8 +125,13 @@ def _get_unit_qty(units, form, sheet):
 
 
 def _calc_spec_machine_cost(spec_name, m_data, machine_assignment, form, sheet,
-                             item_qty, no_of_colors, units, machine_count_map):
-    """Calculate machine cost for one spec, given a chosen machine and assignment params."""
+                             item_qty, no_of_colors, units, machine_count_map,
+                             reel_area=0):
+    """Calculate machine cost for one spec.
+    Returns (list_of_rows, total_cost).
+    Flexo printing machines return two rows: Printing Setup + Printing Run (Excel formula).
+    All other machines return a single row.
+    """
     is_printing  = cint(m_data.get("is_printing_machine", 0))
     max_out      = flt(m_data.get("max_output_per_hour", 1)) or 1
     cost_ph      = flt(m_data.get("machine_cost_per_hour", 0))
@@ -140,10 +145,53 @@ def _calc_spec_machine_cost(spec_name, m_data, machine_assignment, form, sheet,
     machine_name = m_data["machine"]
     qty_formula  = m_data.get("qty_formula",  "")
     rate_formula = m_data.get("rate_formula", "")
+    pricing_t    = (form.get("pricing_type") or "Offset").strip()
+
+    # Foil counts from this machine's own assignment (used in Flexo printing formula)
+    foils_list      = machine_assignment.get("foils", []) or []
+    cold_foil_count = sum(1 for f in foils_list if (f.get("foil_group") or "").upper() == "COLD")
+    hot_foil_count  = sum(1 for f in foils_list if (f.get("foil_group") or "").upper() == "HOT")
+    foil_count      = cold_foil_count + hot_foil_count
+
+    # ── Flexo printing machine: Excel formula (Setup + Run as separate rows) ──────────────
+    if pricing_t == "Flexo" and is_printing and not qty_formula:
+        run_div    = 600 if cold_foil_count > 0 else 750
+        setup_hrs  = no_of_colors / 3.0
+        run_hrs    = (reel_area / run_div) if (run_div and reel_area) else 0.0
+        setup_cost = round(setup_hrs * cost_ph, 2)
+        run_cost   = round(run_hrs   * cost_ph, 2)
+        total_cost = setup_cost + run_cost
+        rows = [
+            {
+                "spec_name":          spec_name,
+                "cost_fact":          f"{spec_name} - Printing Setup",
+                "cost_group":         "Production",
+                "selected_item":      machine_name,
+                "selected_item_name": machine_name,
+                "attribute_values":   {"machine": machine_name, "setup_hrs": round(setup_hrs, 4)},
+                "req_qty":            round(setup_hrs, 4),
+                "rate":               round(cost_ph, 4),
+                "amount":             setup_cost,
+                "is_auto":            False,
+            },
+            {
+                "spec_name":          spec_name,
+                "cost_fact":          f"{spec_name} - Printing Run",
+                "cost_group":         "Production",
+                "selected_item":      machine_name,
+                "selected_item_name": machine_name,
+                "attribute_values":   {"machine": machine_name, "run_hrs": round(run_hrs, 4), "divisor": run_div},
+                "req_qty":            round(run_hrs, 4),
+                "rate":               round(cost_ph, 4),
+                "amount":             run_cost,
+                "is_auto":            False,
+            },
+        ]
+        return rows, total_cost
+    # ─────────────────────────────────────────────────────────────────────────────────────
 
     if is_printing:
-        # Printing press throughput is measured in cut sheets per hour.
-        # Use req_cut_sheets (net + wastage) — every sheet including wastage runs through the press.
+        # Offset printing press: throughput in cut sheets/hr (req_cut_sheets includes wastage)
         unit_qty   = sheet.get("req_cut_sheets", 0) or sheet.get("cut_sheet_qty", 0)
         pass_count = math.ceil(no_of_colors / color_cap) if color_cap else 1
     else:
@@ -163,53 +211,56 @@ def _calc_spec_machine_cost(spec_name, m_data, machine_assignment, form, sheet,
 
     total_hrs = (makeready_hrs + production_hrs) * cycles
 
-    # Build formula context — all variables available in qty/rate formulas
     formula_ctx = {
-        "total_hrs":           total_hrs,
-        "makeready_hrs":       makeready_hrs,
-        "production_hrs":      production_hrs,
-        "pass_count":          pass_count,
-        "unit_qty":            unit_qty,
-        "cycles":              cycles,
+        "total_hrs":             total_hrs,
+        "makeready_hrs":         makeready_hrs,
+        "production_hrs":        production_hrs,
+        "pass_count":            pass_count,
+        "unit_qty":              unit_qty,
+        "cycles":                cycles,
         "machine_cost_per_hour": cost_ph,
-        "no_of_colors":        no_of_colors,
-        "item_qty":            item_qty,
-        "full_sheet_qty":      sheet.get("full_sheet_qty",  0),
-        "cut_sheet_qty":       sheet.get("cut_sheet_qty",   0),
-        "req_cut_sheets":      sheet.get("req_cut_sheets",  sheet.get("cut_sheet_qty", 0)),
-        "cut_sheet_ups":       sheet.get("cut_sheet_ups",   1),
-        "cut_sheet_area":      flt(form.get("cut_sheet_l", 0)) * (flt(form.get("cut_sheetw", 0)) or flt(form.get("cut_sheet_w", 0))),
-        "reel_area":           sheet.get("reel_area",   0),
-        "reel_length":         sheet.get("reel_length", 0),
-        "no_of_cuts":          cint(form.get("no_of_cuts", 1)),
-        "no_of_ups":           cint(form.get("no_of_ups",  1)),
+        "no_of_colors":          no_of_colors,
+        "item_qty":              item_qty,
+        "full_sheet_qty":        sheet.get("full_sheet_qty",  0),
+        "cut_sheet_qty":         sheet.get("cut_sheet_qty",   0),
+        "req_cut_sheets":        sheet.get("req_cut_sheets",  sheet.get("cut_sheet_qty", 0)),
+        "cut_sheet_ups":         sheet.get("cut_sheet_ups",   1),
+        "cut_sheet_area":        flt(form.get("cut_sheet_l", 0)) * (flt(form.get("cut_sheetw", 0)) or flt(form.get("cut_sheet_w", 0))),
+        "reel_area":             reel_area or sheet.get("reel_area", 0),
+        "reel_length":           sheet.get("reel_length", 0),
+        "no_of_cuts":            cint(form.get("no_of_cuts", 1)),
+        "no_of_ups":             cint(form.get("no_of_ups",  1)),
+        "foil_count":            foil_count,
+        "cold_foil_count":       cold_foil_count,
+        "hot_foil_count":        hot_foil_count,
     }
 
-    # Apply custom formulas if provided — override standard calculation
-    req_qty = _safe_eval(qty_formula,  formula_ctx) if qty_formula  else total_hrs
-    rate    = _safe_eval(rate_formula, formula_ctx) if rate_formula else cost_ph
-
+    req_qty      = _safe_eval(qty_formula,  formula_ctx) if qty_formula  else total_hrs
+    rate         = _safe_eval(rate_formula, formula_ctx) if rate_formula else cost_ph
     machine_cost = round(req_qty * rate, 2)
 
     row = {
-        "section": "Spec", "spec_name": spec_name,
-        "cost_fact": f"{spec_name} - Machine",
-        "cost_group": "Production",
-        "selected_item": machine_name, "selected_item_name": machine_name,
+        "spec_name":          spec_name,
+        "cost_fact":          f"{spec_name} - Machine",
+        "cost_group":         "Production",
+        "selected_item":      machine_name,
+        "selected_item_name": machine_name,
         "attribute_values": {
-            "machine":         machine_name,
-            "cycles":          cycles,
-            "total_hrs":       round(total_hrs, 4),
-            "makeready_hrs":   round(makeready_hrs, 4),
-            "production_hrs":  round(production_hrs, 4),
-            "pass_count":      pass_count,
-            "req_qty":         round(req_qty, 4),
-            "rate":            round(rate, 4),
+            "machine":        machine_name,
+            "cycles":         cycles,
+            "total_hrs":      round(total_hrs, 4),
+            "makeready_hrs":  round(makeready_hrs, 4),
+            "production_hrs": round(production_hrs, 4),
+            "pass_count":     pass_count,
+            "req_qty":        round(req_qty, 4),
+            "rate":           round(rate, 4),
         },
         "req_qty": round(req_qty, 4),
-        "rate": round(rate, 4), "amount": machine_cost, "is_auto": False,
+        "rate":    round(rate, 4),
+        "amount":  machine_cost,
+        "is_auto": False,
     }
-    return row, machine_cost
+    return [row], machine_cost
 
 
 @frappe.whitelist()
@@ -279,7 +330,7 @@ def calculate(payload):
             "rate": material_rate, "amount": amt, "is_auto": True,
         })
 
-    # 2. Machine (auto)
+    # 2. Machine (auto) — flexo_ctx not yet computed here; will pass empty dict (machine spec is Offset-only)
     if machine_spec:
         rows, mt, pp, pr = _process_spec(
             machine_spec, form, sheet, item_qty, no_of_colors, material_rate,
@@ -298,6 +349,34 @@ def calculate(payload):
         if m_name:
             machine_count_map[m_name] = machine_count_map.get(m_name, 0) + 1
 
+    # Flexo: pre-compute global foil counts + printing machine rate so ALL specs can use them
+    flexo_ctx = {}
+    if pricing_type == "Flexo":
+        g_foil = g_cold = g_hot = 0
+        g_print_rate = 0.0
+        g_print_cap  = 8
+        for s in selected_specs:
+            if s.get("has_machine"):
+                ma = s.get("machine_assignment") or {}
+                for f in (ma.get("foils") or []):
+                    grp = (f.get("foil_group") or "").upper()
+                    g_foil += 1
+                    if grp == "COLD": g_cold += 1
+                    elif grp == "HOT": g_hot += 1
+                mname = ma.get("machine", "")
+                for m in (s.get("machines") or []):
+                    if m.get("machine") == mname and cint(m.get("is_printing_machine")):
+                        g_print_rate = flt(m.get("machine_cost_per_hour", 0))
+                        g_print_cap  = cint(m.get("color_capacity", 8)) or 8
+        flexo_ctx = {
+            "foil_count":            g_foil,
+            "cold_foil_count":       g_cold,
+            "hot_foil_count":        g_hot,
+            "printing_machine_rate": g_print_rate,
+            "machine_capacity":      g_print_cap,
+            "uv_machine_applies":    1 if (g_foil + no_of_colors) > g_print_cap else 0,
+        }
+
     for spec in selected_specs:
         rows, mt, pp, pr = _process_spec(
             spec, form, sheet, item_qty, no_of_colors, material_rate,
@@ -306,6 +385,7 @@ def calculate(payload):
             reel_area=reel_area, reel_length=reel_length, ups=ups,
             all_selected_spec_names=all_selected_spec_names,
             machine_count_map=machine_count_map,
+            global_extra_ctx=flexo_ctx,
         )
         cost_rows.extend(rows)
         mat_total += mt; prep_total += pp; prod_total += pr
@@ -939,7 +1019,8 @@ def _process_spec(spec, form, sheet, item_qty, no_of_colors, material_rate,
                   full_sheet_qty, cut_sheet_qty, cut_sheet_area, price_list,
                   section="Spec", is_auto=False,
                   reel_area=0, reel_length=0, ups=0,
-                  all_selected_spec_names=None, machine_count_map=None):
+                  all_selected_spec_names=None, machine_count_map=None,
+                  global_extra_ctx=None):
     all_rows = []; mat = prep = prod = 0.0
 
     # Build foil count context from machine_assignment (used in Flexo formulas)
@@ -992,6 +1073,12 @@ def _process_spec(spec, form, sheet, item_qty, no_of_colors, material_rate,
         "hot_foil_count":   hot_foil_count,
         "machine_capacity": machine_capacity_ctx,
     }
+    # Merge global Flexo context (e.g. printing_machine_rate, uv_machine_applies, global foil counts)
+    # Global values fill in any key not already set by this spec's own machine assignment
+    if global_extra_ctx:
+        for k, v in global_extra_ctx.items():
+            if k not in extra_ctx:
+                extra_ctx[k] = v
 
     for cf_row in spec.get("cost_facts", []):
         row, mt, pp, pr = _build_row(
@@ -1014,13 +1101,15 @@ def _process_spec(spec, form, sheet, item_qty, no_of_colors, material_rate,
         if not skip:
             m_data = next((m for m in spec.get("machines", []) if m["machine"] == machine_name), None)
             if m_data:
-                machine_row, machine_cost = _calc_spec_machine_cost(
+                machine_rows, machine_cost = _calc_spec_machine_cost(
                     spec.get("spec_name", ""), m_data, machine_assignment,
                     form, sheet, item_qty, no_of_colors,
                     spec.get("units", "Full sheet"), machine_count_map or {},
+                    reel_area=reel_area,
                 )
-                machine_row["section"] = section
-                all_rows.append(machine_row)
+                for mr in machine_rows:
+                    mr["section"] = section
+                    all_rows.append(mr)
                 prod += machine_cost
 
                 # Offset ink cost — for printing machines and machines with allow_ink_assignment

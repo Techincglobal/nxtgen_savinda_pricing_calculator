@@ -84,6 +84,9 @@ function oc_mount_app(el) {
 				// machineSpecState[cost_fact] = { selected_item, attr_values, rate, req_qty }
 				machineSpecState: {},
 
+				// Flexo: top-level printing machine selection
+				flexoPrintMachine: '',
+
 				selectedSpecNames: [],
 				specState: {},
 				autoSelectOperations: [],
@@ -189,6 +192,24 @@ function oc_mount_app(el) {
 			// Flexo reel requirements card — show when flexo calc done
 			flexoReady() {
 				return this.isFlexo && this.calc.sheet && this.calc.sheet.reel_area > 0;
+			},
+
+			// Flexo: the spec that has printing machines (is_printing_machine=1)
+			flexoPrintingSpec() {
+				return this.allSpecs.find(function (s) {
+					return s.has_machine && (s.machines || []).some(function (m) { return m.is_printing_machine; });
+				}) || null;
+			},
+			// Flexo: list of printing machines from that spec
+			flexoPrintingMachines() {
+				var spec = this.flexoPrintingSpec;
+				if (!spec) return [];
+				return (spec.machines || []).filter(function (m) { return m.is_printing_machine; });
+			},
+			// Flexo: info object of the currently selected printing machine
+			selectedFlexoPrintMachineInfo() {
+				var self = this;
+				return this.flexoPrintingMachines.find(function (m) { return m.machine === self.flexoPrintMachine; }) || null;
 			},
 
 			calcPayload() {
@@ -332,6 +353,7 @@ function oc_mount_app(el) {
 				self.specState = {};
 				self.selectedMachine = null;
 				self.machineSpecState = {};
+				self.flexoPrintMachine = '';
 				self.calc = { sheet: null, cost_rows: [], group_totals: {}, pricing: null };
 				var pt = self.form.pricing_type || 'Offset';
 				var done = 0;
@@ -363,12 +385,35 @@ function oc_mount_app(el) {
 				this.scheduleCalc();
 			},
 
+			// ── Flexo printing machine (top-level card) ──
+			onFlexoPrintMachineChange(machineName) {
+				var self = this;
+				this.flexoPrintMachine = machineName;
+				var spec = this.flexoPrintingSpec;
+				if (!spec) { this.scheduleCalc(); return; }
+				var specName = spec.spec_name;
+				// Auto-select the printing spec when a machine is chosen
+				if (machineName && this.selectedSpecNames.indexOf(specName) === -1) {
+					this.selectedSpecNames.push(specName);
+					this.initSpecState(specName);
+				}
+				// Assign machine into spec state
+				if (this.specState[specName]) {
+					this.specState[specName]._machine = machineName || '';
+				}
+				this.scheduleCalc();
+			},
+
 			// ── Specs (checkboxes) ──
 			toggleSpec(specName) {
 				var idx = this.selectedSpecNames.indexOf(specName);
 				if (idx > -1) {
 					this.selectedSpecNames.splice(idx, 1);
 					delete this.specState[specName];
+					// If user deselects the Flexo printing spec, clear the top-level machine selector
+					if (this.isFlexo && this.flexoPrintingSpec && this.flexoPrintingSpec.spec_name === specName) {
+						this.flexoPrintMachine = '';
+					}
 				} else {
 					this.selectedSpecNames.push(specName);
 					this.initSpecState(specName);
@@ -518,6 +563,10 @@ function oc_mount_app(el) {
 				st._manual_process   = this.inkDialogState.manual_process;
 				st._manual_unit      = this.inkDialogState.manual_unit;
 				st._manual_unit_cost = this.inkDialogState.manual_unit_cost;
+				// Sync Flexo top-level machine card if this is the printing spec
+				if (this.isFlexo && this.flexoPrintingSpec && this.flexoPrintingSpec.spec_name === this.inkDialog.spec_name) {
+					this.flexoPrintMachine = this.inkDialogState.machine || '';
+				}
 				this.inkDialog = null;
 				this.scheduleCalc();
 			},
@@ -794,8 +843,17 @@ function oc_mount_app(el) {
 								state._csc     = false;
 							}
 							self.specState[spec.spec_name] = state;
+					});
+					// For Flexo: sync top-level print machine from the printing spec's saved assignment
+					if (self.isFlexo || (d.form && d.form.pricing_type === 'Flexo')) {
+						var printSpec = self.allSpecs.find(function (s) {
+							return s.has_machine && (s.machines || []).some(function (m) { return m.is_printing_machine; });
 						});
-						// Restore ALL breakdown splits (not just the "additional" ones)
+						if (printSpec && self.specState[printSpec.spec_name]) {
+							self.flexoPrintMachine = self.specState[printSpec.spec_name]._machine || '';
+						}
+					}
+					// Restore ALL breakdown splits (not just the "additional" ones)
 						self.additionalBreakdowns = (d.form && d.form.breakdown_qtys && d.form.breakdown_qtys.length > 0)
 							? d.form.breakdown_qtys.map(function (q) { return parseFloat(q) || 0; }).filter(function (q) { return q > 0; })
 							: [];
@@ -1103,6 +1161,26 @@ function oc_mount_app(el) {
         <div class="oc-field">
           <label class="oc-lbl">Rate (LKR / {{ isFlexo ? 'm²' : 'full sheet' }})</label>
           <input v-model.number="form.material_rate" type="number" min="0" step="0.01" class="oc-inp" @change="scheduleCalc" />
+        </div>
+      </div>
+
+      <!-- ══ FLEXO: Printing Machine card ══ -->
+      <div v-if="isFlexo && flexoPrintingMachines.length" class="oc-auto-card">
+        <div class="oc-auto-card-title">
+          <span class="oc-auto-dot" :class="flexoPrintMachine ? 'on' : ''"></span>
+          Printing Machine
+          <span v-if="flexoPrintMachine" class="oc-auto-ok">✓ {{ flexoPrintMachine }}</span>
+        </div>
+        <div class="oc-field">
+          <label class="oc-lbl">Select Printing Machine</label>
+          <select :value="flexoPrintMachine" class="oc-inp oc-sel" @change="onFlexoPrintMachineChange($event.target.value)">
+            <option value="">— Select Machine —</option>
+            <option v-for="m in flexoPrintingMachines" :key="m.machine" :value="m.machine">{{ m.machine }}</option>
+          </select>
+        </div>
+        <div v-if="selectedFlexoPrintMachineInfo" class="oc-hint" style="margin-top:2px">
+          LKR {{ (selectedFlexoPrintMachineInfo.machine_cost_per_hour || 0).toLocaleString() }}/hr
+          &nbsp;·&nbsp; Capacity: {{ selectedFlexoPrintMachineInfo.color_capacity || '—' }} colors
         </div>
       </div>
 

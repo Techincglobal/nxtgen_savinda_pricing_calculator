@@ -138,18 +138,21 @@ frappe.ui.form.on("Cost Sheet", {
 					frm.refresh_field("operations");
 				}
 
-				// Copy compliance data from inquiry (always refresh — compliance may have changed)
-				var compliance_items = o.custom_compliance || [];
-				if (compliance_items.length) {
-					frm.doc.compliance = [];
-					compliance_items.forEach(function (c) {
-						if (c.disabled) return;
-						var row = frm.add_child("compliance");
-						// Table MultiSelect stores the linked value in the 'compliance_details' or first link field
-						row.compliance_type = c.compliance_type || c.type || "";
-						row.about_compliance = c.about_compliance || "";
-					});
-					frm.refresh_field("compliance");
+				// Copy compliance from inquiry
+				// Table MultiSelect requires frappe.model.add_child (same as the control's own parse()),
+				// because set_value with plain strings causes row["type"] → undefined in set_formatted_input.
+				if (!frm.doc.compliance || !frm.doc.compliance.length) {
+					var compliance_vals = (o.custom_compliance || [])
+						.map(function (c) { return c.type || ""; })
+						.filter(Boolean);
+					if (compliance_vals.length) {
+						frm.doc.compliance = [];
+						compliance_vals.forEach(function (val) {
+							var new_row = frappe.model.add_child(frm.doc, "Compliance Details", "compliance");
+							new_row.type = val;
+						});
+						frm.refresh_field("compliance");
+					}
 				}
 			},
 		});
@@ -310,6 +313,35 @@ function render_panel(frm, cdt, cdn) {
 				? "<th style='padding:5px 8px;color:#fff;font-size:10.5px;text-align:center'>Link</th>"
 				: "<th style='padding:5px 8px;color:#fff;font-size:10.5px;text-align:center'>Actions</th>";
 
+			// ── Cut sheet sizes strip (Offset only) ──
+			var cut_strip = "";
+			if ((ci.cut_sheet_l || 0) || (ci.cut_sheet_w || 0)) {
+				var sz1 = (ci.cut_sheet_l || "—") + " × " + (ci.cut_sheet_w || "—") + " in";
+				var sz2_part = "";
+				if ((ci.cut_sheet_l_2 || 0) || (ci.cut_sheet_w_2 || 0)) {
+					sz2_part = " &nbsp;·&nbsp; <b>Size 2:</b> "
+						+ (ci.cut_sheet_l_2 || "—") + " × " + (ci.cut_sheet_w_2 || "—") + " in";
+				}
+				cut_strip = "<div style='margin-bottom:8px;padding:5px 8px;background:#eff6ff;"
+					+ "border:1px solid #bfdbfe;border-radius:4px;font-size:11px;color:#1e3a5f'>"
+					+ "✂ <b>Cut Sizes</b> — <b>Size 1:</b> " + sz1 + sz2_part + "</div>";
+			}
+
+			// ── Finishing operations strip ──
+			var ops_html = "";
+			var ops = frm.doc.operations || [];
+			if (ops.length) {
+				var badges = ops.map(function (op) {
+					return "<span style='display:inline-block;margin:2px 3px 2px 0;padding:2px 8px;"
+						+ "background:#dbeafe;border:1px solid #93c5fd;border-radius:12px;"
+						+ "font-size:10.5px;color:#1e3a5f'>"
+						+ frappe.utils.escape_html(op.operation || "") + "</span>";
+				}).join("");
+				ops_html = "<div style='margin-bottom:8px;padding:5px 8px;background:#f0fdf4;"
+					+ "border:1px solid #bbf7d0;border-radius:4px;font-size:11px;color:#14532d'>"
+					+ "<span style='font-weight:600'>Finishing:</span> " + badges + "</div>";
+			}
+
 			var html =
 				"<div style='padding:12px 14px;background:#f8fafc;border-radius:5px;border:1px solid #e5e7eb'>"
 
@@ -321,6 +353,8 @@ function render_panel(frm, cdt, cdn) {
 				+ "</span>"
 				+ add_btn
 				+ "</div>"
+				+ cut_strip
+				+ ops_html
 
 				// ── Calculation list table ──
 				+ "<div style='border:1px solid #e5e7eb;border-radius:4px;overflow:hidden;margin-bottom:12px'>"
@@ -502,10 +536,14 @@ function show_add_calc_popup(frm, cdt, cdn, item_name) {
 					{ fieldtype: "Float", fieldname: "full_sheet_l", label: "Full Sheet Length (L)", reqd: 1 },
 					{ fieldtype: "Column Break" },
 					{ fieldtype: "Float", fieldname: "full_sheet_w", label: "Full Sheet Width (W)", reqd: 1 },
-					{ fieldtype: "Section Break", label: "Cut Sheet (Inches)" },
-					{ fieldtype: "Float", fieldname: "cut_sheet_l", label: "Cut Sheet Length (L)", reqd: 1 },
+					{ fieldtype: "Section Break", label: "Cut Sheet 1 (Inches)" },
+					{ fieldtype: "Float", fieldname: "cut_sheet_l", label: "Cut Sheet 1 — L", reqd: 1, default: ci.cut_sheet_l || 0 },
 					{ fieldtype: "Column Break" },
-					{ fieldtype: "Float", fieldname: "cut_sheet_w", label: "Cut Sheet Width (W)", reqd: 1 },
+					{ fieldtype: "Float", fieldname: "cut_sheet_w", label: "Cut Sheet 1 — W", reqd: 1, default: ci.cut_sheet_w || 0 },
+					{ fieldtype: "Section Break", label: "Cut Sheet 2 (Optional, Inches)" },
+					{ fieldtype: "Float", fieldname: "cut_sheet_l_2", label: "Cut Sheet 2 — L", default: ci.cut_sheet_l_2 || 0, description: "Leave 0 if only one cut size." },
+					{ fieldtype: "Column Break" },
+					{ fieldtype: "Float", fieldname: "cut_sheet_w_2", label: "Cut Sheet 2 — W", default: ci.cut_sheet_w_2 || 0 },
 					{ fieldtype: "Section Break", label: "Cuts & Ups" },
 					{ fieldtype: "Int", fieldname: "no_of_cuts", label: "No of Cuts", default: 2, reqd: 1 },
 					{ fieldtype: "Column Break" },
@@ -614,6 +652,13 @@ function create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pric
 						unit_cost: 0,
 						amount: 0,
 					});
+					// Save cut sheet sizes to Cost Item (Offset only)
+					if (pricingType !== "Flexo") {
+						doc.cut_sheet_l   = parseFloat(vals.cut_sheet_l)   || 0;
+						doc.cut_sheet_w   = parseFloat(vals.cut_sheet_w)   || 0;
+						doc.cut_sheet_l_2 = parseFloat(vals.cut_sheet_l_2) || 0;
+						doc.cut_sheet_w_2 = parseFloat(vals.cut_sheet_w_2) || 0;
+					}
 
 					frappe.call({
 						method: "frappe.client.save",
