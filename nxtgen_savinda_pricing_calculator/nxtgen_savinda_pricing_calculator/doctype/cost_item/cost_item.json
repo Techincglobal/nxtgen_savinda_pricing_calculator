@@ -15,6 +15,12 @@
   "column_break_2",
   "material",
   "no_of_pages",
+  "section_break_cut_sizes",
+  "cut_sheet_l",
+  "cut_sheet_w",
+  "column_break_cs2",
+  "cut_sheet_l_2",
+  "cut_sheet_w_2",
   "section_break_calc",
   "item_qty",
   "breakdown",
@@ -83,6 +89,39 @@
    "fieldname": "no_of_pages",
    "fieldtype": "Float",
    "label": "No of Pages"
+  },
+  {
+   "fieldname": "section_break_cut_sizes",
+   "fieldtype": "Section Break",
+   "label": "Cut Sheet Sizes (inches)"
+  },
+  {
+   "fieldname": "cut_sheet_l",
+   "fieldtype": "Float",
+   "label": "Cut Sheet 1 — L",
+   "description": "Primary cut sheet length (inches)"
+  },
+  {
+   "fieldname": "cut_sheet_w",
+   "fieldtype": "Float",
+   "label": "Cut Sheet 1 — W",
+   "description": "Primary cut sheet width (inches)"
+  },
+  {
+   "fieldname": "column_break_cs2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cut_sheet_l_2",
+   "fieldtype": "Float",
+   "label": "Cut Sheet 2 — L",
+   "description": "Second cut sheet length (optional)"
+  },
+  {
+   "fieldname": "cut_sheet_w_2",
+   "fieldtype": "Float",
+   "label": "Cut Sheet 2 — W",
+   "description": "Second cut sheet width (optional)"
   },
   {
    "fieldname": "section_break_calc",

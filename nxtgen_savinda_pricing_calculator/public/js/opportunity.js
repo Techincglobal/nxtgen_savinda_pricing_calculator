@@ -41,14 +41,12 @@ frappe.ui.form.on("Opportunity", {
 
 function create_cost_sheet(frm) {
 	// Carry compliance rows from Inquiry to Cost Sheet
+	// Compliance Details child DocType has one field: 'type' (Link → Compliance)
 	var compliance_rows = (frm.doc.custom_compliance || [])
-		.filter(function (c) { return !c.disabled; })
-		.map(function (c) {
-			return {
-				doctype:          "Compliance Details",
-				compliance_type:  c.compliance_type || c.type || "",
-				about_compliance: c.about_compliance || "",
-			};
+		.map(function (c) { return c.type || ""; })
+		.filter(Boolean)
+		.map(function (val) {
+			return { doctype: "Compliance Details", type: val };
 		});
 
 	frappe.call({

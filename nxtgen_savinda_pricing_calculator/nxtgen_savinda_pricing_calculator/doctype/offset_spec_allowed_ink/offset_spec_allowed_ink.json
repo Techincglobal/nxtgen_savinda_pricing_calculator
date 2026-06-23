@@ -1,0 +1,32 @@
+{
+ "actions": [],
+ "creation": "2026-06-14 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "ink_name"
+ ],
+ "fields": [
+  {
+   "fieldname": "ink_name",
+   "fieldtype": "Link",
+   "label": "Ink",
+   "options": "Offset Ink",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 12
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-06-14 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "Offset Spec Allowed Ink",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

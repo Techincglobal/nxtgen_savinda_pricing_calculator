@@ -84,6 +84,9 @@ function oc_mount_app(el) {
 				// machineSpecState[cost_fact] = { selected_item, attr_values, rate, req_qty }
 				machineSpecState: {},
 
+				// Flexo: top-level printing machine selection
+				flexoPrintMachine: '',
+
 				selectedSpecNames: [],
 				specState: {},
 				autoSelectOperations: [],
@@ -97,9 +100,9 @@ function oc_mount_app(el) {
 					// Common
 					pricing_type: 'Offset',
 					customer_name: '', ref: '', price_list: '', carton_size: '',
-					base_material: '', material_rate: 0,
+					material_type: 'Existing', base_material: '', custom_material_name: '', material_rate: 0,
 					no_of_colors: 4, item_qty: 1000,
-					profit_margin: 15, tax_sscl: false, tax_vat: false,
+					profit_margin: 15, extra_prod_cost_pct: 0, tax_sscl: false, tax_vat: false,
 					// Offset-specific
 					full_sheet_l: 0, full_sheet_w: 0,
 					cut_sheet_l: 0, cut_sheet_w: 0,
@@ -121,7 +124,7 @@ function oc_mount_app(el) {
 				allInks: [],
 				allFoils: [],
 				inkDialog: null,
-				inkDialogState: { machine: '', cycles: 1, csc: false, inks: [], foils: [] },
+				inkDialogState: { machine: '', cycles: 1, csc: false, inks: [], foils: [], manual_process: false, manual_unit: 'Fixed Amount', manual_unit_cost: 0 },
 				inkNewInk: '', inkNewPct: 100,
 				foilNewName: '', foilNewGroup: 'COLD', foilNewPct: 100,
 			};
@@ -167,15 +170,46 @@ function oc_mount_app(el) {
 				var mData = mList.find(function (m) { return m.machine === this.inkDialogState.machine; }, this);
 				return mData ? !!mData.allow_ink_assignment : false;
 			},
+			// Filtered ink list for the current dialog spec
+			dialogInkList() {
+				var allowed = this.inkDialog && this.inkDialog.allowed_inks;
+				if (allowed && allowed.length) {
+					var self = this;
+					return self.allInks.filter(function (ink) { return allowed.indexOf(ink.ink_name) !== -1; });
+				}
+				return this.allInks;
+			},
 
 			// Auto-include material row check
 			materialReady() {
-				return !!(this.form.base_material && this.form.material_rate && this.form.item_qty);
+				var matOk = this.form.material_type === 'Custom'
+					? !!(this.form.custom_material_name && this.form.custom_material_name.trim())
+					: !!(this.form.base_material);
+				return !!(matOk && this.form.material_rate && this.form.item_qty);
 			},
+			isCustomMaterial() { return this.form.material_type === 'Custom'; },
 
 			// Flexo reel requirements card — show when flexo calc done
 			flexoReady() {
 				return this.isFlexo && this.calc.sheet && this.calc.sheet.reel_area > 0;
+			},
+
+			// Flexo: the spec that has printing machines (is_printing_machine=1)
+			flexoPrintingSpec() {
+				return this.allSpecs.find(function (s) {
+					return s.has_machine && (s.machines || []).some(function (m) { return m.is_printing_machine; });
+				}) || null;
+			},
+			// Flexo: list of printing machines from that spec
+			flexoPrintingMachines() {
+				var spec = this.flexoPrintingSpec;
+				if (!spec) return [];
+				return (spec.machines || []).filter(function (m) { return m.is_printing_machine; });
+			},
+			// Flexo: info object of the currently selected printing machine
+			selectedFlexoPrintMachineInfo() {
+				var self = this;
+				return this.flexoPrintingMachines.find(function (m) { return m.machine === self.flexoPrintMachine; }) || null;
 			},
 
 			calcPayload() {
@@ -201,11 +235,14 @@ function oc_mount_app(el) {
 						skip_machine_if_spec: spec.skip_machine_if_spec || '',
 						machines: spec.machines || [],
 						machine_assignment: {
-							machine: st._machine || '',
-							cycles: parseInt(st._cycles || 1),
+							machine:                st._machine    || '',
+							cycles:                 parseInt(st._cycles || 1),
 							customer_sample_colors: !!(st._csc),
-							inks: st._inks || [],
-							foils: st._foils || [],
+							inks:                   st._inks   || [],
+							foils:                  st._foils  || [],
+							manual_process:         !!(st._manual_process),
+							manual_unit:            st._manual_unit      || 'Fixed Amount',
+							manual_unit_cost:       parseFloat(st._manual_unit_cost || 0),
 						},
 						cost_facts: facts,
 					};
@@ -316,6 +353,7 @@ function oc_mount_app(el) {
 				self.specState = {};
 				self.selectedMachine = null;
 				self.machineSpecState = {};
+				self.flexoPrintMachine = '';
 				self.calc = { sheet: null, cost_rows: [], group_totals: {}, pricing: null };
 				var pt = self.form.pricing_type || 'Offset';
 				var done = 0;
@@ -347,12 +385,35 @@ function oc_mount_app(el) {
 				this.scheduleCalc();
 			},
 
+			// ── Flexo printing machine (top-level card) ──
+			onFlexoPrintMachineChange(machineName) {
+				var self = this;
+				this.flexoPrintMachine = machineName;
+				var spec = this.flexoPrintingSpec;
+				if (!spec) { this.scheduleCalc(); return; }
+				var specName = spec.spec_name;
+				// Auto-select the printing spec when a machine is chosen
+				if (machineName && this.selectedSpecNames.indexOf(specName) === -1) {
+					this.selectedSpecNames.push(specName);
+					this.initSpecState(specName);
+				}
+				// Assign machine into spec state
+				if (this.specState[specName]) {
+					this.specState[specName]._machine = machineName || '';
+				}
+				this.scheduleCalc();
+			},
+
 			// ── Specs (checkboxes) ──
 			toggleSpec(specName) {
 				var idx = this.selectedSpecNames.indexOf(specName);
 				if (idx > -1) {
 					this.selectedSpecNames.splice(idx, 1);
 					delete this.specState[specName];
+					// If user deselects the Flexo printing spec, clear the top-level machine selector
+					if (this.isFlexo && this.flexoPrintingSpec && this.flexoPrintingSpec.spec_name === specName) {
+						this.flexoPrintMachine = '';
+					}
 				} else {
 					this.selectedSpecNames.push(specName);
 					this.initSpecState(specName);
@@ -475,11 +536,14 @@ function oc_mount_app(el) {
 				var st = this.specState[spec.spec_name] || {};
 				this.inkDialog = spec;
 				this.inkDialogState = {
-					machine: st._machine || '',
-					cycles: parseInt(st._cycles || 1),
-					csc: !!(st._csc),
-					inks:  JSON.parse(JSON.stringify(st._inks  || [])),
-					foils: JSON.parse(JSON.stringify(st._foils || [])),
+					machine:      st._machine      || '',
+					cycles:       parseInt(st._cycles || 1),
+					csc:          !!(st._csc),
+					inks:         JSON.parse(JSON.stringify(st._inks  || [])),
+					foils:        JSON.parse(JSON.stringify(st._foils || [])),
+					manual_process:   !!(st._manual_process),
+					manual_unit:      st._manual_unit      || 'Fixed Amount',
+					manual_unit_cost: parseFloat(st._manual_unit_cost || 0),
 				};
 				this.inkNewInk = '';
 				this.inkNewPct = 100;
@@ -491,11 +555,18 @@ function oc_mount_app(el) {
 				if (!this.inkDialog) return;
 				var st = this.specState[this.inkDialog.spec_name];
 				if (!st) return;
-				st._machine = this.inkDialogState.machine;
-				st._cycles  = this.inkDialogState.cycles;
-				st._csc     = this.inkDialogState.csc;
-				st._inks    = JSON.parse(JSON.stringify(this.inkDialogState.inks));
-				st._foils   = JSON.parse(JSON.stringify(this.inkDialogState.foils));
+				st._machine          = this.inkDialogState.machine;
+				st._cycles           = this.inkDialogState.cycles;
+				st._csc              = this.inkDialogState.csc;
+				st._inks             = JSON.parse(JSON.stringify(this.inkDialogState.inks));
+				st._foils            = JSON.parse(JSON.stringify(this.inkDialogState.foils));
+				st._manual_process   = this.inkDialogState.manual_process;
+				st._manual_unit      = this.inkDialogState.manual_unit;
+				st._manual_unit_cost = this.inkDialogState.manual_unit_cost;
+				// Sync Flexo top-level machine card if this is the printing spec
+				if (this.isFlexo && this.flexoPrintingSpec && this.flexoPrintingSpec.spec_name === this.inkDialog.spec_name) {
+					this.flexoPrintMachine = this.inkDialogState.machine || '';
+				}
 				this.inkDialog = null;
 				this.scheduleCalc();
 			},
@@ -704,6 +775,9 @@ function oc_mount_app(el) {
 										}
 									},
 								});
+							} else if (d.form.material_type === 'Custom' && d.form.custom_material_name && d.form.material_rate) {
+								// Custom material with rate already saved — trigger calculation immediately
+								self.scheduleCalc();
 							}
 						}
 						// Restore machine
@@ -769,8 +843,17 @@ function oc_mount_app(el) {
 								state._csc     = false;
 							}
 							self.specState[spec.spec_name] = state;
+					});
+					// For Flexo: sync top-level print machine from the printing spec's saved assignment
+					if (self.isFlexo || (d.form && d.form.pricing_type === 'Flexo')) {
+						var printSpec = self.allSpecs.find(function (s) {
+							return s.has_machine && (s.machines || []).some(function (m) { return m.is_printing_machine; });
 						});
-						// Restore ALL breakdown splits (not just the "additional" ones)
+						if (printSpec && self.specState[printSpec.spec_name]) {
+							self.flexoPrintMachine = self.specState[printSpec.spec_name]._machine || '';
+						}
+					}
+					// Restore ALL breakdown splits (not just the "additional" ones)
 						self.additionalBreakdowns = (d.form && d.form.breakdown_qtys && d.form.breakdown_qtys.length > 0)
 							? d.form.breakdown_qtys.map(function (q) { return parseFloat(q) || 0; }).filter(function (q) { return q > 0; })
 							: [];
@@ -840,7 +923,7 @@ function oc_mount_app(el) {
 				}
 			},
 			clearMaterial() {
-				this.form.base_material = ''; this.form.material_rate = 0;
+				this.form.base_material = ''; this.form.custom_material_name = ''; this.form.material_rate = 0;
 				this.matSearch = ''; this.matResults = []; this.matOpen = false;
 				this.scheduleCalc();
 			},
@@ -864,6 +947,17 @@ function oc_mount_app(el) {
     <div class="oc-pa-dialog">
       <div class="oc-pa-hdr">Production Assignment: <b>{{ inkDialog.spec_name }}</b></div>
       <div class="oc-pa-body">
+        <!-- Manual Process toggle -->
+        <div class="oc-field">
+          <label class="oc-chk-lbl" style="font-weight:600">
+            <input type="checkbox" v-model="inkDialogState.manual_process" class="oc-chk" />
+            <span>Manual Process</span>
+          </label>
+          <div class="oc-hint">When checked, skips machine cost formulas and uses a fixed manual cost instead.</div>
+        </div>
+
+        <!-- Machine + Cycles (hidden when Manual Process) -->
+        <template v-if="!inkDialogState.manual_process">
         <div class="oc-field">
           <label class="oc-sublbl">Select Machine</label>
           <select v-model="inkDialogState.machine" class="oc-inp oc-sel">
@@ -876,6 +970,25 @@ function oc_mount_app(el) {
           <input type="number" v-model.number="inkDialogState.cycles" min="1" class="oc-inp" placeholder="Number of cycles" />
           <div class="oc-hint">Multiplies make-ready and production time.</div>
         </div>
+        </template>
+
+        <!-- Manual cost fields (shown when Manual Process) -->
+        <template v-if="inkDialogState.manual_process">
+        <div class="oc-field">
+          <label class="oc-sublbl">Manual Calculation Unit</label>
+          <select v-model="inkDialogState.manual_unit" class="oc-inp oc-sel">
+            <option value="Per Item">Per Item</option>
+            <option value="Per Cut Sheet">Per Cut Sheet</option>
+            <option value="Per Full Sheet">Per Full Sheet</option>
+            <option value="Fixed Amount">Fixed Amount</option>
+          </select>
+        </div>
+        <div class="oc-field">
+          <label class="oc-sublbl">Unit Cost (Rs.)</label>
+          <input type="number" v-model.number="inkDialogState.manual_unit_cost" min="0" class="oc-inp" placeholder="0.00" />
+        </div>
+        </template>
+
         <!-- Offset: CSC (printing machines only) + Inks (printing OR allow_ink_assignment) -->
         <template v-if="!isFlexoDialog && (isDialogMachinePrinting || isDialogMachineInkAllowed)">
           <div v-if="isDialogMachinePrinting" class="oc-field">
@@ -897,7 +1010,7 @@ function oc_mount_app(el) {
             <div class="oc-add-ink">
               <select v-model="inkNewInk" class="oc-inp oc-sel oc-ink-sel">
                 <option value="">Select Ink</option>
-                <option v-for="ink in allInks" :key="ink.ink_name" :value="ink.ink_name">{{ ink.ink_name }}</option>
+                <option v-for="ink in dialogInkList" :key="ink.ink_name" :value="ink.ink_name">{{ ink.ink_name }}</option>
               </select>
               <input type="number" v-model.number="inkNewPct" min="1" max="100" class="oc-inp oc-pct-inp" />
               <span class="oc-pct-sym">%</span>
@@ -943,7 +1056,7 @@ function oc_mount_app(el) {
           <div class="oc-add-ink" style="margin-top:6px">
             <select v-model="inkNewInk" class="oc-inp oc-sel oc-ink-sel">
               <option value="">Select Ink</option>
-              <option v-for="ink in allInks" :key="ink.ink_name" :value="ink.ink_name">{{ ink.ink_name }}</option>
+              <option v-for="ink in dialogInkList" :key="ink.ink_name" :value="ink.ink_name">{{ ink.ink_name }}</option>
             </select>
             <button @click="addDialogInk" class="oc-btn oc-btn-blue oc-btn-sm">Add</button>
           </div>
@@ -995,7 +1108,18 @@ function oc_mount_app(el) {
           {{ isFlexo ? 'Reel Material' : 'Base Material' }}
           <span v-if="materialReady" class="oc-auto-ok">✓ auto-included</span>
         </div>
+        <!-- Material type toggle -->
         <div class="oc-field">
+          <label class="oc-lbl">Material Type</label>
+          <div class="oc-type-toggle" style="margin-top:2px">
+            <button class="oc-type-btn" :class="{active: !isCustomMaterial}"
+              @click="form.material_type='Existing'; scheduleCalc()">Existing Item</button>
+            <button class="oc-type-btn" :class="{active: isCustomMaterial}"
+              @click="form.material_type='Custom'; scheduleCalc()">Custom / Non-stock</button>
+          </div>
+        </div>
+        <!-- Existing: Item link-field -->
+        <div v-if="!isCustomMaterial" class="oc-field">
           <label class="oc-lbl oc-lbl-blue">{{ isFlexo ? 'Reel Material (Item)' : 'Item' }}</label>
           <div class="mlf">
             <div class="mlf-row">
@@ -1026,9 +1150,37 @@ function oc_mount_app(el) {
             </div>
           </div>
         </div>
+        <!-- Custom: free-text name -->
+        <div v-if="isCustomMaterial" class="oc-field">
+          <label class="oc-lbl oc-lbl-blue">{{ isFlexo ? 'Reel Material Name' : 'Board / Paper Name' }}</label>
+          <input v-model="form.custom_material_name" type="text" class="oc-inp"
+            placeholder="e.g. 300gsm Art Board (unregistered)"
+            @input="scheduleCalc" />
+          <div class="oc-hint" style="margin-top:3px">This name will appear in the cost breakdown and print format.</div>
+        </div>
         <div class="oc-field">
           <label class="oc-lbl">Rate (LKR / {{ isFlexo ? 'm²' : 'full sheet' }})</label>
           <input v-model.number="form.material_rate" type="number" min="0" step="0.01" class="oc-inp" @change="scheduleCalc" />
+        </div>
+      </div>
+
+      <!-- ══ FLEXO: Printing Machine card ══ -->
+      <div v-if="isFlexo && flexoPrintingMachines.length" class="oc-auto-card">
+        <div class="oc-auto-card-title">
+          <span class="oc-auto-dot" :class="flexoPrintMachine ? 'on' : ''"></span>
+          Printing Machine
+          <span v-if="flexoPrintMachine" class="oc-auto-ok">✓ {{ flexoPrintMachine }}</span>
+        </div>
+        <div class="oc-field">
+          <label class="oc-lbl">Select Printing Machine</label>
+          <select :value="flexoPrintMachine" class="oc-inp oc-sel" @change="onFlexoPrintMachineChange($event.target.value)">
+            <option value="">— Select Machine —</option>
+            <option v-for="m in flexoPrintingMachines" :key="m.machine" :value="m.machine">{{ m.machine }}</option>
+          </select>
+        </div>
+        <div v-if="selectedFlexoPrintMachineInfo" class="oc-hint" style="margin-top:2px">
+          LKR {{ (selectedFlexoPrintMachineInfo.machine_cost_per_hour || 0).toLocaleString() }}/hr
+          &nbsp;·&nbsp; Capacity: {{ selectedFlexoPrintMachineInfo.color_capacity || '—' }} colors
         </div>
       </div>
 
@@ -1077,6 +1229,7 @@ function oc_mount_app(el) {
             </div>
           </div>
           <div class="oc-field"><label class="oc-lbl">Profit Margin (%)</label><input v-model.number="form.profit_margin" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
+          <div class="oc-field"><label class="oc-lbl">Extra Production Cost (%)</label><input v-model.number="form.extra_prod_cost_pct" type="number" min="0" step="0.5" class="oc-inp" @change="scheduleCalc" /><div class="oc-hint">Added on top of total production cost before profit margin.</div></div>
         </div>
       </div>
 
@@ -1111,6 +1264,7 @@ function oc_mount_app(el) {
         </div>
         <div class="oc-2col">
           <div class="oc-field"><label class="oc-lbl">Profit Margin (%)</label><input v-model.number="form.profit_margin" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
+          <div class="oc-field"><label class="oc-lbl">Extra Production Cost (%)</label><input v-model.number="form.extra_prod_cost_pct" type="number" min="0" step="0.5" class="oc-inp" @change="scheduleCalc" /></div>
         </div>
       </div>
       <div class="oc-field">
