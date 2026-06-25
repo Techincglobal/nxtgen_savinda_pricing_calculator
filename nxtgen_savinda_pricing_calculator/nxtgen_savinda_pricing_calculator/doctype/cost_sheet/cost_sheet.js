@@ -669,14 +669,30 @@ function create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pric
 							// 3. Link CB to all peer Cost Items in the same group, then open calculator
 							function link_peer(idx) {
 								if (idx >= peer_items.length) {
-									// Build bqtys param from Cost Item's breakdown_qtys_json
+									// Build bqtys param — controls per-breakdown SHEET SPLIT (wastage per qty).
+									//  1. Combine-mode item (breakdown_qtys_json) → split by those qtys
+									//  2. Grouped items (group_name set) → split by the group's member qtys (selected group list)
+									//  3. No group, single item → NO sheet split (one item_qty, single wastage)
 									var bqtys_param = "";
+									var bqtys = [];
 									try {
-										var bqtys = ci.breakdown_qtys_json ? JSON.parse(ci.breakdown_qtys_json) : [];
-										if (bqtys && bqtys.length > 1) {
-											bqtys_param = "&bqtys=" + encodeURIComponent(bqtys.join(","));
+										var json_bqtys = ci.breakdown_qtys_json ? JSON.parse(ci.breakdown_qtys_json) : [];
+										if (json_bqtys && json_bqtys.length > 1) {
+											bqtys = json_bqtys;
 										}
 									} catch (e) {}
+									if (!bqtys.length && group_name) {
+										// Group set → sheet split across all member quantities in this group
+										(frm.doc.pricing_list || []).forEach(function (r) {
+											if (r.item && (r.group_name || "").trim() === group_name.trim()) {
+												bqtys.push(flt_v(r.qty));
+											}
+										});
+									}
+									bqtys = bqtys.filter(function (q) { return q > 0; });
+									if (bqtys.length > 1) {
+										bqtys_param = "&bqtys=" + encodeURIComponent(bqtys.join(","));
+									}
 									var url = "/app/offset-calculator?ref=" + encodeURIComponent(cb_name)
 										+ "&cost_sheet=" + encodeURIComponent(frm.doc.name)
 										+ "&pricing_type=" + encodeURIComponent(pricingType || "Offset")

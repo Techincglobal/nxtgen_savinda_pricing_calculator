@@ -933,8 +933,13 @@ function oc_mount_app(el) {
 
 		watch: {
 			'form.ref': function (newRef) {
-				// Only auto-fetch if no breakdowns are already loaded (don't overwrite restored or URL-injected breakdowns)
-				if (newRef && !this.additionalBreakdowns.length) this.fetchInquiryBreakdowns(newRef);
+				// Auto-fetch inquiry breakdowns ONLY in standalone calculator mode.
+				// When launched from a Cost Sheet, splits are controlled entirely by the
+				// bqtys URL param (group membership): no group → no split, group → split by
+				// group members. So don't auto-split by the inquiry's breakdown list here.
+				if (newRef && !this.costSheetRef && !this.additionalBreakdowns.length) {
+					this.fetchInquiryBreakdowns(newRef);
+				}
 			},
 		},
 
