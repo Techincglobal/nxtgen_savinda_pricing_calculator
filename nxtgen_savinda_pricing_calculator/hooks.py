@@ -26,15 +26,19 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/nxtgen_savinda_pricing_calculator/css/nxtgen_savinda_pricing_calculator.css"
-# NOTE: Seed/master data (Cost Fact, Item, Item Group, Offset Spec/Machine/Ink,
-# Flexo Foil, Costing Configuration, BOM Builder Config) is deliberately NOT
-# listed here. Fixtures re-sync on every `bench migrate` and would overwrite
-# records edited on the live site. That data is imported ONCE on install via
-# install.after_install instead. Only app-maintained templates/roles sync here.
-fixtures = [
-	{"dt": "Role", "filters": [["name", "in", ["Savinda Pricing Manager", "Savinda Estimator", "Savinda Pricing Viewer"]]]},
-	{"dt": "Print Format", "filters": [["doc_type", "in", ["Cost Sheet", "Calculation Breakdown", "Savinda Quotation"]]]},
-]
+# IMPORTANT: This is intentionally EMPTY.
+#
+# Frappe re-imports everything in `fixtures` on every `bench migrate` (with
+# force=True), which OVERWRITES records edited on the live site — Offset Ink,
+# Offset Machine, Items, Cost Facts, Specs, Costing Configuration, etc. To stop
+# that, ALL seed/master data is imported ONCE on install via
+# install.after_install (see INSTALL_ONLY_FIXTURES) and is never touched again
+# on update/migrate.
+#
+# Do NOT add entries here unless you genuinely want them re-synced (overwritten)
+# on every migrate. To re-snapshot the seed JSON during development, temporarily
+# restore the list and run `bench export-fixtures`, then clear it again.
+fixtures = []
 
 app_include_js = [
 	"https://unpkg.com/vue@3/dist/vue.global.prod.js",
