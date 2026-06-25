@@ -8,10 +8,12 @@ from frappe.utils.nestedset import rebuild_tree
 
 ROOT_ITEM_GROUP = "All Item Groups"
 
-# Seed/master data imported ONCE on install only — NOT re-synced on migrate, so
-# edits made on the live site (machines, specs, cost facts, rates, config) are
-# never overwritten by an update. Order matters: dependencies first.
+# ALL seed/master data imported ONCE on install only — NOTHING is re-synced on
+# migrate/update, so anything edited on the live site (machines, inks, specs,
+# cost facts, items, rates, config, print formats) is never overwritten by an
+# app update. Order matters: dependencies first.
 INSTALL_ONLY_FIXTURES = [
+	"role.json",                # roles first (independent)
 	"item_group.json",          # parent group for the rate items
 	"item.json",                # CALC-% rate items (used by Cost Fact Items)
 	"cost_fact.json",           # references the rate items above
@@ -20,6 +22,7 @@ INSTALL_ONLY_FIXTURES = [
 	"flexo_foil.json",
 	"offset_spec.json",         # references cost facts + machines above
 	"costing_configuration.json",  # single — tax/wastage config
+	"print_format.json",        # print templates
 ]
 
 
