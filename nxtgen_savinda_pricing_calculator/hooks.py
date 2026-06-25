@@ -111,8 +111,10 @@ jinja = {
 # Installation
 # ------------
 
-# before_install = "nxtgen_savinda_pricing_calculator.install.before_install"
+before_install = "nxtgen_savinda_pricing_calculator.install.before_install"
 # after_install = "nxtgen_savinda_pricing_calculator.install.after_install"
+
+after_migrate = "nxtgen_savinda_pricing_calculator.install.after_migrate"
 
 # Uninstallation
 # ------------
