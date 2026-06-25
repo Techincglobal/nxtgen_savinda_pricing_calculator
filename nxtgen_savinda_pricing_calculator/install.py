@@ -37,16 +37,23 @@ def before_install():
 
 
 def after_install():
-	"""Seed master data ONCE on install (kept out of the migrate-time fixture sync)."""
+	"""Seed master data on install.
+
+	Seeding is NON-DESTRUCTIVE: a record is created only if it does not already
+	exist. So even if Frappe Cloud re-runs this on an app update, it will NEVER
+	overwrite records edited on the live site (Cost Fact, Offset Ink, Machine,
+	Spec, Items, Costing Configuration, etc.) — it only fills in genuinely
+	missing ones.
+	"""
 	_ensure_item_group_tree()
-	_import_install_only_fixtures()
+	_seed_install_only_fixtures()
 
 
 def after_migrate():
-	"""Keep the Item Group tree healthy on every migrate (idempotent).
+	"""Runs on every migrate/update.
 
-	NOTE: master/seed data is intentionally NOT re-imported here — migrate must
-	not overwrite records edited on the live site.
+	Master/seed data is intentionally NOT re-imported here. We only keep the
+	Item Group tree healthy.
 	"""
 	_ensure_item_group_tree()
 
@@ -82,9 +89,14 @@ def _ensure_item_group_tree():
 		)
 
 
-def _import_install_only_fixtures():
-	"""Import the seed JSON files from the app's fixtures/ dir, once, on install."""
-	from frappe.core.doctype.data_import.data_import import import_doc
+def _seed_install_only_fixtures():
+	"""Create seed records from the app's fixtures/ dir — only the ones missing.
+
+	Reads each JSON file and inserts records that do not already exist. Existing
+	records (including any edited on the live site) are left untouched. This is
+	deliberately NOT frappe's force-overwrite fixture import.
+	"""
+	import json
 
 	fixtures_dir = frappe.get_app_path("nxtgen_savinda_pricing_calculator", "fixtures")
 	for fname in INSTALL_ONLY_FIXTURES:
@@ -92,10 +104,64 @@ def _import_install_only_fixtures():
 		if not os.path.exists(path):
 			continue
 		try:
-			import_doc(path)
+			with open(path, encoding="utf-8") as fh:
+				records = json.load(fh)
 		except Exception:
 			frappe.log_error(
-				title=f"pricing_calculator: install import failed ({fname})",
+				title=f"pricing_calculator: read seed file failed ({fname})",
 				message=frappe.get_traceback(),
 			)
+			continue
+		if isinstance(records, dict):
+			records = [records]
+		for rec in records:
+			_create_if_missing(rec)
 	frappe.db.commit()
+
+
+def _create_if_missing(rec):
+	"""Insert one fixture record only if it isn't already present."""
+	if not isinstance(rec, dict):
+		return
+	doctype = rec.get("doctype")
+	if not doctype or not frappe.db.table_exists(doctype):
+		return
+	try:
+		meta = frappe.get_meta(doctype)
+	except Exception:
+		return
+
+	# Strip transient keys that would interfere with a clean insert.
+	clean = {
+		k: v for k, v in rec.items()
+		if k not in ("__islocal", "__unsaved", "modified", "creation", "owner", "modified_by")
+	}
+
+	try:
+		if meta.issingle:
+			# Seed a Single ONLY if it has never been configured — never overwrite.
+			if frappe.db.get_singles_dict(doctype):
+				return
+			single = frappe.get_doc(doctype)
+			for k, v in clean.items():
+				if k in ("doctype", "name", "idx", "docstatus"):
+					continue
+				single.set(k, v)
+			single.flags.ignore_permissions = True
+			single.flags.ignore_mandatory = True
+			single.save(ignore_permissions=True)
+			return
+
+		name = clean.get("name")
+		if name and frappe.db.exists(doctype, name):
+			return  # already present — preserve any live edits
+
+		doc = frappe.get_doc(clean)
+		doc.flags.ignore_permissions = True
+		doc.flags.ignore_mandatory = True
+		doc.insert(ignore_permissions=True)
+	except Exception:
+		frappe.log_error(
+			title=f"pricing_calculator: seed insert failed ({doctype} {rec.get('name', '')})",
+			message=frappe.get_traceback(),
+		)
