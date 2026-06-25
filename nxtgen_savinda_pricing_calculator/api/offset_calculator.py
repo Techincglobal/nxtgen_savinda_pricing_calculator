@@ -409,6 +409,37 @@ def calculate(payload):
         })
         prod_total += extra_prod_amt
 
+    # Manual cost items (user-entered ad-hoc lines: name + qty + rate + cost group)
+    for mc in (form.get("manual_costs") or []):
+        mc_name = (mc.get("name") or "").strip()
+        mc_qty  = flt(mc.get("qty"))
+        mc_rate = flt(mc.get("rate"))
+        mc_amt  = round(mc_qty * mc_rate, 2)
+        if not mc_name or not mc_amt:
+            continue
+        mc_group = (mc.get("cost_group") or "Production").strip()
+        gl = mc_group.lower()
+        if gl == "material":
+            mat_total += mc_amt
+        elif gl == "preparation":
+            prep_total += mc_amt
+        else:
+            mc_group = "Production"
+            prod_total += mc_amt
+        cost_rows.append({
+            "section":            "Manual",
+            "spec_name":          mc_name,
+            "cost_fact":          mc_name,
+            "cost_group":         mc_group,
+            "selected_item":      "",
+            "selected_item_name": mc_name,
+            "attribute_values":   {"manual": 1},
+            "req_qty":            round(mc_qty, 4),
+            "rate":               round(mc_rate, 4),
+            "amount":             mc_amt,
+            "is_auto":            False,
+        })
+
     grand = mat_total + prep_total + prod_total
     pm    = flt(form.get("profit_margin", 0)) / 100
     uc    = grand / item_qty if item_qty else 0
