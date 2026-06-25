@@ -1484,3 +1484,137 @@ def calculate_qty_break(calculation_breakdown, qty, profit_margin=None, tax_sscl
     except Exception as e:
         frappe.log_error(title="calculate_qty_break error", message=str(e))
         return {"error": str(e)}
+
+
+@frappe.whitelist()
+def get_cost_sheet_calculations(cost_sheet):
+    """
+    Return all distinct Calculation Breakdowns already created in a Cost Sheet
+    (via its Cost Items). Used by the "Copy Calculation" picker so a user can
+    reuse an existing calculation for another item at a different qty.
+    """
+    if not cost_sheet:
+        return []
+    try:
+        cs = frappe.get_doc("Cost Sheet", cost_sheet)
+    except frappe.DoesNotExistError:
+        return []
+
+    out, seen = [], set()
+    for row in (cs.pricing_list or []):
+        if not row.item:
+            continue
+        try:
+            ci = frappe.get_doc("cost Item", row.item)
+        except frappe.DoesNotExistError:
+            continue
+        for calc in (ci.calculations or []):
+            cb = calc.calculation_breakdown
+            if not cb or cb in seen:
+                continue
+            seen.add(cb)
+            cbd = frappe.db.get_value(
+                "Calculation Breakdown", cb,
+                ["item_qty", "unit_cost", "pricing_type"], as_dict=True,
+            ) or {}
+            out.append({
+                "cb":           cb,
+                "source_item":  ci.cost_item_name or ci.name,
+                "item_qty":     flt(cbd.get("item_qty")),
+                "unit_cost":    flt(cbd.get("unit_cost")),
+                "pricing_type": cbd.get("pricing_type") or "Offset",
+                "description":  calc.description or "",
+            })
+    return out
+
+
+@frappe.whitelist()
+def copy_calculation(source_cb, target_cost_item, new_qty=None, description=None):
+    """
+    Duplicate an existing Calculation Breakdown at a (optionally) different qty
+    WITHOUT re-entering any specs. Loads the source's saved ui_state, overrides
+    item_qty, recalculates, saves a NEW Calculation Breakdown, and links it to
+    the target Cost Item. Single-item copy → no sheet split.
+    """
+    if not source_cb or not target_cost_item:
+        return {"error": "source_cb and target_cost_item are required"}
+
+    try:
+        src = frappe.get_doc("Calculation Breakdown", source_cb)
+    except frappe.DoesNotExistError:
+        return {"error": f"Source calculation {source_cb} not found"}
+
+    if not (hasattr(src, "ui_state") and src.ui_state):
+        return {"error": "Source calculation has no saved state to copy"}
+
+    try:
+        state = json.loads(src.ui_state)
+    except Exception:
+        return {"error": "Could not parse source calculation state"}
+
+    form = state.get("form", {})
+    if new_qty is not None and flt(new_qty) > 0:
+        form["item_qty"] = flt(new_qty)
+    # Single-item copy → no breakdown split (recompute as one quantity)
+    form["breakdown_qtys"] = []
+    state["form"] = form
+
+    payload = {
+        "form":           form,
+        "machine_spec":   state.get("machine_spec"),
+        "selected_specs": state.get("selected_specs", []),
+    }
+
+    try:
+        result = calculate(json.dumps(payload))
+    except Exception as e:
+        frappe.log_error(title="copy_calculation calculate error", message=str(e))
+        return {"error": str(e)}
+
+    # Save as a NEW Calculation Breakdown (doc_name empty → insert)
+    save_payload = {
+        "form":           form,
+        "machine_spec":   state.get("machine_spec"),
+        "selected_specs": state.get("selected_specs", []),
+        "calc_result":    result,
+        "doc_name":       "",
+    }
+    try:
+        saved  = save_costing(json.dumps(save_payload))
+        new_cb = saved.get("doc_name")
+    except Exception as e:
+        frappe.log_error(title="copy_calculation save error", message=str(e))
+        return {"error": str(e)}
+
+    if not new_cb:
+        return {"error": "Failed to create copied calculation"}
+
+    pricing = result.get("pricing", {})
+    unit_cost = flt(pricing.get("unit_cost", 0))
+
+    # Link the new CB to the target Cost Item
+    try:
+        ci = frappe.get_doc("cost Item", target_cost_item)
+        ci.append("calculations", {
+            "calculation_breakdown": new_cb,
+            "description":           description or "",
+            "unit_cost":             unit_cost,
+            "amount":                0,
+        })
+        ci.save(ignore_permissions=True)
+    except Exception as e:
+        frappe.log_error(title="copy_calculation link error", message=str(e))
+        return {"error": str(e)}
+
+    # Sync unit cost up to Cost Item + Cost Sheet rows
+    try:
+        sync_cost_item_unit_cost(new_cb)
+    except Exception:
+        pass
+
+    frappe.db.commit()
+    return {
+        "new_cb":    new_cb,
+        "unit_cost": unit_cost,
+        "item_qty":  flt(form.get("item_qty")),
+    }

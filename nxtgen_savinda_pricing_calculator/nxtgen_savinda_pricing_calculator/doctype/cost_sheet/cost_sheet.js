@@ -309,6 +309,11 @@ function render_panel(frm, cdt, cdn) {
 				"<button class='btn-add-calc btn btn-xs btn-primary' "
 				+ "data-item='" + item_name + "' data-cdt='" + cdt + "' data-cdn='" + cdn + "'>"
 				+ "+ Add Calculation</button>";
+			var copy_btn = is_submitted ? "" :
+				"<button class='btn-copy-calc btn btn-xs btn-default' style='margin-left:6px' "
+				+ "data-item='" + item_name + "' data-cdt='" + cdt + "' data-cdn='" + cdn + "' "
+				+ "title='Copy an existing calculation and only change the quantity'>"
+				+ "📋 Copy Qty</button>";
 			var actions_th = is_submitted
 				? "<th style='padding:5px 8px;color:#fff;font-size:10.5px;text-align:center'>Link</th>"
 				: "<th style='padding:5px 8px;color:#fff;font-size:10.5px;text-align:center'>Actions</th>";
@@ -351,7 +356,7 @@ function render_panel(frm, cdt, cdn) {
 				+ (display_calcs.length ? " <span style='font-size:10px;background:#e0e7ff;color:#3730a3;"
 					+ "border-radius:10px;padding:1px 7px;font-weight:600'>" + display_calcs.length + "</span>" : "")
 				+ "</span>"
-				+ add_btn
+				+ "<span>" + add_btn + copy_btn + "</span>"
 				+ "</div>"
 				+ cut_strip
 				+ ops_html
@@ -393,6 +398,11 @@ function render_panel(frm, cdt, cdn) {
 					// ── Add Calculation button ──────────────────────
 					$w.off("click.add_calc").on("click.add_calc", ".btn-add-calc", function () {
 						show_add_calc_popup(frm, cdt, cdn, item_name);
+					});
+
+					// ── Copy Qty button (duplicate an existing calc at a new qty) ──
+					$w.off("click.copy_calc").on("click.copy_calc", ".btn-copy-calc", function () {
+						show_copy_calc_popup(frm, cdt, cdn, item_name);
 					});
 
 					// ── Edit (open calculator) button ───────────────
@@ -582,6 +592,114 @@ function show_add_calc_popup(frm, cdt, cdn, item_name) {
 				},
 			});
 
+			d.show();
+		},
+	});
+}
+
+
+// ─────────────────────────────────────────────────────────────
+//  COPY CALCULATION — reuse an existing calc, change only the qty
+//  No re-entering specs. Server recalculates at the new qty and
+//  saves a new Calculation Breakdown linked to this item.
+// ─────────────────────────────────────────────────────────────
+
+function show_copy_calc_popup(frm, cdt, cdn, item_name) {
+	var row = locals[cdt][cdn];
+	var target_qty = flt_v(row.qty) || 0;
+
+	frappe.call({
+		method: "nxtgen_savinda_pricing_calculator.api.offset_calculator.get_cost_sheet_calculations",
+		args: { cost_sheet: frm.doc.name },
+		callback: function (r) {
+			var calcs = (r.message || []).filter(function (c) { return c.cb; });
+			if (!calcs.length) {
+				frappe.msgprint({
+					title: "Nothing to copy",
+					message: "There are no existing calculations in this Cost Sheet yet. "
+						+ "Create one with <b>+ Add Calculation</b> first, then you can copy it at a different qty.",
+					indicator: "orange",
+				});
+				return;
+			}
+
+			// Build label→cb map (Select shows descriptive labels)
+			var label_to_cb = {};
+			var labels = calcs.map(function (c) {
+				var lbl = (c.source_item || c.cb)
+					+ "  |  qty " + (c.item_qty || 0).toLocaleString()
+					+ "  |  LKR " + cur_fmt(c.unit_cost)
+					+ "  |  " + c.cb;
+				label_to_cb[lbl] = c.cb;
+				return lbl;
+			});
+
+			var d = new frappe.ui.Dialog({
+				title: "Copy Calculation — change qty only",
+				fields: [
+					{
+						fieldtype: "HTML",
+						options: "<div style='padding:7px 10px;background:#f0f4ff;border-radius:4px;"
+							+ "font-size:12px;color:#1a3a5c;margin-bottom:6px'>"
+							+ "Copies an existing calculation's full setup (material, machine, specs) and "
+							+ "<b>only changes the quantity</b>. The cost is recalculated automatically — "
+							+ "you don't re-enter anything.</div>",
+					},
+					{
+						fieldtype: "Select", fieldname: "source_label",
+						label: "Source Calculation",
+						options: labels.join("\n"),
+						default: labels[0], reqd: 1,
+					},
+					{
+						fieldtype: "Float", fieldname: "new_qty",
+						label: "New Order Qty", default: target_qty, reqd: 1,
+						description: "Defaults to this item's qty (" + target_qty.toLocaleString() + ").",
+					},
+					{
+						fieldtype: "Data", fieldname: "description",
+						label: "Description (optional)",
+						description: "e.g. 5,000 qty variant",
+					},
+				],
+				primary_action_label: "Create Copy",
+				primary_action: function (vals) {
+					var source_cb = label_to_cb[vals.source_label];
+					if (!source_cb) {
+						frappe.msgprint({ message: "Please select a source calculation.", indicator: "orange" });
+						return;
+					}
+					d.hide();
+					frappe.call({
+						method: "nxtgen_savinda_pricing_calculator.api.offset_calculator.copy_calculation",
+						args: {
+							source_cb:        source_cb,
+							target_cost_item: item_name,
+							new_qty:          vals.new_qty,
+							description:      vals.description || "",
+						},
+						freeze: true,
+						freeze_message: "Copying calculation…",
+						callback: function (res) {
+							if (res.message && res.message.new_cb) {
+								frappe.show_alert({
+									message: "Copied → " + res.message.new_cb
+										+ " (qty " + (res.message.item_qty || 0).toLocaleString() + ")",
+									indicator: "green",
+								});
+								render_panel(frm, cdt, cdn);
+								refresh_row_prices(frm, cdt, cdn);
+							} else {
+								frappe.msgprint({
+									title: "Copy failed",
+									message: (res.message && res.message.error) || "Unknown error.",
+									indicator: "red",
+								});
+							}
+						},
+					});
+				},
+			});
 			d.show();
 		},
 	});
