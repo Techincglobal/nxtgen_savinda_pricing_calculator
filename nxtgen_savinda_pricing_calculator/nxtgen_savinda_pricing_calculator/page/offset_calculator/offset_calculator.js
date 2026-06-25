@@ -117,6 +117,7 @@ function oc_mount_app(el) {
 				calc: { sheet: null, cost_rows: [], group_totals: {}, pricing: null },
 				additionalBreakdowns: [],
 				newBreakdownQty: '',
+				manualCosts: [],   // ad-hoc user cost lines: {name, qty, rate, cost_group}
 				collapsedGroups: {},
 				collapsedSpecs: {},
 
@@ -272,6 +273,17 @@ function oc_mount_app(el) {
 				formData.breakdown_qtys = this.additionalBreakdowns.length > 0
 					? this.additionalBreakdowns.map(function (q) { return parseFloat(q) || 0; })
 					: [];
+				// Manual ad-hoc cost lines (only valid rows: have a name and a non-zero amount)
+				formData.manual_costs = (this.manualCosts || [])
+					.map(function (m) {
+						return {
+							name: (m.name || '').trim(),
+							qty: parseFloat(m.qty) || 0,
+							rate: parseFloat(m.rate) || 0,
+							cost_group: m.cost_group || 'Production',
+						};
+					})
+					.filter(function (m) { return m.name && m.qty * m.rate; });
 				return { form: formData, selected_specs: specs, machine_spec: machine_spec };
 			},
 		},
@@ -617,6 +629,16 @@ function oc_mount_app(el) {
 				this.additionalBreakdowns.splice(idx, 1);
 				this.scheduleCalc();
 			},
+			addManualCost() {
+				this.manualCosts.push({ name: '', qty: 1, rate: 0, cost_group: 'Production' });
+			},
+			removeManualCost(idx) {
+				this.manualCosts.splice(idx, 1);
+				this.scheduleCalc();
+			},
+			manualCostAmount(m) {
+				return (parseFloat(m.qty) || 0) * (parseFloat(m.rate) || 0);
+			},
 			fetchInquiryBreakdowns(ref) {
 				var self = this;
 				if (!ref || !self.isOffset) return;
@@ -678,7 +700,8 @@ function oc_mount_app(el) {
 					method: API.save,
 					args: {
 						payload: JSON.stringify({
-							form: self.form,
+							// merge manual cost lines into the saved form so they persist + restore
+							form: Object.assign({}, self.form, { manual_costs: self.calcPayload.form.manual_costs }),
 							selected_specs: self.calcPayload.selected_specs,
 							machine_spec: self.calcPayload.machine_spec,
 							calc_result: self.calc,
@@ -749,6 +772,17 @@ function oc_mount_app(el) {
 						self.savedDocName = d.doc_name || '';
 						if (d.form) {
 							Object.assign(self.form, d.form);
+							// Restore manual ad-hoc cost lines
+							self.manualCosts = Array.isArray(d.form.manual_costs)
+								? d.form.manual_costs.map(function (m) {
+									return {
+										name: m.name || '',
+										qty: parseFloat(m.qty) || 0,
+										rate: parseFloat(m.rate) || 0,
+										cost_group: m.cost_group || 'Production',
+									};
+								})
+								: [];
 							// Restore matSearch display and fetch material rate if not saved in ui_state
 							if (d.form.base_material) {
 								frappe.call({
@@ -1358,6 +1392,24 @@ function oc_mount_app(el) {
           </div><!-- /v-show collapsible group -->
         </div>
       </div>
+
+      <!-- ══ MANUAL COST ITEMS (ad-hoc) ══ -->
+      <div class="oc-divider"></div>
+      <div class="oc-divider-label">Manual Cost Items</div>
+      <div v-for="(mc, mi) in manualCosts" :key="'mc'+mi" style="display:flex;gap:5px;align-items:center;margin-bottom:5px">
+        <input v-model="mc.name" type="text" placeholder="Name (e.g. Delivery)" class="oc-inp" style="flex:2;min-width:0" @input="scheduleCalc" />
+        <select v-model="mc.cost_group" class="oc-inp oc-sel" style="flex:1.2;min-width:0" @change="scheduleCalc">
+          <option value="Production">Production</option>
+          <option value="Material">Material</option>
+          <option value="Preparation">Preparation</option>
+        </select>
+        <input v-model.number="mc.qty" type="number" min="0" placeholder="Qty" class="oc-inp" style="width:60px" @input="scheduleCalc" />
+        <input v-model.number="mc.rate" type="number" min="0" placeholder="Rate" class="oc-inp" style="width:78px" @input="scheduleCalc" />
+        <span style="min-width:72px;text-align:right;font-family:monospace;font-size:11px;font-weight:600">{{ fmtCur(manualCostAmount(mc)) }}</span>
+        <button @click="removeManualCost(mi)" title="Remove" style="border:none;background:#fee2e2;color:#b91c1c;border-radius:4px;width:22px;height:22px;cursor:pointer;flex:none">×</button>
+      </div>
+      <button class="oc-btn-mini" @click="addManualCost">+ Add Manual Cost</button>
+      <div v-if="!manualCosts.length" class="oc-hint" style="margin-top:3px">Add ad-hoc costs (delivery, handling, etc.). Pick a type: Production / Material / Preparation.</div>
 
     </div>
   </div>
