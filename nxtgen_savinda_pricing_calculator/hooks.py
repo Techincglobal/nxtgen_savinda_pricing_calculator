@@ -26,16 +26,12 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/nxtgen_savinda_pricing_calculator/css/nxtgen_savinda_pricing_calculator.css"
+# NOTE: Seed/master data (Cost Fact, Item, Item Group, Offset Spec/Machine/Ink,
+# Flexo Foil, Costing Configuration, BOM Builder Config) is deliberately NOT
+# listed here. Fixtures re-sync on every `bench migrate` and would overwrite
+# records edited on the live site. That data is imported ONCE on install via
+# install.after_install instead. Only app-maintained templates/roles sync here.
 fixtures = [
-	{"dt": "Costing Configuration"},
-	{"dt": "Item Group", "filters": [["item_group_name", "=", "Costing Rate Items"]]},
-	{"dt": "Item",       "filters": [["item_code", "like", "CALC-%"]]},
-	{"dt": "Cost Fact"},
-	{"dt": "Offset Spec"},
-	{"dt": "Offset Machine"},
-	{"dt": "Offset Ink"},
-	{"dt": "Flexo Foil"},
-	{"dt": "BOM Builder Config"},
 	{"dt": "Role", "filters": [["name", "in", ["Savinda Pricing Manager", "Savinda Estimator", "Savinda Pricing Viewer"]]]},
 	{"dt": "Print Format", "filters": [["doc_type", "in", ["Cost Sheet", "Calculation Breakdown", "Savinda Quotation"]]]},
 ]
@@ -112,7 +108,7 @@ jinja = {
 # ------------
 
 before_install = "nxtgen_savinda_pricing_calculator.install.before_install"
-# after_install = "nxtgen_savinda_pricing_calculator.install.after_install"
+after_install = "nxtgen_savinda_pricing_calculator.install.after_install"
 
 after_migrate = "nxtgen_savinda_pricing_calculator.install.after_migrate"
 
