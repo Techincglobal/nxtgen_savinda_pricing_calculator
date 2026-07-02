@@ -266,6 +266,7 @@ function oc_mount_app(el) {
 							manual_process:         !!(st._manual_process),
 							manual_unit:            st._manual_unit      || 'Fixed Amount',
 							manual_unit_cost:       parseFloat(st._manual_unit_cost || 0),
+							skip_machine:           self.effectiveSkip(spec.spec_name),
 						},
 						cost_facts: facts,
 					};
@@ -413,7 +414,7 @@ function oc_mount_app(el) {
 						var items = (cf.master && cf.master.items) || [];
 						var sel = items.length === 1 ? items[0].item : '';
 						var rate = (items.length === 1 && items[0].is_fix_rate) ? (items[0].rate || 0) : 0;
-						self.machineSpecState[cf.cost_fact] = { selected_item: sel, attr_values: {}, rate: rate, req_qty: 0 };
+						self.machineSpecState[cf.cost_fact] = { selected_item: sel, attr_values: self._defaultAttrValues(cf), rate: rate, req_qty: 0 };
 					});
 				}
 				this.scheduleCalc();
@@ -465,7 +466,7 @@ function oc_mount_app(el) {
 					var items = (cf.master && cf.master.items) || [];
 					var sel = items.length === 1 ? items[0].item : '';
 					var rate = (items.length === 1 && items[0].is_fix_rate) ? (items[0].rate || 0) : 0;
-					state[cf.cost_fact] = { selected_item: sel, attr_values: {}, rate: rate, req_qty: 0 };
+					state[cf.cost_fact] = { selected_item: sel, attr_values: self._defaultAttrValues(cf), rate: rate, req_qty: 0 };
 					if (sel && !(items[0] && items[0].is_fix_rate)) self.fetchItemRate(specName, cf.cost_fact, sel);
 				});
 				// Machine state fields
@@ -651,6 +652,19 @@ function oc_mount_app(el) {
 				this.additionalBreakdowns.splice(idx, 1);
 				this.scheduleCalc();
 			},
+			// Build the initial attribute values for a cost fact from its attribute defaults
+			_defaultAttrValues(cf) {
+				var out = {};
+				var attrs = (cf.master && cf.master.attributes) || [];
+				attrs.forEach(function (a) {
+					if (a.default_value === null || a.default_value === undefined || a.default_value === '') return;
+					var t = a.type;
+					out[a.attribute_name] = (t === 'Number' || t === 'Float' || t === 'Percentage')
+						? (parseFloat(a.default_value) || 0)
+						: a.default_value;
+				});
+				return out;
+			},
 			// ── Manual-select cost facts inside a spec ──
 			isCostFactIncluded(specName, cf) {
 				if (!cf.manual_select) return true;   // auto cost fact
@@ -665,6 +679,48 @@ function oc_mount_app(el) {
 				cfst._included = !cfst._included;
 				// Vue 2/3 reactivity for freshly-added nested keys
 				this.specState[specName][cfName] = Object.assign({}, cfst);
+				this.scheduleCalc();
+			},
+
+			// ── Machine-skip rules on a spec ──
+			anyPrintingActive() {
+				var self = this;
+				if (this.flexoPrintMachine) return true;
+				return this.selectedSpecs.some(function (s) { return self.isPrintingMachine(s.spec_name); });
+			},
+			specHasSkipRule(spec) {
+				return !!(spec.has_machine && (spec.skip_machine_if_spec || spec.skip_machine_if_printing || spec.skip_machine_if_machine));
+			},
+			// Auto-skip decision from the spec's configured rules + current selections
+			specAutoSkip(specName) {
+				var self = this;
+				var spec = this.allSpecs.find(function (s) { return s.spec_name === specName; });
+				if (!spec || !spec.has_machine) return false;
+				// (a) legacy: skip if a named spec is also selected
+				if (spec.skip_machine_if_spec && this.selectedSpecNames.indexOf(spec.skip_machine_if_spec) > -1) return true;
+				// (b) skip if any printing machine is active
+				if (spec.skip_machine_if_printing && this.anyPrintingActive()) return true;
+				// (c) skip if a specific machine is running on another selected spec
+				if (spec.skip_machine_if_machine) {
+					var m = spec.skip_machine_if_machine;
+					if (this.flexoPrintMachine === m) return true;
+					return this.selectedSpecs.some(function (s) {
+						if (s.spec_name === specName) return false;   // don't self-trigger
+						return (self.specState[s.spec_name] || {})._machine === m;
+					});
+				}
+				return false;
+			},
+			// Effective skip = user override if set, else the auto decision
+			effectiveSkip(specName) {
+				var st = this.specState[specName] || {};
+				if (st._skipOverride === true || st._skipOverride === false) return st._skipOverride;
+				return this.specAutoSkip(specName);
+			},
+			toggleSkipMachine(specName) {
+				if (!this.specState[specName]) this.specState[specName] = {};
+				this.specState[specName]._skipOverride = !this.effectiveSkip(specName);
+				this.specState[specName] = Object.assign({}, this.specState[specName]);
 				this.scheduleCalc();
 			},
 			addManualCost() {
@@ -910,6 +966,10 @@ function oc_mount_app(el) {
 								state._csc     = !!(spec.machine_assignment.customer_sample_colors);
 								state._inks    = spec.machine_assignment.inks  || [];
 								state._foils   = spec.machine_assignment.foils || [];
+								// Restore the skip-machine choice if it was saved
+								if (typeof spec.machine_assignment.skip_machine === 'boolean') {
+									state._skipOverride = spec.machine_assignment.skip_machine;
+								}
 							} else if (spec.has_machine) {
 								state._machine = '';
 								state._cycles  = 1;
@@ -1395,6 +1455,11 @@ function oc_mount_app(el) {
                   </div>
                   <button class="oc-btn-assign" @click.stop="openInkDialog(spec)">⚙ Assign</button>
                 </div>
+                <!-- Skip machine cost — auto-ticks per the spec's skip rules; untick to charge -->
+                <label v-if="specHasSkipRule(spec)" class="oc-skip-row" :class="{active: effectiveSkip(spec.spec_name)}">
+                  <input type="checkbox" class="oc-chk" :checked="effectiveSkip(spec.spec_name)" @change="toggleSkipMachine(spec.spec_name)" />
+                  <span>{{ effectiveSkip(spec.spec_name) ? 'Machine cost skipped (inline / covered elsewhere)' : 'Charging machine cost — tick to skip' }}</span>
+                </label>
               </div>
 
               <div v-for="cf in spec.cost_facts" :key="cf.cost_fact" class="oc-cf">
@@ -1720,6 +1785,8 @@ function oc_inject_styles() {
 .oc-attr-lbl{font-size:11px;font-weight:600;color:#6b7280;margin-bottom:3px}
 /* Machine section inside spec detail */
 .oc-machine-sec{background:#fff8e1;border:1px solid #ffe082;border-radius:5px;padding:8px 10px;margin-bottom:10px}
+.oc-skip-row{display:flex;align-items:center;gap:7px;margin-top:7px;padding-top:7px;border-top:1px dashed #e6d08a;font-size:11.5px;color:#6b5900;cursor:pointer}
+.oc-skip-row.active{color:#8a5a00;font-weight:600}
 /* Buttons */
 .oc-btn{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 14px;border:none;border-radius:4px;font-size:12.5px;font-weight:500;cursor:pointer;transition:filter .15s}
 .oc-btn:disabled{opacity:.4;cursor:not-allowed}

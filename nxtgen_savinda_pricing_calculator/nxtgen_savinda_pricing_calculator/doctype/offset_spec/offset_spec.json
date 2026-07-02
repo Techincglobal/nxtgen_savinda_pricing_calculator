@@ -15,6 +15,8 @@
   "has_machine",
   "column_break_mach1",
   "skip_machine_if_spec",
+  "skip_machine_if_machine",
+  "skip_machine_if_printing",
   "section_break_mach_units",
   "units",
   "section_break_mach_list",
@@ -104,6 +106,22 @@
    "options": "Offset Spec",
    "depends_on": "eval:doc.has_machine==1",
    "description": "If this spec is also selected, skip the machine cost for the current spec."
+  },
+  {
+   "fieldname": "skip_machine_if_machine",
+   "fieldtype": "Link",
+   "label": "Skip Machine If This Machine Used",
+   "options": "Offset Machine",
+   "depends_on": "eval:doc.has_machine==1",
+   "description": "In the calculator a 'Skip machine cost' checkbox auto-ticks when this machine is running on any selected spec. Untick it to charge this spec's machine anyway."
+  },
+  {
+   "fieldname": "skip_machine_if_printing",
+   "fieldtype": "Check",
+   "default": "0",
+   "label": "Skip Machine If Printing Runs",
+   "depends_on": "eval:doc.has_machine==1",
+   "description": "If any selected spec is using a printing machine, the 'Skip machine cost' checkbox auto-ticks (inline with printing). Untick it to charge this spec's machine anyway."
   },
   {
    "fieldname": "section_break_mach_units",
