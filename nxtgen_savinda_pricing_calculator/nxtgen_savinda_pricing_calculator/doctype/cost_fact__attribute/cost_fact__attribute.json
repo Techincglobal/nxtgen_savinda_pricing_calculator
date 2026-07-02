@@ -7,7 +7,8 @@
  "field_order": [
   "lable",
   "attribute_name",
-  "type"
+  "type",
+  "default_value"
  ],
  "fields": [
   {
@@ -28,6 +29,13 @@
    "in_list_view": 1,
    "label": "Type",
    "options": "Number\nFloat\nPercentage\nText"
+  },
+  {
+   "fieldname": "default_value",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Default Value",
+   "description": "Pre-filled in the calculator when this cost fact loads. User can still edit it."
   }
  ],
  "grid_page_length": 50,

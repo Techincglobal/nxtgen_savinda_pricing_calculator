@@ -84,6 +84,8 @@ def _enrich_spec(spec):
         "has_machine":         cint(doc.has_machine),
         "units":               doc.units or "Full sheet",
         "skip_machine_if_spec": doc.skip_machine_if_spec or "",
+        "skip_machine_if_machine":  getattr(doc, "skip_machine_if_machine", "") or "",
+        "skip_machine_if_printing": cint(getattr(doc, "skip_machine_if_printing", 0)),
         "machines":            machines,
         "cost_facts": [
             {
@@ -659,7 +661,12 @@ def _get_cf_data(name):
                 for r in (doc.items or [])
             ],
             "attributes": [
-                {"attribute_name": r.attribute_name, "lable": r.lable, "type": r.type or "Number"}
+                {
+                    "attribute_name": r.attribute_name,
+                    "lable":          r.lable,
+                    "type":           r.type or "Number",
+                    "default_value":  getattr(r, "default_value", None),
+                }
                 for r in (doc.table_acwl or [])
             ],
         }
@@ -1128,8 +1135,16 @@ def _process_spec(spec, form, sheet, item_qty, no_of_colors, material_rate,
     # Machine cost block (machine_assignment already resolved above for foil ctx)
     if spec.get("has_machine") and machine_assignment.get("machine"):
         machine_name = machine_assignment["machine"]
-        skip_spec    = spec.get("skip_machine_if_spec", "")
-        skip = skip_spec and all_selected_spec_names and skip_spec in all_selected_spec_names
+        # Skip decision: the calculator sends an explicit skip_machine flag (its
+        # "Skip machine cost" checkbox, which auto-ticks per the spec's skip rules and
+        # can be un-ticked to force the cost). When present it wins. Otherwise fall back
+        # to the legacy server-side "skip if spec selected" rule (unchanged behaviour).
+        explicit_skip = machine_assignment.get("skip_machine")
+        if explicit_skip is not None:
+            skip = bool(explicit_skip)
+        else:
+            skip_spec = spec.get("skip_machine_if_spec", "")
+            skip = skip_spec and all_selected_spec_names and skip_spec in all_selected_spec_names
         if not skip:
             m_data = next((m for m in spec.get("machines", []) if m["machine"] == machine_name), None)
             if m_data:
