@@ -5,11 +5,12 @@
  "engine": "InnoDB",
  "field_order": [
   "cost_fact",
-  "is_primary"
+  "is_primary",
+  "manual_select"
  ],
  "fields": [
   {
-   "columns": 8,
+   "columns": 6,
    "fieldname": "cost_fact",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -18,13 +19,22 @@
    "reqd": 1
   },
   {
-   "columns": 4,
+   "columns": 3,
    "default": "0",
    "description": "If checked, this cost fact's attributes are rendered in the UI for user input",
    "fieldname": "is_primary",
    "fieldtype": "Check",
    "in_list_view": 1,
    "label": "Has Attributes"
+  },
+  {
+   "columns": 3,
+   "default": "0",
+   "description": "If checked, this cost fact is NOT auto-added. It shows as a checkbox and is included only when the user ticks it. Leave unchecked to keep auto-adding (default).",
+   "fieldname": "manual_select",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Manual Select"
   }
  ],
  "istable": 1,
