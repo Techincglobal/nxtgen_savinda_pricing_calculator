@@ -158,6 +158,22 @@ function oc_mount_app(el) {
 				return parseFloat(this.form.item_qty) || 0;
 			},
 			hasBreakdowns() { return this.additionalBreakdowns.length > 0; },
+			// Cost rows grouped into sections (Preparation / Material / Production) with subtotals
+			groupedCostRows() {
+				var rows = (this.calc && this.calc.cost_rows) || [];
+				var order = ['Preparation', 'Material', 'Production'];
+				var groups = {};
+				rows.forEach(function (r) {
+					var g = r.cost_group || 'Other';
+					if (!groups[g]) groups[g] = { group: g, rows: [], subtotal: 0 };
+					groups[g].rows.push(r);
+					groups[g].subtotal += parseFloat(r.amount) || 0;
+				});
+				var out = [];
+				order.forEach(function (g) { if (groups[g]) { out.push(groups[g]); delete groups[g]; } });
+				Object.keys(groups).forEach(function (g) { out.push(groups[g]); });
+				return out;
+			},
 			isFlexoDialog() { return this.isFlexo; },
 			isDialogMachinePrinting() {
 				if (!this.inkDialog || !this.inkDialogState.machine) return false;
@@ -217,7 +233,13 @@ function oc_mount_app(el) {
 				var self = this;
 				var specs = this.selectedSpecs.map(function (spec) {
 					var st = self.specState[spec.spec_name] || {};
-					var facts = (spec.cost_facts || []).map(function (cf) {
+					var facts = (spec.cost_facts || []).filter(function (cf) {
+						// Manual-select cost facts are only included when the user ticks them.
+						// Non-manual cost facts are always auto-included (existing behaviour).
+						if (!cf.manual_select) return true;
+						var s = st[cf.cost_fact] || {};
+						return !!s._included;
+					}).map(function (cf) {
 						var cfst = st[cf.cost_fact] || {};
 						var hasItems = cf.master && cf.master.items && cf.master.items.length > 0;
 						var rate = parseFloat(cfst.rate || 0);
@@ -629,6 +651,22 @@ function oc_mount_app(el) {
 				this.additionalBreakdowns.splice(idx, 1);
 				this.scheduleCalc();
 			},
+			// ── Manual-select cost facts inside a spec ──
+			isCostFactIncluded(specName, cf) {
+				if (!cf.manual_select) return true;   // auto cost fact
+				var st = this.specState[specName] || {};
+				var cfst = st[cf.cost_fact] || {};
+				return !!cfst._included;
+			},
+			toggleCostFact(specName, cfName) {
+				if (!this.specState[specName]) this.specState[specName] = {};
+				if (!this.specState[specName][cfName]) this.specState[specName][cfName] = {};
+				var cfst = this.specState[specName][cfName];
+				cfst._included = !cfst._included;
+				// Vue 2/3 reactivity for freshly-added nested keys
+				this.specState[specName][cfName] = Object.assign({}, cfst);
+				this.scheduleCalc();
+			},
 			addManualCost() {
 				this.manualCosts.push({ name: '', qty: 1, rate: 0, cost_group: 'Production' });
 			},
@@ -860,6 +898,9 @@ function oc_mount_app(el) {
 									attr_values: cf.attribute_values || {},
 									rate: parseFloat(cf.rate || 0),
 									req_qty: parseFloat(cf.req_qty || 0),
+									// Only included cost facts are saved, so restore them as ticked
+									// (matters for manual-select cost facts).
+									_included: true,
 								};
 							});
 							// Restore machine assignment if this spec has_machine
@@ -1357,7 +1398,13 @@ function oc_mount_app(el) {
               </div>
 
               <div v-for="cf in spec.cost_facts" :key="cf.cost_fact" class="oc-cf">
-                <div v-if="spec.cost_facts.length > 1" class="oc-cf-title">{{ cf.cost_fact }}</div>
+                <!-- Manual-select cost fact: added to the calculation ONLY when ticked -->
+                <label v-if="cf.manual_select" class="oc-cf-toggle" :class="{active: isCostFactIncluded(spec.spec_name, cf)}">
+                  <input type="checkbox" class="oc-chk" :checked="isCostFactIncluded(spec.spec_name, cf)" @change="toggleCostFact(spec.spec_name, cf.cost_fact)" />
+                  <span>{{ cf.cost_fact }}</span>
+                </label>
+                <template v-if="isCostFactIncluded(spec.spec_name, cf)">
+                <div v-if="spec.cost_facts.length > 1 && !cf.manual_select" class="oc-cf-title">{{ cf.cost_fact }}</div>
                 <!-- Item selector -->
                 <div v-if="cf.master && cf.master.items && cf.master.items.length > 1" class="oc-field">
                   <label class="oc-sublbl">Select Option</label>
@@ -1386,6 +1433,7 @@ function oc_mount_app(el) {
                   </div>
                 </div>
                 <div v-if="cf.master && !cf.master.items.length && !cf.master.attributes.length && cf.master.calculation" class="oc-cf-info">ℹ️ {{ cf.master.calculation }}</div>
+                </template>
               </div>
             </div>
           </div>
@@ -1491,25 +1539,28 @@ function oc_mount_app(el) {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="row in calc.cost_rows" :key="row.spec_name+row.cost_fact" :class="row.is_auto ? 'oc-auto-row' : ''">
-                <td>{{ row.spec_name }}<span v-if="row.is_auto" class="oc-auto-tag">auto</span></td>
-                <td>{{ row.cost_fact }}</td>
-                <td class="oc-grp">{{ row.cost_group }}</td>
-                <td>
-                  <span v-if="row.selected_item_name && row.selected_item_name !== row.selected_item">
-                    {{ row.selected_item_name }}
-                    <span class="oc-code-badge">{{ row.selected_item }}</span>
-                  </span>
-                  <span v-else>{{ row.selected_item }}</span>
-                </td>
-                <td class="r mono">{{ fmtQty(row.req_qty) }}</td>
-                <td class="oc-uom">{{ row.uom || '' }}</td>
-                <td class="r mono">{{ fmtRate(row.rate) }}</td>
-                <td class="r mono">{{ fmtCur(row.amount) }}</td>
-              </tr>
-              <tr class="oc-sub" v-if="calc.group_totals.material"><td colspan="7">Material Subtotal</td><td class="r mono">{{ fmtCur(calc.group_totals.material) }}</td></tr>
-              <tr class="oc-sub" v-if="calc.group_totals.preparation"><td colspan="7">Preparation Subtotal</td><td class="r mono">{{ fmtCur(calc.group_totals.preparation) }}</td></tr>
-              <tr class="oc-sub" v-if="calc.group_totals.production"><td colspan="7">Production Subtotal</td><td class="r mono">{{ fmtCur(calc.group_totals.production) }}</td></tr>
+              <template v-for="grp in groupedCostRows" :key="grp.group">
+                <tr class="oc-grp-header">
+                  <td colspan="7">{{ grp.group }} Costs</td>
+                  <td class="r mono">{{ fmtCur(grp.subtotal) }}</td>
+                </tr>
+                <tr v-for="row in grp.rows" :key="grp.group + '-' + row.spec_name + '-' + row.cost_fact" :class="row.is_auto ? 'oc-auto-row' : ''">
+                  <td>{{ row.spec_name }}<span v-if="row.is_auto" class="oc-auto-tag">auto</span></td>
+                  <td>{{ row.cost_fact }}</td>
+                  <td class="oc-grp">{{ row.cost_group }}</td>
+                  <td>
+                    <span v-if="row.selected_item_name && row.selected_item_name !== row.selected_item">
+                      {{ row.selected_item_name }}
+                      <span class="oc-code-badge">{{ row.selected_item }}</span>
+                    </span>
+                    <span v-else>{{ row.selected_item }}</span>
+                  </td>
+                  <td class="r mono">{{ fmtQty(row.req_qty) }}</td>
+                  <td class="oc-uom">{{ row.uom || '' }}</td>
+                  <td class="r mono">{{ fmtRate(row.rate) }}</td>
+                  <td class="r mono">{{ fmtCur(row.amount) }}</td>
+                </tr>
+              </template>
               <tr class="oc-tot"><td colspan="7"><strong>TOTAL COST</strong></td><td class="r mono">{{ fmtCur(calc.group_totals.grand) }}</td></tr>
             </tbody>
           </table>
@@ -1690,6 +1741,9 @@ function oc_inject_styles() {
 .oc-tbl-scroll{overflow:auto;max-height:38vh;border-radius:4px;border:1px solid #d1d5db}
 .oc-tbl{width:100%;border-collapse:collapse;font-size:12px}
 .oc-tbl thead tr{background:#1a3a5c}
+.oc-grp-header td{background:#1a3a5c!important;color:#fff;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px 8px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.oc-cf-toggle{display:flex;align-items:center;gap:7px;padding:5px 9px;border:1px solid #e5e7eb;border-radius:5px;cursor:pointer;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}
+.oc-cf-toggle.active{background:#eef4ff;border-color:#93c5fd;color:#1a3a5c}
 .oc-tbl th{padding:7px 10px;color:#fff;font-weight:600;font-size:11px;letter-spacing:.04em;text-align:left;white-space:nowrap}
 .oc-tbl th.r{text-align:right}
 .oc-tbl td{padding:6px 10px;border-bottom:1px solid #f0f0f0}

@@ -87,9 +87,10 @@ def _enrich_spec(spec):
         "machines":            machines,
         "cost_facts": [
             {
-                "cost_fact":  row.cost_fact,
-                "is_primary": cint(row.is_primary),
-                "master":     _get_cf_data(row.cost_fact),
+                "cost_fact":     row.cost_fact,
+                "is_primary":    cint(row.is_primary),
+                "manual_select": cint(getattr(row, "manual_select", 0)),
+                "master":        _get_cf_data(row.cost_fact),
             }
             for row in (doc.cost_facts or [])
         ],
