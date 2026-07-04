@@ -11,6 +11,7 @@
   "column_break_1",
   "is_active",
   "pricing_type",
+  "adds_colors",
   "section_break_machine_cfg",
   "has_machine",
   "column_break_mach1",
@@ -82,6 +83,13 @@
    "in_list_view": 1,
    "columns": 3,
    "description": "Offset = only shown in Offset calculator. Flexo = only shown in Flexo calculator. Both = shown in both (e.g. Delivery, Proof Board, Corrugated Boxes)."
+  },
+  {
+   "fieldname": "adds_colors",
+   "fieldtype": "Int",
+   "label": "Adds Colors",
+   "default": "0",
+   "description": "Selecting this spec increases the effective No of Colors by this amount (e.g. Gold Color = 1). Drives the Flexo printing formula and plate count. Leave 0 for none."
   },
   {
    "fieldname": "section_break_machine_cfg",

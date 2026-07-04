@@ -82,6 +82,7 @@ def _enrich_spec(spec):
         "group":               spec["group"],
         "operation":           doc.operation or "",
         "has_machine":         cint(doc.has_machine),
+        "adds_colors":         cint(getattr(doc, "adds_colors", 0)),
         "units":               doc.units or "Full sheet",
         "skip_machine_if_spec": doc.skip_machine_if_spec or "",
         "skip_machine_if_machine":  getattr(doc, "skip_machine_if_machine", "") or "",
@@ -281,8 +282,15 @@ def calculate(payload):
     pricing_type  = (form.get("pricing_type") or "Offset").strip()
     price_list    = _resolve_pl(form.get("price_list"), form.get("customer_name"))
     item_qty      = flt(form.get("item_qty") or 0)
-    no_of_colors  = cint(form.get("no_of_colors") or 0)
     material_rate = flt(form.get("material_rate") or 0)
+
+    # Effective colors = base No of Colors + colors added by selected specs (adds_colors).
+    # Write it back to the form so ALL downstream reads (sheet wastage, printing formula,
+    # plates) use the total. Base specs default adds_colors=0 → no change to existing calcs.
+    base_colors   = cint(form.get("no_of_colors") or 0)
+    added_colors  = sum(cint(s.get("adds_colors", 0)) for s in (selected_specs or []))
+    no_of_colors  = base_colors + added_colors
+    form["no_of_colors"] = no_of_colors
 
     # Route sheet calculation by pricing type
     if pricing_type == "Flexo":
@@ -332,6 +340,23 @@ def calculate(payload):
             "attribute_values": {}, "req_qty": round(auto_qty, 4),
             "rate": material_rate, "amount": amt, "is_auto": True,
         })
+
+    # 1b. Plates (Flexo, auto) — plate count = effective colors, user sets plate price
+    if pricing_type == "Flexo":
+        plate_price = flt(form.get("plate_price") or 0)
+        plate_count = no_of_colors
+        if plate_price and plate_count:
+            plate_cost = round(plate_count * plate_price, 2)
+            prep_total += plate_cost
+            cost_rows.append({
+                "section": "Preparation", "spec_name": "Plates",
+                "cost_fact": "Plates", "cost_group": "Preparation",
+                "selected_item": "",
+                "selected_item_name": f"Plates ({plate_count} colors)",
+                "attribute_values": {"plate_count": plate_count, "plate_price": plate_price},
+                "req_qty": plate_count, "rate": plate_price,
+                "amount": plate_cost, "is_auto": True,
+            })
 
     # 2. Machine (auto) — flexo_ctx not yet computed here; will pass empty dict (machine spec is Offset-only)
     if machine_spec:
