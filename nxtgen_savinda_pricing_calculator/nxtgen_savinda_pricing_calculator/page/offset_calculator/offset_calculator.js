@@ -113,6 +113,7 @@ function oc_mount_app(el) {
 					product_width_mm: 0, product_length_mm: 0,
 					product_margin_mm: 4, product_gap_mm: 3,
 					plate_price: 0,
+					plate_count: 0, plate_count_manual: 0,
 				},
 
 				calc: { sheet: null, cost_rows: [], group_totals: {}, pricing: null },
@@ -166,6 +167,10 @@ function oc_mount_app(el) {
 			// Effective colors = base input + colors added by selected specs
 			effectiveColors() {
 				return (parseInt(this.form.no_of_colors) || 0) + this.addedColors;
+			},
+			// Plate count: manual value if the user set one, else auto = effective colors
+			plateCount() {
+				return this.form.plate_count_manual ? (parseInt(this.form.plate_count) || 0) : this.effectiveColors;
 			},
 			// Cost rows grouped into sections (Preparation / Material / Production) with subtotals
 			groupedCostRows() {
@@ -731,6 +736,17 @@ function oc_mount_app(el) {
 				if (!this.specState[specName]) this.specState[specName] = {};
 				this.specState[specName]._skipOverride = !this.effectiveSkip(specName);
 				this.specState[specName] = Object.assign({}, this.specState[specName]);
+				this.scheduleCalc();
+			},
+			// Plate count manual override
+			onPlateCountInput(val) {
+				this.form.plate_count_manual = 1;
+				this.form.plate_count = parseInt(val) || 0;
+				this.scheduleCalc();
+			},
+			resetPlateCount() {
+				this.form.plate_count_manual = 0;
+				this.form.plate_count = 0;
 				this.scheduleCalc();
 			},
 			addManualCost() {
@@ -1418,8 +1434,9 @@ function oc_mount_app(el) {
         </div>
         <div class="oc-2col">
           <div class="oc-field">
-            <label class="oc-lbl">Plate Count <span class="oc-calc-tag">auto = colors</span></label>
-            <input :value="effectiveColors" type="number" class="oc-inp" readonly style="background:#f3f4f6" />
+            <label class="oc-lbl">Plate Count <span class="oc-calc-tag">{{ form.plate_count_manual ? 'manual' : 'auto = colors' }}</span></label>
+            <input :value="plateCount" @input="onPlateCountInput($event.target.value)" type="number" min="0" class="oc-inp" />
+            <div v-if="form.plate_count_manual" class="oc-hint"><a href="#" @click.prevent="resetPlateCount">↺ reset to auto ({{ effectiveColors }})</a></div>
           </div>
           <div class="oc-field"><label class="oc-lbl">Plate Price (per plate)</label><input v-model.number="form.plate_price" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
         </div>

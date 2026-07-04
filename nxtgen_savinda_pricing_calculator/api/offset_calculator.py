@@ -341,10 +341,14 @@ def calculate(payload):
             "rate": material_rate, "amount": amt, "is_auto": True,
         })
 
-    # 1b. Plates (Flexo, auto) — plate count = effective colors, user sets plate price
+    # 1b. Plates (Flexo) — plate count = effective colors, unless the user set it
+    # manually (plate_count_manual); manual value is never overwritten by color changes.
     if pricing_type == "Flexo":
         plate_price = flt(form.get("plate_price") or 0)
-        plate_count = no_of_colors
+        if form.get("plate_count_manual"):
+            plate_count = cint(form.get("plate_count") or 0)
+        else:
+            plate_count = no_of_colors
         if plate_price and plate_count:
             plate_cost = round(plate_count * plate_price, 2)
             prep_total += plate_cost
