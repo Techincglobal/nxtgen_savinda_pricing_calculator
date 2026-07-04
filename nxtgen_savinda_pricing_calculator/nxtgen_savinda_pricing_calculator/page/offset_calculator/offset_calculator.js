@@ -112,6 +112,7 @@ function oc_mount_app(el) {
 					reel_length_m: 0,
 					product_width_mm: 0, product_length_mm: 0,
 					product_margin_mm: 4, product_gap_mm: 3,
+					plate_price: 0,
 				},
 
 				calc: { sheet: null, cost_rows: [], group_totals: {}, pricing: null },
@@ -158,6 +159,14 @@ function oc_mount_app(el) {
 				return parseFloat(this.form.item_qty) || 0;
 			},
 			hasBreakdowns() { return this.additionalBreakdowns.length > 0; },
+			// Colors added by selected specs (e.g. Gold Color = +1)
+			addedColors() {
+				return this.selectedSpecs.reduce(function (s, sp) { return s + (parseInt(sp.adds_colors) || 0); }, 0);
+			},
+			// Effective colors = base input + colors added by selected specs
+			effectiveColors() {
+				return (parseInt(this.form.no_of_colors) || 0) + this.addedColors;
+			},
 			// Cost rows grouped into sections (Preparation / Material / Production) with subtotals
 			groupedCostRows() {
 				var rows = (this.calc && this.calc.cost_rows) || [];
@@ -254,6 +263,7 @@ function oc_mount_app(el) {
 					return {
 						spec_name: spec.spec_name,
 						has_machine: spec.has_machine || 0,
+						adds_colors: spec.adds_colors || 0,
 						units: spec.units || 'Full sheet',
 						skip_machine_if_spec: spec.skip_machine_if_spec || '',
 						machines: spec.machines || [],
@@ -1399,8 +1409,19 @@ function oc_mount_app(el) {
           <div class="oc-field"><label class="oc-lbl">Gap (mm)</label><input v-model.number="form.product_gap_mm" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
         </div>
         <div class="oc-2col">
-          <div class="oc-field"><label class="oc-lbl">No of Colors</label><input v-model.number="form.no_of_colors" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
+          <div class="oc-field">
+            <label class="oc-lbl">No of Colors <span v-if="addedColors" class="oc-total-badge">Total {{ effectiveColors }}</span></label>
+            <input v-model.number="form.no_of_colors" type="number" min="0" class="oc-inp" @change="scheduleCalc" />
+            <div v-if="addedColors" class="oc-hint">Base {{ form.no_of_colors || 0 }} + {{ addedColors }} from specs = <b>{{ effectiveColors }}</b> colors</div>
+          </div>
           <div class="oc-field"><label class="oc-lbl">Order Quantity (stickers)</label><input v-model.number="form.item_qty" type="number" min="1" class="oc-inp" @change="scheduleCalc" /></div>
+        </div>
+        <div class="oc-2col">
+          <div class="oc-field">
+            <label class="oc-lbl">Plate Count <span class="oc-calc-tag">auto = colors</span></label>
+            <input :value="effectiveColors" type="number" class="oc-inp" readonly style="background:#f3f4f6" />
+          </div>
+          <div class="oc-field"><label class="oc-lbl">Plate Price (per plate)</label><input v-model.number="form.plate_price" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
         </div>
         <div class="oc-2col">
           <div class="oc-field"><label class="oc-lbl">Profit Margin (%)</label><input v-model.number="form.profit_margin" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
@@ -1429,7 +1450,7 @@ function oc_mount_app(el) {
           <div v-for="spec in specs" :key="spec.spec_name" class="oc-spec">
             <label class="oc-spec-label" :class="{active: isSelected(spec.spec_name)}">
               <input type="checkbox" class="oc-chk" :checked="isSelected(spec.spec_name)" @change="toggleSpec(spec.spec_name)" />
-              <span class="oc-spec-name">{{ spec.spec_name }}</span>
+              <span class="oc-spec-name">{{ spec.spec_name }}<span v-if="spec.adds_colors" class="oc-total-badge" style="margin-left:6px">+{{ spec.adds_colors }} color</span></span>
               <span v-if="isSelected(spec.spec_name)" class="oc-spec-chevron" @click.prevent.stop="toggleSpecCollapse(spec.spec_name)">
                 {{ collapsedSpecs[spec.spec_name] ? '▶' : '▼' }}
               </span>
