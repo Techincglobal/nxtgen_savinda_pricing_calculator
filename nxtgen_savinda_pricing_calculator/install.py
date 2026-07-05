@@ -46,6 +46,7 @@ def after_install():
 	missing ones.
 	"""
 	_ensure_item_group_tree()
+	_ensure_custom_fields()
 	_seed_install_only_fixtures()
 
 
@@ -53,9 +54,51 @@ def after_migrate():
 	"""Runs on every migrate/update.
 
 	Master/seed data is intentionally NOT re-imported here. We only keep the
-	Item Group tree healthy.
+	Item Group tree healthy and ensure our custom fields exist.
 	"""
 	_ensure_item_group_tree()
+	_ensure_custom_fields()
+
+
+def _ensure_custom_fields():
+	"""Custom fields this app adds to standard doctypes (idempotent)."""
+	try:
+		from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
+		create_custom_fields({
+			"Item": [
+				{
+					"fieldname":    "customer_ref",
+					"label":        "Customer Reference Code",
+					"fieldtype":    "Data",
+					"insert_after": "item_name",
+					"description":  "Customer's own code for this item (per FG variant). Used in BOM creation.",
+				},
+				{
+					"fieldname":    "custom_cost_item",
+					"label":        "Cost Item",
+					"fieldtype":    "Link",
+					"options":      "cost Item",
+					"insert_after": "customer_ref",
+					"description":  "Linked Cost Item — keeps this FG connected to its calculation breakdown for BOM creation. All variants of one product share the same Cost Item.",
+				},
+			],
+			"Material Request Plan Item": [
+				{
+					"fieldname":    "custom_wastage_qty",
+					"label":        "Wastage Qty",
+					"fieldtype":    "Float",
+					"insert_after": "quantity",
+					"read_only":    1,
+					"description":  "Wastage portion included in Quantity (added at production planning). Kept separate for print formats.",
+				},
+			],
+		}, ignore_validate=True)
+		frappe.db.commit()
+	except Exception:
+		frappe.log_error(
+			title="pricing_calculator: ensure custom fields failed",
+			message=frappe.get_traceback(),
+		)
 
 
 def _ensure_item_group_tree():

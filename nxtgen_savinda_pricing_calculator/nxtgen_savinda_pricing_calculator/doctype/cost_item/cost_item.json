@@ -9,6 +9,7 @@
   "inquiry",
   "column_break_1",
   "subject",
+  "customer_ref",
   "section_break_details",
   "page_type",
   "colour",
@@ -57,6 +58,12 @@
    "fieldtype": "Data",
    "label": "Subject",
    "in_list_view": 1
+  },
+  {
+   "fieldname": "customer_ref",
+   "fieldtype": "Data",
+   "label": "Customer Reference Code",
+   "description": "Customer's own code for this product. Shared by all FG variants built from this Cost Item; carried to the FG Item(s) for BOM creation."
   },
   {
    "fieldname": "section_break_details",

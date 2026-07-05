@@ -46,8 +46,9 @@ app_include_js = [
 	]
 
 doctype_js = {
-	"Opportunity":   "public/js/opportunity.js",
-	"Sales Order":   "public/js/sales_order.js",
+	"Opportunity":     "public/js/opportunity.js",
+	"Sales Order":     "public/js/sales_order.js",
+	"Production Plan": "public/js/production_plan.js",
 }
 
 jinja = {

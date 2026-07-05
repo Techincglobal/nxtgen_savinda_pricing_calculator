@@ -30,6 +30,8 @@
   "column_break_4",
   "payment_terms",
   "remarks",
+  "terms_template",
+  "terms",
   "section_break_status",
   "status",
   "amended_from"
@@ -68,19 +70,19 @@
   },
   {
    "bold": 1,
+   "description": "Optional. Leave blank for lead-based inquiries and use Customer Name instead.",
    "fieldname": "customer",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Customer",
-   "options": "Customer",
-   "reqd": 1
+   "options": "Customer"
   },
   {
-   "fetch_from": "customer.customer_name",
+   "description": "Party name shown on the quotation. Auto-filled from the Customer / Cost Sheet / Inquiry; editable for lead-based inquiries.",
    "fieldname": "customer_name",
    "fieldtype": "Data",
    "label": "Customer Name",
-   "read_only": 1
+   "reqd": 1
   },
   {
    "fieldname": "column_break_2",
@@ -176,12 +178,25 @@
   {
    "fieldname": "payment_terms",
    "fieldtype": "Small Text",
+   "hidden": 1,
    "label": "Payment Terms"
   },
   {
    "fieldname": "remarks",
    "fieldtype": "Small Text",
    "label": "Remarks"
+  },
+  {
+   "description": "Pick a Terms & Conditions template to load its text below. You can then edit it for this quotation.",
+   "fieldname": "terms_template",
+   "fieldtype": "Link",
+   "label": "Terms Template",
+   "options": "Terms and Conditions"
+  },
+  {
+   "fieldname": "terms",
+   "fieldtype": "Text Editor",
+   "label": "Terms and Conditions"
   },
   {
    "fieldname": "section_break_status",
@@ -208,7 +223,7 @@
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-06-09 07:31:38.276092",
+ "modified": "2026-07-05 08:54:29.588987",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Savinda Quotation",
@@ -264,5 +279,6 @@
  "sort_order": "DESC",
  "states": [],
  "title_field": "customer_name",
- "track_changes": 1
+ "track_changes": 1,
+ "track_views": 1
 }

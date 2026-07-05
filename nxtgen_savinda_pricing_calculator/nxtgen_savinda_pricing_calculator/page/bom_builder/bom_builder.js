@@ -28,6 +28,7 @@ function bb_mount_app(el) {
 		getContext:      'nxtgen_savinda_pricing_calculator.api.bom_builder.get_bom_context',
 		getBomData:      'nxtgen_savinda_pricing_calculator.api.bom_builder.get_bom_data',
 		createBomChain:  'nxtgen_savinda_pricing_calculator.api.bom_builder.create_bom_chain',
+		createMultiBom:  'nxtgen_savinda_pricing_calculator.api.bom_builder.create_multi_bom',
 		searchCB:        'nxtgen_savinda_pricing_calculator.api.bom_builder.search_cb_for_fg',
 		saveBomConfig:   'nxtgen_savinda_pricing_calculator.api.bom_builder.save_bom_config',
 		loadBomConfig:   'nxtgen_savinda_pricing_calculator.api.bom_builder.load_bom_config',
@@ -45,7 +46,7 @@ function bb_mount_app(el) {
 			return {
 				loading: false, saving: false, error: '',
 				sourceType: '', sourceName: '', customer: '',
-				fgItems: [], selectedFG: '', calcBreakdown: '', mfgQty: 0,
+				fgItems: [], selectedFG: '', selectedFGs: [], calcBreakdown: '', mfgQty: 0,
 				itemQty: 0,
 				globalCB: '',
 				isDefault: false,
@@ -61,6 +62,10 @@ function bb_mount_app(el) {
 		computed: {
 			selectedFGData() { return this.fgItems.find(function (f) { return f.item_code === this.selectedFG; }, this) || null; },
 			canCreate() { return this.selectedFG && this.mfgQty > 0 && this.operations.length > 0; },
+			costItem() {
+				var fg = this.selectedFGData;
+				return fg ? (fg.cost_item || '') : '';
+			},
 		},
 
 		watch: {
@@ -96,11 +101,18 @@ function bb_mount_app(el) {
 						self.fgItems  = r.message.fg_items || [];
 						if (self.fgItems.length === 1) {
 							self.selectedFG = self.fgItems[0].item_code;
+							self.selectedFGs = [self.selectedFG];
 							self.$nextTick(function () { self.onFGChange(); });
 						}
 					},
 					error: function () { self.loading = false; self.error = 'Failed to load context.'; },
 				});
+			},
+
+			// Dropdown selection = single-FG build
+			onFGDropdown() {
+				this.selectedFGs = this.selectedFG ? [this.selectedFG] : [];
+				this.onFGChange();
 			},
 
 			onFGChange() {
@@ -120,6 +132,43 @@ function bb_mount_app(el) {
 				} else {
 					frappe.show_alert({ message: 'No CB linked for ' + self.selectedFG + '. Set "Global CB" or click 🔍.', indicator: 'orange' }, 6);
 				}
+			},
+
+			// Multi-select FG popup — one checkbox per FG (all pre-ticked = select all)
+			openFGPicker() {
+				var self = this;
+				if (!self.fgItems.length) { frappe.msgprint('No FG items to select.'); return; }
+				var had = self.selectedFGs.length > 0;
+				var fields = [{
+					fieldtype: 'HTML',
+					options: '<div style="font-size:12px;color:#555;margin-bottom:4px">Tick the FGs to build. Selecting several variants of the same product builds a <b>consolidated multi-level BOM</b> that shares the common SFGs.</div>',
+				}];
+				self.fgItems.forEach(function (f, i) {
+					fields.push({
+						fieldtype: 'Check', fieldname: 'fg_' + i,
+						// default: keep prior selection if any, else select all
+						default: had ? (self.selectedFGs.indexOf(f.item_code) > -1 ? 1 : 0) : 1,
+						label: f.item_code + ' — ' + (f.item_name || '')
+							+ (f.cost_item ? '   [Cost Item: ' + f.cost_item + ']' : ''),
+					});
+				});
+				var d = new frappe.ui.Dialog({
+					title: 'Select Finished Goods to build',
+					size: 'large',
+					fields: fields,
+					primary_action_label: 'Select',
+					primary_action: function (v) {
+						var picked = self.fgItems
+							.filter(function (f, i) { return v['fg_' + i]; })
+							.map(function (f) { return f.item_code; });
+						if (!picked.length) { frappe.msgprint('Tick at least one FG.'); return; }
+						d.hide();
+						self.selectedFGs = picked;
+						self.selectedFG = picked[0];   // chain loads from the first
+						self.$nextTick(function () { self.onFGChange(); });
+					},
+				});
+				d.show();
 			},
 
 			saveConfig() {
@@ -201,7 +250,7 @@ function bb_mount_app(el) {
 				});
 			},
 
-			loadBomData() {
+			loadBomData(preserveOrder) {
 				var self = this;
 				if (!self.calcBreakdown || !self.mfgQty) return;
 				self.loading = true;
@@ -218,15 +267,39 @@ function bb_mount_app(el) {
 							if (!Array.isArray(op.materials))          op.materials = [];
 							if (!('split_to_item_unit' in op))         op.split_to_item_unit = false;
 						});
-						// Sort: Print first
-						ops.sort(function (a, b) { return (a.is_print ? 0 : 1) - (b.is_print ? 0 : 1); });
+						// Always refresh header/sheet + base material from the fresh calc
 						self.itemQty     = d.item_qty || self.mfgQty;
 						self.sheetData   = d.sheet || {};
-						// Set baseMat BEFORE operations so syncChain can read it
 						self.baseMat     = d.base_material      || '';
 						self.baseMatName = d.base_material_name || '';
 						self.baseMatQty  = d.base_material_qty  || 0;
 						self.baseMatUom  = d.base_material_uom  || 'Nos';
+
+						// ── Recalculate WITHOUT changing the arranged order ──
+						// Merge fresh quantities/rates into the existing ops (matched by
+						// spec_name); keep the current order, markers, SFG names, materials.
+						if (preserveOrder && self.operations.length) {
+							var freshMap = {};
+							ops.forEach(function (fo) { if (!(fo.spec_name in freshMap)) freshMap[fo.spec_name] = fo; });
+							self.operations.forEach(function (op) {
+								var fo = freshMap[op.spec_name];
+								if (!fo) return;
+								op.input_qty    = fo.input_qty;
+								op.input_uom    = fo.input_uom;
+								op.output_qty   = fo.output_qty;
+								op.output_uom   = fo.output_uom;
+								op.time_in_mins = fo.time_in_mins;
+								op.hour_rate    = fo.hour_rate;
+								if (fo.machine)     op.machine     = fo.machine;
+								if (fo.workstation) op.workstation = fo.workstation;
+							});
+							self.syncChain();
+							frappe.show_alert({ message: '✓ Quantities recalculated — order kept.', indicator: 'green' }, 3);
+							return;
+						}
+
+						// Sort: Print first (only on a fresh load)
+						ops.sort(function (a, b) { return (a.is_print ? 0 : 1) - (b.is_print ? 0 : 1); });
 						self.operations  = ops;
 						self.extraMaterials = d.raw_materials || [];
 						self.syncChain();
@@ -246,6 +319,8 @@ function bb_mount_app(el) {
 									if (saved.sfg_code)          op.sfg_code = saved.sfg_code;
 									if (saved.sfg_name)          op.sfg_name = saved.sfg_name;
 									if (saved.split_to_item_unit) op.split_to_item_unit = true;
+									if (saved.common_sfg_point)  op.common_sfg_point = true;
+									if (saved.output_is_fg)      op.output_is_fg = true;
 									if (Array.isArray(saved.materials) && saved.materials.length)
 										op.materials = saved.materials;
 									// Use 'in' so explicit false/empty from saved config wins over spec defaults
@@ -272,6 +347,8 @@ function bb_mount_app(el) {
 					if (!Array.isArray(op.materials))           op.materials = [];
 					if (!('split_to_item_unit' in op))          op.split_to_item_unit = false;
 					if (!('exclude_from_bom' in op))            op.exclude_from_bom = false;
+					if (!('common_sfg_point' in op))            op.common_sfg_point = false;
+					if (!('output_is_fg' in op))                op.output_is_fg = false;
 					if (!('erp_operation' in op))               op.erp_operation = '';
 					if (!('has_quality_inspection' in op))      op.has_quality_inspection = false;
 					if (!('quality_inspection_template' in op)) op.quality_inspection_template = '';
@@ -284,16 +361,17 @@ function bb_mount_app(el) {
 
 					// Update input chain
 					if (i === 0) {
+						// The FIRST operation always consumes the base material (full sheet),
+						// at the full-sheet quantity from the costing calculation — whatever
+						// operation ends up first after reordering.
 						if (self.baseMat) {
 							op.input_item_code = self.baseMat;
 							op.input_item_name = self.baseMatName;
-							// Ensure Print input_qty = full_sheet_qty (from baseMatQty)
-							if (self.baseMatQty > 0 && op.is_print) {
-								op.input_qty = self.baseMatQty;
-								op.input_uom = self.baseMatUom;
-							}
 						}
-						// input_qty / input_uom set from API (full_sheet_qty)
+						if (self.baseMatQty > 0) {
+							op.input_qty = self.baseMatQty;
+							op.input_uom = self.baseMatUom;
+						}
 					} else {
 						var prev = self.operations[i - 1];
 						op.input_item_code = prev.sfg_code;
@@ -328,6 +406,24 @@ function bb_mount_app(el) {
 				this.syncChain();
 			},
 
+			// Final Common SFG point — ops up to & incl. this one share a common SFG
+			// across all FGs; ops after it get per-FG SFGs. Only ONE can be active.
+			setCommonSfg(idx) {
+				var wasActive = this.operations[idx].common_sfg_point;
+				this.operations.forEach(function (op) { op.common_sfg_point = false; });
+				if (!wasActive) this.operations[idx].common_sfg_point = true;
+				this.syncChain();
+			},
+
+			// Output is FG — this operation produces the Finished Good (no separate
+			// final FG BOM). Usually the last/sorting step. Only ONE can be active.
+			setOutputFg(idx) {
+				var wasActive = this.operations[idx].output_is_fg;
+				this.operations.forEach(function (op) { op.output_is_fg = false; });
+				if (!wasActive) this.operations[idx].output_is_fg = true;
+				this.syncChain();
+			},
+
 			// ── Drag-and-drop ──
 			onDragStart(idx) { this.dragIdx = idx; },
 			onDragOver(e)    { e.preventDefault(); },
@@ -345,6 +441,33 @@ function bb_mount_app(el) {
 				this.syncChain();
 			},
 			removeOp(idx) { this.operations.splice(idx, 1); this.syncChain(); },
+
+			// Add an operation / SFG that isn't in the costing breakdown
+			addOperation() {
+				var self = this;
+				frappe.prompt([
+					{ fieldtype: 'Data', fieldname: 'name', label: 'Operation / SFG Name', reqd: 1 },
+					{ fieldtype: 'Link', fieldname: 'workstation', label: 'Workstation', options: 'Workstation' },
+					{ fieldtype: 'Link', fieldname: 'erp_operation', label: 'ERPNext Operation', options: 'Operation',
+					  description: 'Leave blank to auto-create from the name.' },
+				], function (v) {
+					var nm = v.name;
+					self.operations.push({
+						spec_name: nm, machine: '', workstation: v.workstation || '',
+						time_in_mins: 60,
+						input_item_code: '', input_item_name: '', input_qty: 0, input_uom: 'Nos',
+						sfg_code: self.selectedFG ? (self.selectedFG + '-' + sanitize(nm) + '-SFG') : (sanitize(nm) + '-SFG'),
+						sfg_name: (self.selectedFGData ? self.selectedFGData.item_name + ' — ' : '') + nm,
+						output_qty: self.itemQty || self.mfgQty, output_uom: 'Nos',
+						materials: [], is_print: false, no_of_colors: 0,
+						split_to_item_unit: false, exclude_from_bom: false, output_is_fg: false,
+						erp_operation: v.erp_operation || '', has_quality_inspection: false, quality_inspection_template: '',
+						manual: true,
+					});
+					self.syncChain();
+					frappe.show_alert({ message: 'Operation added — drag it to the right position in the chain.', indicator: 'blue' }, 4);
+				}, 'Add Operation / SFG', 'Add');
+			},
 			removeExtraMat(idx) { this.extraMaterials.splice(idx, 1); },
 			addExtraMat() { this.extraMaterials.push({ item_code: '', item_name: '', qty: 0, rate: 0, uom: 'Nos' }); },
 			addOpMat(op) { op.materials.push({ item_code: '', item_name: '', qty: 0, uom: 'Nos', include: true }); },
@@ -406,6 +529,9 @@ function bb_mount_app(el) {
 				var self = this;
 				if (!self.canCreate) return;
 
+				// Multiple FGs → consolidated multi-FG build (backend guards per-FG)
+				if (self.selectedFGs.length > 1) { self._doCreateMulti(); return; }
+
 				// Check for existing active BOM first
 				frappe.call({
 					method: API.checkExistingBom,
@@ -443,6 +569,44 @@ function bb_mount_app(el) {
 							self._doCreateBOM();
 						}
 					},
+				});
+			},
+
+			// Consolidated build for several FGs (common SFGs shared)
+			_doCreateMulti() {
+				var self = this;
+				var msg = 'Create a <b>consolidated BOM</b> for <b>' + self.selectedFGs.length + ' FGs</b>?<br>'
+					+ 'Common SFGs (up to the 🧩 point) are shared; each FG gets its own tail + FG BOM.<br>'
+					+ 'FGs: ' + self.selectedFGs.join(', ');
+				frappe.confirm(msg, function () {
+					self.saving = true;
+					frappe.call({
+						method: API.createMultiBom,
+						args: {
+							fg_items:        JSON.stringify(self.selectedFGs),
+							cost_item:       self.costItem || '',
+							mfg_qty:         self.mfgQty,
+							operations:      JSON.stringify(self.operations),
+							extra_materials: JSON.stringify(self.extraMaterials),
+							is_default:      self.isDefault ? 1 : 0,
+						},
+						freeze: true,
+						freeze_message: 'Creating consolidated BOM…',
+						callback: function (r) {
+							self.saving = false;
+							if (!r.message) return;
+							var result = r.message;
+							var lines = (result.created_boms || []).map(function (b) {
+								if (b.skipped) return '⏭ Skipped ' + b.item + ' (' + b.skipped + ')';
+								var tag = b.common ? '🧩 Common: ' : (b.is_fg ? '🏁 FG: ' : '✓ SFG: ');
+								return (b.reused ? '♻ ' : '') + tag
+									+ '<a href="/app/bom/' + b.bom_name + '" target="_blank"><b>' + b.bom_name + '</b></a> for ' + b.item;
+							}).join('<br>');
+							frappe.msgprint({ title: 'Consolidated BOM Created',
+								message: lines + '<br><br>FG BOMs: ' + (result.fg_boms || []).length, indicator: 'green' });
+						},
+						error: function () { self.saving = false; },
+					});
 				});
 			},
 
@@ -532,10 +696,20 @@ function bb_mount_app(el) {
         </div>
       </div>
 
+      <!-- Multi-FG picker -->
+      <div class="bb-row" style="padding-bottom:0;align-items:center">
+        <button class="bb-btn bb-btn-blue" @click="openFGPicker">🎯 Select FGs</button>
+        <div v-if="selectedFGs.length" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">
+          <span class="bb-hint">Building:</span>
+          <span v-for="fg in selectedFGs" :key="fg" class="bb-leg-out" style="font-size:11px">{{ fg }}</span>
+          <span v-if="selectedFGs.length > 1" class="bb-count">{{ selectedFGs.length }} FGs → consolidated (shared common SFGs)</span>
+        </div>
+      </div>
+
       <div class="bb-row">
         <div class="bb-field" style="flex:2">
-          <label>Finish Good (FG)</label>
-          <select v-model="selectedFG" class="bb-inp bb-sel" @change="onFGChange">
+          <label>Finish Good (FG) <span class="bb-hint">— chain is loaded from this one</span></label>
+          <select v-model="selectedFG" class="bb-inp bb-sel" @change="onFGDropdown">
             <option value="">— Select FG —</option>
             <option v-for="fg in fgItems" :key="fg.item_code" :value="fg.item_code">
               {{ fg.item_code }} — {{ fg.item_name }}
@@ -558,7 +732,7 @@ function bb_mount_app(el) {
         </div>
         <div class="bb-field" style="flex:0;align-self:flex-end">
           <button :class="['bb-btn', qtyChanged ? 'bb-btn-recalc-alert' : 'bb-btn-blue']"
-            @click="loadBomData" :disabled="!calcBreakdown||!mfgQty"
+            @click="loadBomData(true)" :disabled="!calcBreakdown||!mfgQty"
             :title="qtyChanged ? 'Manufacturing qty changed — recalculate to update all quantities' : 'Recalculate all quantities'">
             {{ qtyChanged ? '⚠ Recalculate Qty' : '↻ Recalculate' }}
           </button>
@@ -630,6 +804,7 @@ function bb_mount_app(el) {
           <span style="color:#555;font-weight:600">Operation</span>
           <span style="color:#888;margin:0 8px">→</span>
           <span class="bb-leg-out">SFG Output ▶</span>
+          <button class="bb-btn-add-op" @click="addOperation" title="Add an operation / SFG that isn't in the costing breakdown">+ Add Operation</button>
         </div>
 
         <div v-for="(op, i) in operations" :key="i" :class="['bb-op-block', op.split_to_item_unit ? 'bb-split-block' : '', op.exclude_from_bom ? 'bb-op-excluded' : '']">
@@ -690,6 +865,18 @@ function bb_mount_app(el) {
               @click="op.exclude_from_bom = !op.exclude_from_bom"
               :title="op.exclude_from_bom ? 'Excluded — click to re-include in BOM chain' : 'Exclude this spec from BOM chain (e.g. Proof Board)'">
               {{ op.exclude_from_bom ? '🚫 Excluded' : '⊘ Exclude' }}
+            </button>
+            <!-- Final Common SFG point -->
+            <button :class="['bb-split-btn', op.common_sfg_point ? 'bb-split-on' : '']"
+              @click="setCommonSfg(i)"
+              :title="op.common_sfg_point ? 'Click to clear' : 'Final Common SFG: SFGs up to here are shared across all FGs; after this they become per-FG'">
+              {{ op.common_sfg_point ? '🧩 Common SFG ✓' : '🧩 Common SFG' }}
+            </button>
+            <!-- Output is FG -->
+            <button :class="['bb-excl-btn', op.output_is_fg ? 'bb-split-on' : '']"
+              @click="setOutputFg(i)"
+              :title="op.output_is_fg ? 'This op produces the FG — click to clear' : 'Mark this op as producing the Finished Good (no separate final FG BOM)'">
+              {{ op.output_is_fg ? '🏁 Output = FG ✓' : '🏁 Output = FG' }}
             </button>
             <!-- Quality Inspection -->
             <label class="bb-chk-lbl" style="font-size:10px;justify-content:center;margin-top:4px">
@@ -766,7 +953,12 @@ function bb_mount_app(el) {
     <!-- Create BOM Chain -->
     <div class="bb-card bb-create-card" v-if="selectedFG">
       <div style="font-size:12px;color:#555;margin-bottom:10px">
-        Will create <b>{{ operations.length }} SFG BOM(s)</b> (skips existing active BOMs) + <b>1 FG BOM</b> for <b>{{ selectedFG }}</b>
+        <template v-if="selectedFGs.length > 1">
+          Consolidated build: <b>common SFGs</b> (shared) + per-FG tail + <b>{{ selectedFGs.length }} FG BOMs</b>.
+        </template>
+        <template v-else>
+          Will create <b>{{ operations.length }} SFG BOM(s)</b> (skips existing active BOMs) + <b>1 FG BOM</b> for <b>{{ selectedFG }}</b>
+        </template>
       </div>
       <label class="bb-chk-lbl" style="margin-bottom:10px">
         <input type="checkbox" v-model="isDefault" style="margin-right:6px" />
@@ -774,7 +966,7 @@ function bb_mount_app(el) {
       </label>
       <div style="display:flex;gap:8px">
         <button class="bb-btn bb-btn-create" @click="createBOM" :disabled="!canCreate||saving" style="flex:1">
-          {{ saving ? 'Creating BOM Chain…' : '⚙ Create BOM Chain for ' + selectedFG }}
+          {{ saving ? 'Creating…' : (selectedFGs.length > 1 ? ('⚙ Create Consolidated BOM for ' + selectedFGs.length + ' FGs') : ('⚙ Create BOM Chain for ' + selectedFG)) }}
         </button>
         <button class="bb-btn" style="background:#1e40af;color:#fff;padding:10px 16px;border:none;border-radius:5px;cursor:pointer;font-size:13px"
           @click="saveConfig" :disabled="!operations.length" title="Save this chain so it reloads next time">
@@ -851,6 +1043,8 @@ function bb_inject_styles() {
 .bb-dim{color:#666;font-size:12px}
 /* Operation chain */
 .bb-chain-legend{display:flex;align-items:center;padding:8px 14px;background:#f0f4ff;font-size:11px;color:#555}
+.bb-btn-add-op{margin-left:auto;border:1px solid #2c7be5;background:#2c7be5;color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600}
+.bb-btn-add-op:hover{background:#1a5fc4}
 .bb-leg-in{background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:3px;font-weight:600}
 .bb-leg-out{background:#dcfce7;color:#166534;padding:2px 8px;border-radius:3px;font-weight:600}
 /* Sheet requirements */
