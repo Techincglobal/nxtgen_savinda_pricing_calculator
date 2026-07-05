@@ -82,6 +82,16 @@ def _ensure_custom_fields():
 					"description":  "Linked Cost Item — keeps this FG connected to its calculation breakdown for BOM creation. All variants of one product share the same Cost Item.",
 				},
 			],
+			"Material Request Plan Item": [
+				{
+					"fieldname":    "custom_wastage_qty",
+					"label":        "Wastage Qty",
+					"fieldtype":    "Float",
+					"insert_after": "quantity",
+					"read_only":    1,
+					"description":  "Wastage portion included in Quantity (added at production planning). Kept separate for print formats.",
+				},
+			],
 		}, ignore_validate=True)
 		frappe.db.commit()
 	except Exception:
