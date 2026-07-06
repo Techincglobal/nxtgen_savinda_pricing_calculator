@@ -607,7 +607,7 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 			"uom":             target_uom,
 			"is_default":      (is_default if is_fg_op else 0),
 			"is_active":       1,
-			"with_operations": 1 if op.get("workstation") else 0,
+			"with_operations": 1 if ((op.get("erp_operation") or "").strip() or (op.get("spec_name") or "").strip()) else 0,
 			"rm_cost_as_per":  "Valuation Rate",
 		})
 
@@ -649,19 +649,23 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 				"rate":      flt(mat.get("rate", 0)),
 			})
 
-		# Operation / workstation
-		if op.get("workstation"):
-			op_name_key = (op.get("erp_operation") or "").strip() or op.get("spec_name", target_item)
+		# Operation — ERPNext requires a workstation; auto-create one from the machine
+		# (or the operation name) when the machine has none.
+		op_name_key = (op.get("erp_operation") or "").strip() or (op.get("spec_name") or "").strip()
+		if op_name_key:
 			op_name = _get_or_create_operation(op_name_key)
 			_hr = flt(op.get("hour_rate") or 0)
-			bom.append("operations", {
-				"operation":     op_name,
-				"workstation":   op["workstation"],
-				"time_in_mins":  flt(op.get("time_in_mins", 60)),
-				"hour_rate":     _hr,
-				"base_hour_rate": _hr,
-				"description":   f"{op.get('machine','')} — {op.get('spec_name','')}".strip(" —"),
-			})
+			ws  = (op.get("workstation") or "").strip() or _get_or_create_workstation(
+				(op.get("machine") or "").strip() or op_name_key, _hr)
+			if ws:
+				bom.append("operations", {
+					"operation":      op_name,
+					"workstation":    ws,
+					"time_in_mins":   flt(op.get("time_in_mins", 60)),
+					"hour_rate":      _hr,
+					"base_hour_rate": _hr,
+					"description":    f"{op.get('machine','')} — {op.get('spec_name','')}".strip(" —"),
+				})
 
 		bom.insert(ignore_permissions=True)
 		bom.submit()
@@ -767,6 +771,30 @@ def _get_or_create_operation(op_name):
 	except Exception:
 		pass
 	return op_name
+
+
+def _get_or_create_workstation(ws_name, hour_rate=0):
+	"""Get or create a Workstation. ERPNext requires a workstation on a BOM
+	operation, so when a machine has none we auto-create one named after it,
+	carrying the costing hour-rate."""
+	ws_name = (ws_name or "").strip()
+	if not ws_name:
+		return ""
+	if frappe.db.exists("Workstation", ws_name):
+		return ws_name
+	try:
+		doc = frappe.get_doc({
+			"doctype": "Workstation",
+			"workstation_name": ws_name,
+			"hour_rate": flt(hour_rate),
+		})
+		doc.insert(ignore_permissions=True)
+		frappe.db.commit()
+		return doc.name
+	except Exception:
+		frappe.log_error(title="pricing_calculator: workstation create failed",
+		                 message=frappe.get_traceback())
+		return ""
 
 
 # ─────────────────────────────────────────────────────────────
@@ -902,7 +930,7 @@ def _mk_qty1_bom(item_code, input_code, input_name, per_input_qty, materials, op
 	bom = frappe.get_doc({
 		"doctype": "BOM", "item": item_code, "quantity": 1, "uom": uom,
 		"is_default": cint(is_default), "is_active": 1,
-		"with_operations": 1 if op.get("workstation") else 0,
+		"with_operations": 1 if ((op.get("erp_operation") or "").strip() or (op.get("spec_name") or "").strip()) else 0,
 		"rm_cost_as_per": "Valuation Rate",
 	})
 	if input_code:
@@ -922,13 +950,17 @@ def _mk_qty1_bom(item_code, input_code, input_name, per_input_qty, materials, op
 		bom.append("items", {"item_code": ic, "item_name": mat.get("item_name", ic),
 		                     "qty": flt(mat.get("qty", 0)), "uom": mu, "stock_uom": mu,
 		                     "rate": flt(mat.get("rate", 0))})
-	if op.get("workstation"):
-		opn = _get_or_create_operation((op.get("erp_operation") or "").strip() or op.get("spec_name", item_code))
+	_op_key = (op.get("erp_operation") or "").strip() or (op.get("spec_name") or "").strip()
+	if _op_key:
+		opn = _get_or_create_operation(_op_key)
 		_hr = flt(op.get("hour_rate") or 0)
-		bom.append("operations", {"operation": opn, "workstation": op["workstation"],
-		                          "time_in_mins": flt(op.get("time_in_mins", 60)),
-		                          "hour_rate": _hr, "base_hour_rate": _hr,
-		                          "description": f"{op.get('machine','')} — {op.get('spec_name','')}".strip(" —")})
+		_ws = (op.get("workstation") or "").strip() or _get_or_create_workstation(
+			(op.get("machine") or "").strip() or _op_key, _hr)
+		if _ws:
+			bom.append("operations", {"operation": opn, "workstation": _ws,
+			          "time_in_mins": flt(op.get("time_in_mins", 60)),
+			          "hour_rate": _hr, "base_hour_rate": _hr,
+			          "description": f"{op.get('machine','')} — {op.get('spec_name','')}".strip(" —")})
 	bom.insert(ignore_permissions=True)
 	bom.submit()
 	frappe.db.commit()
