@@ -83,6 +83,8 @@ def _enrich_spec(spec):
         "operation":           doc.operation or "",
         "has_machine":         cint(doc.has_machine),
         "adds_colors":         cint(getattr(doc, "adds_colors", 0)),
+        "parent_spec":         getattr(doc, "parent_spec", "") or "",
+        "auto_select":         cint(getattr(doc, "auto_select", 0)),
         "units":               doc.units or "Full sheet",
         "skip_machine_if_spec": doc.skip_machine_if_spec or "",
         "skip_machine_if_machine":  getattr(doc, "skip_machine_if_machine", "") or "",
@@ -1174,9 +1176,10 @@ def _process_spec(spec, form, sheet, item_qty, no_of_colors, material_rate,
         else:
             skip_spec = spec.get("skip_machine_if_spec", "")
             skip = skip_spec and all_selected_spec_names and skip_spec in all_selected_spec_names
-        if not skip:
-            m_data = next((m for m in spec.get("machines", []) if m["machine"] == machine_name), None)
-            if m_data:
+        m_data = next((m for m in spec.get("machines", []) if m["machine"] == machine_name), None)
+        if m_data:
+            # Machine (hourly) cost — REMOVED when "skip machine cost" is ticked.
+            if not skip:
                 machine_rows, machine_cost = _calc_spec_machine_cost(
                     spec.get("spec_name", ""), m_data, machine_assignment,
                     form, sheet, item_qty, no_of_colors,
@@ -1188,38 +1191,39 @@ def _process_spec(spec, form, sheet, item_qty, no_of_colors, material_rate,
                     all_rows.append(mr)
                 prod += machine_cost
 
-                # Offset ink cost — for printing machines and machines with allow_ink_assignment
-                pricing_t = (form.get("pricing_type") or "Offset").strip()
-                show_inks = cint(m_data.get("is_printing_machine")) or cint(m_data.get("allow_ink_assignment", 0))
-                if pricing_t == "Offset" and show_inks and machine_assignment.get("inks"):
-                    cycles = max(cint(machine_assignment.get("cycles", 1)), 1)
-                    ink_rows, ink_cost = _calc_spec_ink_cost(
-                        spec.get("spec_name", ""), machine_assignment, form, sheet, cycles
+            # Ink / foil MATERIAL cost — ALWAYS added (the ink/foil is consumed even
+            # when the machine cost is skipped, e.g. the operation runs inline).
+            pricing_t = (form.get("pricing_type") or "Offset").strip()
+            show_inks = cint(m_data.get("is_printing_machine")) or cint(m_data.get("allow_ink_assignment", 0))
+            if pricing_t == "Offset" and show_inks and machine_assignment.get("inks"):
+                cycles = max(cint(machine_assignment.get("cycles", 1)), 1)
+                ink_rows, ink_cost = _calc_spec_ink_cost(
+                    spec.get("spec_name", ""), machine_assignment, form, sheet, cycles
+                )
+                for ir in ink_rows:
+                    ir["section"] = section
+                    all_rows.append(ir)
+                prod += ink_cost
+
+            # Flexo foil + ink costs
+            if pricing_t == "Flexo":
+                if machine_assignment.get("foils"):
+                    foil_rows, foil_cost = _calc_spec_foil_cost(
+                        spec.get("spec_name", ""), machine_assignment, reel_area
                     )
-                    for ir in ink_rows:
+                    for fr in foil_rows:
+                        fr["section"] = section
+                        all_rows.append(fr)
+                    mat += foil_cost
+
+                if machine_assignment.get("inks"):
+                    fx_ink_rows, fx_ink_cost = _calc_flexo_ink_cost(
+                        spec.get("spec_name", ""), machine_assignment, reel_area
+                    )
+                    for ir in fx_ink_rows:
                         ir["section"] = section
                         all_rows.append(ir)
-                    prod += ink_cost
-
-                # Flexo foil + ink costs
-                if pricing_t == "Flexo":
-                    if machine_assignment.get("foils"):
-                        foil_rows, foil_cost = _calc_spec_foil_cost(
-                            spec.get("spec_name", ""), machine_assignment, reel_area
-                        )
-                        for fr in foil_rows:
-                            fr["section"] = section
-                            all_rows.append(fr)
-                        mat += foil_cost
-
-                    if machine_assignment.get("inks"):
-                        fx_ink_rows, fx_ink_cost = _calc_flexo_ink_cost(
-                            spec.get("spec_name", ""), machine_assignment, reel_area
-                        )
-                        for ir in fx_ink_rows:
-                            ir["section"] = section
-                            all_rows.append(ir)
-                        mat += fx_ink_cost
+                    mat += fx_ink_cost
 
     return all_rows, mat, prep, prod
 

@@ -8,8 +8,10 @@
   "spec_name",
   "group",
   "operation",
+  "parent_spec",
   "column_break_1",
   "is_active",
+  "auto_select",
   "pricing_type",
   "adds_colors",
   "section_break_machine_cfg",
@@ -60,6 +62,20 @@
    "in_list_view": 1,
    "label": "Finishing Operation",
    "options": "Finishing"
+  },
+  {
+   "fieldname": "parent_spec",
+   "fieldtype": "Link",
+   "label": "Parent Spec",
+   "options": "Offset Spec",
+   "description": "Optional. If set, this spec is a child shown under its parent in the calculator; selecting the parent auto-selects this child."
+  },
+  {
+   "fieldname": "auto_select",
+   "fieldtype": "Check",
+   "default": "0",
+   "label": "Auto Select in Calculator",
+   "description": "Auto-tick this spec for the calculation (top-level: on load; child: when its parent is selected). Cascades to its own children."
   },
   {
    "fieldname": "column_break_1",

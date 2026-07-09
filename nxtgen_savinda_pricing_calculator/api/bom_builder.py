@@ -69,10 +69,23 @@ def get_bom_context(source_type, source_name):
 def _find_cb_for_fg(fg_item_code):
 	"""
 	Multi-strategy CB lookup for a FG item:
+	S0: FG Item's own Cost Item link (custom_cost_item) → its calculation breakdown
 	S1: Savinda Quotation Item.finish_good
 	S2: cost Item Calculation via Savinda Quotation Item.cost_item
 	S3: cost Item Calculation via item_name pattern match
 	"""
+	# S0 — the FG's linked Cost Item (set at FG creation) is the authoritative source
+	if frappe.db.has_column("Item", "custom_cost_item"):
+		cost_item = frappe.db.get_value("Item", fg_item_code, "custom_cost_item")
+		if cost_item:
+			cb = frappe.db.get_value(
+				"Cost Item Calculation",
+				{"parent": cost_item, "calculation_breakdown": ["!=", ""]},
+				"calculation_breakdown", order_by="idx asc",
+			)
+			if cb:
+				return cb
+
 	# S1 — direct finish_good link
 	r = frappe.db.sql("""
 		SELECT calculation_breakdown
@@ -497,6 +510,8 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 	if not operations:
 		frappe.throw("No operations defined. Please add at least one operation.")
 
+	_validate_materials(operations)
+
 	created_boms = []
 
 	# ── Build active_ops: exclude flagged ops and re-link chain ──
@@ -657,11 +672,13 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 			_hr = flt(op.get("hour_rate") or 0)
 			ws  = (op.get("workstation") or "").strip() or _get_or_create_workstation(
 				(op.get("machine") or "").strip() or op_name_key, _hr)
+			# Per-unit time: whole-run minutes ÷ output qty (BOM is qty 1)
+			_per_time = (flt(op.get("time_in_mins") or 0) / out_qty) if out_qty else flt(op.get("time_in_mins") or 0)
 			if ws:
 				bom.append("operations", {
 					"operation":      op_name,
 					"workstation":    ws,
-					"time_in_mins":   flt(op.get("time_in_mins", 60)),
+					"time_in_mins":   _per_time,
 					"hour_rate":      _hr,
 					"base_hour_rate": _hr,
 					"description":    f"{op.get('machine','')} — {op.get('spec_name','')}".strip(" —"),
@@ -771,6 +788,26 @@ def _get_or_create_operation(op_name):
 	except Exception:
 		pass
 	return op_name
+
+
+def _validate_materials(operations):
+	"""Refuse to build if any INCLUDED material row (on a non-excluded op) has no
+	actual item selected — e.g. empty ink/colour slots. Warns the user to pick items."""
+	missing = []
+	for op in (operations or []):
+		if op.get("exclude_from_bom"):
+			continue
+		for mat in (op.get("materials") or []):
+			if mat.get("include", True) and not (mat.get("item_code") or "").strip():
+				missing.append("<b>{}</b> → {}".format(
+					op.get("spec_name") or "?",
+					mat.get("label") or mat.get("cost_fact") or "material"))
+	if missing:
+		frappe.throw(
+			"Select an actual item for these material rows before creating the BOM "
+			"(or untick them):<br>• " + "<br>• ".join(missing),
+			title="Material item not selected",
+		)
 
 
 def _get_or_create_workstation(ws_name, hour_rate=0):
@@ -956,9 +993,11 @@ def _mk_qty1_bom(item_code, input_code, input_name, per_input_qty, materials, op
 		_hr = flt(op.get("hour_rate") or 0)
 		_ws = (op.get("workstation") or "").strip() or _get_or_create_workstation(
 			(op.get("machine") or "").strip() or _op_key, _hr)
+		_ot = flt(op.get("output_qty")) or 1
+		_per_time = (flt(op.get("time_in_mins") or 0) / _ot) if _ot else flt(op.get("time_in_mins") or 0)
 		if _ws:
 			bom.append("operations", {"operation": opn, "workstation": _ws,
-			          "time_in_mins": flt(op.get("time_in_mins", 60)),
+			          "time_in_mins": _per_time,
 			          "hour_rate": _hr, "base_hour_rate": _hr,
 			          "description": f"{op.get('machine','')} — {op.get('spec_name','')}".strip(" —")})
 	bom.insert(ignore_permissions=True)
@@ -1016,6 +1055,8 @@ def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, 
 		                        json.dumps(extra_materials), is_default)
 	if not operations:
 		frappe.throw("No operations defined.")
+
+	_validate_materials(operations)
 
 	active, first_in, first_inn = _active_ops(operations)
 	if not active:
