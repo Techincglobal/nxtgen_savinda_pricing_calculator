@@ -71,6 +71,7 @@ function oc_mount_app(el) {
 				saveLoading: false,
 				calcError: '',
 				savedDocName: '',
+				_draftReady: false,  // gates autosave until the initial load settles
 				costSheetRef: '',  // Cost Sheet to return to when clicking Back
 				viewOnly: false,   // Set to true via ?view_only=1 — disables editing
 				sheetExpanded: true,  // Offset: Sheet Requirements collapsible
@@ -175,7 +176,7 @@ function oc_mount_app(el) {
 			// Cost rows grouped into sections (Preparation / Material / Production) with subtotals
 			groupedCostRows() {
 				var rows = (this.calc && this.calc.cost_rows) || [];
-				var order = ['Preparation', 'Material', 'Production'];
+				var order = ['Preparation', 'Material', 'Production', 'Outsource'];
 				var groups = {};
 				rows.forEach(function (r) {
 					var g = r.cost_group || 'Other';
@@ -267,6 +268,7 @@ function oc_mount_app(el) {
 					});
 					return {
 						spec_name: spec.spec_name,
+						group: spec.group || '',
 						has_machine: spec.has_machine || 0,
 						adds_colors: spec.adds_colors || 0,
 						units: spec.units || 'Full sheet',
@@ -349,6 +351,13 @@ function oc_mount_app(el) {
 				}
 			}
 			this.loadData();
+			// Flush the draft synchronously if the tab is closed / navigated away
+			this._flushBound = this._flushDraft.bind(this);
+			window.addEventListener('beforeunload', this._flushBound);
+		},
+
+		beforeUnmount() {
+			if (this._flushBound) window.removeEventListener('beforeunload', this._flushBound);
 		},
 
 		methods: {
@@ -367,10 +376,24 @@ function oc_mount_app(el) {
 				var cs = urlParams.get('cost_sheet') || opts.cost_sheet || '';
 				if (cs) this.costSheetRef = cs;
 
+				var self = this;
+				// An unsaved draft (from an accidental reload before Save) wins — restore
+				// the user's work-in-progress instead of the (older) DB copy / a blank form.
+				if (this.restoreDraft()) {
+					if (name && !this.savedDocName) this.savedDocName = name;
+					setTimeout(function () { self._draftReady = true; }, 400);
+					return;
+				}
+
 				if (name && name !== this.savedDocName) {
 					this.savedDocName = name;
 					this.loadExisting(name);
+				} else if (!name) {
+					// New calculation → auto-select specs flagged "Auto Select" (cascades children)
+					this._autoSelectDefaults();
 				}
+				// Enable autosave once the initial (async) load has settled
+				setTimeout(function () { self._draftReady = true; }, 1500);
 			},
 
 			loadData() {
@@ -408,7 +431,7 @@ function oc_mount_app(el) {
 				var pt = self.form.pricing_type || 'Offset';
 				var done = 0;
 				function check() { done++; if (done >= 2) { self.loading = false; } }
-				frappe.call({ method: API.getSpecs, args: { pricing_type: pt }, callback: function (r) { self.allSpecs = r.message || []; check(); } });
+				frappe.call({ method: API.getSpecs, args: { pricing_type: pt }, callback: function (r) { self.allSpecs = r.message || []; self._autoSelectDefaults(); check(); } });
 				frappe.call({ method: API.getMachines, args: { pricing_type: pt }, callback: function (r) { self.allMachines = r.message || []; check(); } });
 			},
 
@@ -456,21 +479,81 @@ function oc_mount_app(el) {
 
 			// ── Specs (checkboxes) ──
 			toggleSpec(specName) {
-				var idx = this.selectedSpecNames.indexOf(specName);
-				if (idx > -1) {
-					this.selectedSpecNames.splice(idx, 1);
-					delete this.specState[specName];
-					// If user deselects the Flexo printing spec, clear the top-level machine selector
-					if (this.isFlexo && this.flexoPrintingSpec && this.flexoPrintingSpec.spec_name === specName) {
-						this.flexoPrintMachine = '';
-					}
+				if (this.isSelected(specName)) {
+					this._deselectSpec(specName);
 				} else {
-					this.selectedSpecNames.push(specName);
-					this.initSpecState(specName);
+					this._selectSpec(specName);
 				}
 				this.scheduleCalc();
 			},
+			// Select a spec and cascade-select ALL its children (recursively)
+			_selectSpec(specName) {
+				var self = this;
+				if (self.selectedSpecNames.indexOf(specName) === -1) {
+					self.selectedSpecNames.push(specName);
+					self.initSpecState(specName);
+				}
+				self.allSpecs.forEach(function (s) {
+					if (s.parent_spec === specName && self.selectedSpecNames.indexOf(s.spec_name) === -1) {
+						self._selectSpec(s.spec_name);
+					}
+				});
+			},
+			// Deselect a spec and cascade-deselect its children
+			_deselectSpec(specName) {
+				var self = this;
+				var i = self.selectedSpecNames.indexOf(specName);
+				if (i > -1) self.selectedSpecNames.splice(i, 1);
+				delete self.specState[specName];
+				if (self.isFlexo && self.flexoPrintingSpec && self.flexoPrintingSpec.spec_name === specName) {
+					self.flexoPrintMachine = '';
+				}
+				self.allSpecs.forEach(function (s) {
+					if (s.parent_spec === specName) self._deselectSpec(s.spec_name);
+				});
+			},
 			isSelected(n) { return this.selectedSpecNames.indexOf(n) > -1; },
+
+			// Depth of a spec in the parent chain (for indentation)
+			specDepth(specName) {
+				var self = this, d = 0, cur = specName, guard = 0;
+				while (guard++ < 20) {
+					var s = self.allSpecs.find(function (x) { return x.spec_name === cur; });
+					if (!s || !s.parent_spec) break;
+					d++; cur = s.parent_spec;
+				}
+				return d;
+			},
+			// Ordered, tree-aware list of specs in a group: top-level first; a spec's
+			// children appear right under it ONLY when the spec is selected.
+			groupSpecTreeSpecs(specs) {
+				var self = this;
+				var names = {};
+				specs.forEach(function (s) { names[s.spec_name] = true; });
+				var byParent = {};
+				specs.forEach(function (s) {
+					var p = (s.parent_spec && names[s.parent_spec]) ? s.parent_spec : '';
+					(byParent[p] = byParent[p] || []).push(s);
+				});
+				var out = [];
+				function walk(parent) {
+					(byParent[parent] || []).forEach(function (s) {
+						out.push(s);
+						if (self.isSelected(s.spec_name) && byParent[s.spec_name]) walk(s.spec_name);
+					});
+				}
+				walk('');
+				return out;
+			},
+			// Auto-select specs flagged Auto Select (top-level → cascades children)
+			_autoSelectDefaults() {
+				var self = this;
+				this.allSpecs.forEach(function (s) {
+					if ((parseInt(s.auto_select) || 0) && !s.parent_spec && self.selectedSpecNames.indexOf(s.spec_name) === -1) {
+						self._selectSpec(s.spec_name);
+					}
+				});
+			},
 
 			initSpecState(specName) {
 				var self = this;
@@ -708,22 +791,16 @@ function oc_mount_app(el) {
 			},
 			// Auto-skip decision from the spec's configured rules + current selections
 			specAutoSkip(specName) {
-				var self = this;
 				var spec = this.allSpecs.find(function (s) { return s.spec_name === specName; });
 				if (!spec || !spec.has_machine) return false;
 				// (a) legacy: skip if a named spec is also selected
 				if (spec.skip_machine_if_spec && this.selectedSpecNames.indexOf(spec.skip_machine_if_spec) > -1) return true;
 				// (b) skip if any printing machine is active
 				if (spec.skip_machine_if_printing && this.anyPrintingActive()) return true;
-				// (c) skip if a specific machine is running on another selected spec
-				if (spec.skip_machine_if_machine) {
-					var m = spec.skip_machine_if_machine;
-					if (this.flexoPrintMachine === m) return true;
-					return this.selectedSpecs.some(function (s) {
-						if (s.spec_name === specName) return false;   // don't self-trigger
-						return (self.specState[s.spec_name] || {})._machine === m;
-					});
-				}
+				// (c) a linked machine is configured → default to skipped (the machine
+				// cost is assumed covered by the linked machine). Overridable — untick
+				// to charge this spec's machine anyway.
+				if (spec.skip_machine_if_machine) return true;
 				return false;
 			},
 			// Effective skip = user override if set, else the auto decision
@@ -737,6 +814,20 @@ function oc_mount_app(el) {
 				this.specState[specName]._skipOverride = !this.effectiveSkip(specName);
 				this.specState[specName] = Object.assign({}, this.specState[specName]);
 				this.scheduleCalc();
+			},
+			// Wording for the skip-machine checkbox. When the machine has ink assigned,
+			// skipping removes only the machine (hourly) cost — the ink is still charged.
+			skipMachineLabel(specName) {
+				var st = this.specState[specName] || {};
+				var hasInk = (st._inks || []).length > 0;
+				if (this.effectiveSkip(specName)) {
+					return hasInk
+						? 'Machine cost skipped — ink still charged'
+						: 'Machine cost skipped (inline / covered elsewhere)';
+				}
+				return hasInk
+					? 'Charging machine + ink cost — tick to skip machine cost only'
+					: 'Charging machine cost — tick to skip';
 			},
 			// Plate count manual override
 			onPlateCountInput(val) {
@@ -832,6 +923,8 @@ function oc_mount_app(el) {
 						self.saveLoading = false;
 						if (r.message && r.message.doc_name) {
 							self.savedDocName = r.message.doc_name;
+							// Persisted to DB now — drop the local draft so it can't shadow the saved copy
+							self.clearDraft();
 							frappe.show_alert({ message: 'Saved: ' + self.savedDocName, indicator: 'green' });
 							// Notify parent Cost Item to sync unit_cost from this CB
 							self.notifyCostItemRefresh(self.savedDocName);
@@ -1089,6 +1182,79 @@ function oc_mount_app(el) {
 				this.scheduleCalc();
 			},
 
+			// ─────────────────────────────────────────────────────────────
+			// Draft autosave — keeps work-in-progress in the browser so an
+			// accidental reload (before the user clicks Save) doesn't lose data.
+			// Cleared automatically once the calculation is saved to the DB.
+			// ─────────────────────────────────────────────────────────────
+			_draftKey() {
+				// Keyed on the URL query (ref / cost_sheet / operations / bqtys) so a
+				// reload of the SAME calculation restores its own draft, and different
+				// calculations don't overwrite each other.
+				var q = (window.location.search || '').replace(/^\?/, '') || 'new';
+				return 'oc_draft::' + q;
+			},
+			saveDraft() {
+				try {
+					var snap = {
+						_v: 1,
+						_ts: new Date().getTime(),
+						savedDocName:         this.savedDocName || '',
+						form:                 JSON.parse(JSON.stringify(this.form)),
+						selectedSpecNames:    JSON.parse(JSON.stringify(this.selectedSpecNames)),
+						specState:            JSON.parse(JSON.stringify(this.specState)),
+						machineSpecState:     JSON.parse(JSON.stringify(this.machineSpecState)),
+						selectedMachine:      this.selectedMachine ? this.selectedMachine.spec_name : '',
+						flexoPrintMachine:    this.flexoPrintMachine || '',
+						manualCosts:          JSON.parse(JSON.stringify(this.manualCosts)),
+						additionalBreakdowns: JSON.parse(JSON.stringify(this.additionalBreakdowns)),
+						matSearch:            this.matSearch || '',
+						calc:                 JSON.parse(JSON.stringify(this.calc || {})),
+					};
+					window.localStorage.setItem(this._draftKey(), JSON.stringify(snap));
+				} catch (e) { /* storage full / unavailable — ignore */ }
+			},
+			// Debounced writer bound to state changes (see watch:)
+			autoSaveDraft: debounce(function () { if (this._draftReady) this.saveDraft(); }, 800),
+			_flushDraft() { if (this._draftReady) this.saveDraft(); },
+			clearDraft() {
+				try { window.localStorage.removeItem(this._draftKey()); } catch (e) {}
+			},
+			restoreDraft() {
+				var raw;
+				try { raw = window.localStorage.getItem(this._draftKey()); } catch (e) { return false; }
+				if (!raw) return false;
+				var d;
+				try { d = JSON.parse(raw); } catch (e) { return false; }
+				if (!d || !d.form) return false;
+				var self = this;
+
+				self.savedDocName = d.savedDocName || self.savedDocName || '';
+				Object.assign(self.form, d.form);
+				self.selectedSpecNames    = Array.isArray(d.selectedSpecNames) ? d.selectedSpecNames.slice() : [];
+				self.specState            = d.specState || {};
+				self.machineSpecState     = d.machineSpecState || {};
+				self.flexoPrintMachine    = d.flexoPrintMachine || '';
+				self.manualCosts          = Array.isArray(d.manualCosts) ? d.manualCosts : [];
+				self.additionalBreakdowns = Array.isArray(d.additionalBreakdowns) ? d.additionalBreakdowns : [];
+				self.matSearch            = d.matSearch || '';
+				if (d.calc && d.calc.cost_rows) self.calc = d.calc;
+
+				// Resolve the selected machine object from its saved name
+				if (d.selectedMachine) {
+					var m = self.allMachines.find(function (x) { return x.spec_name === d.selectedMachine; });
+					self.selectedMachine = m || null;
+				}
+
+				frappe.show_alert({
+					message: '↩ Restored unsaved changes from your last session — remember to Save.',
+					indicator: 'blue',
+				}, 7);
+				// Refresh sheet math / totals from the restored inputs
+				self.scheduleCalc();
+				return true;
+			},
+
 			fmtCur, fmtNum, fmtRate, fmtQty,
 		},
 
@@ -1102,6 +1268,17 @@ function oc_mount_app(el) {
 					this.fetchInquiryBreakdowns(newRef);
 				}
 			},
+			// Autosave a draft whenever any working state changes (debounced + gated)
+			form:                 { deep: true, handler: function () { this.autoSaveDraft(); } },
+			specState:            { deep: true, handler: function () { this.autoSaveDraft(); } },
+			machineSpecState:     { deep: true, handler: function () { this.autoSaveDraft(); } },
+			selectedSpecNames:    { deep: true, handler: function () { this.autoSaveDraft(); } },
+			manualCosts:          { deep: true, handler: function () { this.autoSaveDraft(); } },
+			additionalBreakdowns: { deep: true, handler: function () { this.autoSaveDraft(); } },
+			calc:                 { deep: true, handler: function () { this.autoSaveDraft(); } },
+			selectedMachine:      function () { this.autoSaveDraft(); },
+			flexoPrintMachine:    function () { this.autoSaveDraft(); },
+			matSearch:            function () { this.autoSaveDraft(); },
 		},
 
 		// ── TEMPLATE ────────────────────────────────────────────────
@@ -1464,10 +1641,11 @@ function oc_mount_app(el) {
             <span class="oc-group-arrow">{{ collapsedGroups[groupName] ? '▶' : '▼' }}</span>
           </div>
           <div v-show="!collapsedGroups[groupName]">
-          <div v-for="spec in specs" :key="spec.spec_name" class="oc-spec">
+          <div v-for="spec in groupSpecTreeSpecs(specs)" :key="spec.spec_name" class="oc-spec"
+               :style="{ marginLeft: (specDepth(spec.spec_name) * 18) + 'px' }">
             <label class="oc-spec-label" :class="{active: isSelected(spec.spec_name)}">
               <input type="checkbox" class="oc-chk" :checked="isSelected(spec.spec_name)" @change="toggleSpec(spec.spec_name)" />
-              <span class="oc-spec-name">{{ spec.spec_name }}<span v-if="spec.adds_colors" class="oc-total-badge" style="margin-left:6px">+{{ spec.adds_colors }} color</span></span>
+              <span class="oc-spec-name"><span v-if="specDepth(spec.spec_name)" style="color:#9ca3af">↳ </span>{{ spec.spec_name }}<span v-if="spec.adds_colors" class="oc-total-badge" style="margin-left:6px">+{{ spec.adds_colors }} color</span></span>
               <span v-if="isSelected(spec.spec_name)" class="oc-spec-chevron" @click.prevent.stop="toggleSpecCollapse(spec.spec_name)">
                 {{ collapsedSpecs[spec.spec_name] ? '▶' : '▼' }}
               </span>
@@ -1496,7 +1674,7 @@ function oc_mount_app(el) {
                 <!-- Skip machine cost — auto-ticks per the spec's skip rules; untick to charge -->
                 <label v-if="specHasSkipRule(spec)" class="oc-skip-row" :class="{active: effectiveSkip(spec.spec_name)}">
                   <input type="checkbox" class="oc-chk" :checked="effectiveSkip(spec.spec_name)" @change="toggleSkipMachine(spec.spec_name)" />
-                  <span>{{ effectiveSkip(spec.spec_name) ? 'Machine cost skipped (inline / covered elsewhere)' : 'Charging machine cost — tick to skip' }}</span>
+                  <span>{{ skipMachineLabel(spec.spec_name) }}</span>
                 </label>
               </div>
 
@@ -1553,6 +1731,7 @@ function oc_mount_app(el) {
           <option value="Production">Production</option>
           <option value="Material">Material</option>
           <option value="Preparation">Preparation</option>
+          <option value="Outsource">Outsource</option>
         </select>
         <input v-model.number="mc.qty" type="number" min="0" placeholder="Qty" class="oc-inp" style="width:60px" @input="scheduleCalc" />
         <input v-model.number="mc.rate" type="number" min="0" placeholder="Rate" class="oc-inp" style="width:78px" @input="scheduleCalc" />
