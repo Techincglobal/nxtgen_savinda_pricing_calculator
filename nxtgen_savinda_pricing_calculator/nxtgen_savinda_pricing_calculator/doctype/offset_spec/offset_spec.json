@@ -48,12 +48,12 @@
    "fieldname": "group",
    "fieldtype": "Select",
    "label": "Group",
-   "options": "Specification\nFinishing\nMachine",
+   "options": "Specification\nFinishing\nOutsource\nMachine",
    "default": "Specification",
    "reqd": 1,
    "in_list_view": 1,
    "columns": 4,
-   "description": "Machine = shown as dropdown. Specification and Finishing = shown as checkboxes."
+   "description": "Machine = shown as dropdown. Specification, Finishing and Outsource = shown as checkboxes. Outsource specs get their own section in the cost breakdown."
   },
   {
    "depends_on": "eval:doc.group=='Finishing'",

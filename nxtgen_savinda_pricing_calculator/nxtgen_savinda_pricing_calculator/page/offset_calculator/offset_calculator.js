@@ -71,6 +71,7 @@ function oc_mount_app(el) {
 				saveLoading: false,
 				calcError: '',
 				savedDocName: '',
+				_draftReady: false,  // gates autosave until the initial load settles
 				costSheetRef: '',  // Cost Sheet to return to when clicking Back
 				viewOnly: false,   // Set to true via ?view_only=1 — disables editing
 				sheetExpanded: true,  // Offset: Sheet Requirements collapsible
@@ -175,7 +176,7 @@ function oc_mount_app(el) {
 			// Cost rows grouped into sections (Preparation / Material / Production) with subtotals
 			groupedCostRows() {
 				var rows = (this.calc && this.calc.cost_rows) || [];
-				var order = ['Preparation', 'Material', 'Production'];
+				var order = ['Preparation', 'Material', 'Production', 'Outsource'];
 				var groups = {};
 				rows.forEach(function (r) {
 					var g = r.cost_group || 'Other';
@@ -267,6 +268,7 @@ function oc_mount_app(el) {
 					});
 					return {
 						spec_name: spec.spec_name,
+						group: spec.group || '',
 						has_machine: spec.has_machine || 0,
 						adds_colors: spec.adds_colors || 0,
 						units: spec.units || 'Full sheet',
@@ -349,6 +351,13 @@ function oc_mount_app(el) {
 				}
 			}
 			this.loadData();
+			// Flush the draft synchronously if the tab is closed / navigated away
+			this._flushBound = this._flushDraft.bind(this);
+			window.addEventListener('beforeunload', this._flushBound);
+		},
+
+		beforeUnmount() {
+			if (this._flushBound) window.removeEventListener('beforeunload', this._flushBound);
 		},
 
 		methods: {
@@ -367,6 +376,15 @@ function oc_mount_app(el) {
 				var cs = urlParams.get('cost_sheet') || opts.cost_sheet || '';
 				if (cs) this.costSheetRef = cs;
 
+				var self = this;
+				// An unsaved draft (from an accidental reload before Save) wins — restore
+				// the user's work-in-progress instead of the (older) DB copy / a blank form.
+				if (this.restoreDraft()) {
+					if (name && !this.savedDocName) this.savedDocName = name;
+					setTimeout(function () { self._draftReady = true; }, 400);
+					return;
+				}
+
 				if (name && name !== this.savedDocName) {
 					this.savedDocName = name;
 					this.loadExisting(name);
@@ -374,6 +392,8 @@ function oc_mount_app(el) {
 					// New calculation → auto-select specs flagged "Auto Select" (cascades children)
 					this._autoSelectDefaults();
 				}
+				// Enable autosave once the initial (async) load has settled
+				setTimeout(function () { self._draftReady = true; }, 1500);
 			},
 
 			loadData() {
@@ -903,6 +923,8 @@ function oc_mount_app(el) {
 						self.saveLoading = false;
 						if (r.message && r.message.doc_name) {
 							self.savedDocName = r.message.doc_name;
+							// Persisted to DB now — drop the local draft so it can't shadow the saved copy
+							self.clearDraft();
 							frappe.show_alert({ message: 'Saved: ' + self.savedDocName, indicator: 'green' });
 							// Notify parent Cost Item to sync unit_cost from this CB
 							self.notifyCostItemRefresh(self.savedDocName);
@@ -1160,6 +1182,79 @@ function oc_mount_app(el) {
 				this.scheduleCalc();
 			},
 
+			// ─────────────────────────────────────────────────────────────
+			// Draft autosave — keeps work-in-progress in the browser so an
+			// accidental reload (before the user clicks Save) doesn't lose data.
+			// Cleared automatically once the calculation is saved to the DB.
+			// ─────────────────────────────────────────────────────────────
+			_draftKey() {
+				// Keyed on the URL query (ref / cost_sheet / operations / bqtys) so a
+				// reload of the SAME calculation restores its own draft, and different
+				// calculations don't overwrite each other.
+				var q = (window.location.search || '').replace(/^\?/, '') || 'new';
+				return 'oc_draft::' + q;
+			},
+			saveDraft() {
+				try {
+					var snap = {
+						_v: 1,
+						_ts: new Date().getTime(),
+						savedDocName:         this.savedDocName || '',
+						form:                 JSON.parse(JSON.stringify(this.form)),
+						selectedSpecNames:    JSON.parse(JSON.stringify(this.selectedSpecNames)),
+						specState:            JSON.parse(JSON.stringify(this.specState)),
+						machineSpecState:     JSON.parse(JSON.stringify(this.machineSpecState)),
+						selectedMachine:      this.selectedMachine ? this.selectedMachine.spec_name : '',
+						flexoPrintMachine:    this.flexoPrintMachine || '',
+						manualCosts:          JSON.parse(JSON.stringify(this.manualCosts)),
+						additionalBreakdowns: JSON.parse(JSON.stringify(this.additionalBreakdowns)),
+						matSearch:            this.matSearch || '',
+						calc:                 JSON.parse(JSON.stringify(this.calc || {})),
+					};
+					window.localStorage.setItem(this._draftKey(), JSON.stringify(snap));
+				} catch (e) { /* storage full / unavailable — ignore */ }
+			},
+			// Debounced writer bound to state changes (see watch:)
+			autoSaveDraft: debounce(function () { if (this._draftReady) this.saveDraft(); }, 800),
+			_flushDraft() { if (this._draftReady) this.saveDraft(); },
+			clearDraft() {
+				try { window.localStorage.removeItem(this._draftKey()); } catch (e) {}
+			},
+			restoreDraft() {
+				var raw;
+				try { raw = window.localStorage.getItem(this._draftKey()); } catch (e) { return false; }
+				if (!raw) return false;
+				var d;
+				try { d = JSON.parse(raw); } catch (e) { return false; }
+				if (!d || !d.form) return false;
+				var self = this;
+
+				self.savedDocName = d.savedDocName || self.savedDocName || '';
+				Object.assign(self.form, d.form);
+				self.selectedSpecNames    = Array.isArray(d.selectedSpecNames) ? d.selectedSpecNames.slice() : [];
+				self.specState            = d.specState || {};
+				self.machineSpecState     = d.machineSpecState || {};
+				self.flexoPrintMachine    = d.flexoPrintMachine || '';
+				self.manualCosts          = Array.isArray(d.manualCosts) ? d.manualCosts : [];
+				self.additionalBreakdowns = Array.isArray(d.additionalBreakdowns) ? d.additionalBreakdowns : [];
+				self.matSearch            = d.matSearch || '';
+				if (d.calc && d.calc.cost_rows) self.calc = d.calc;
+
+				// Resolve the selected machine object from its saved name
+				if (d.selectedMachine) {
+					var m = self.allMachines.find(function (x) { return x.spec_name === d.selectedMachine; });
+					self.selectedMachine = m || null;
+				}
+
+				frappe.show_alert({
+					message: '↩ Restored unsaved changes from your last session — remember to Save.',
+					indicator: 'blue',
+				}, 7);
+				// Refresh sheet math / totals from the restored inputs
+				self.scheduleCalc();
+				return true;
+			},
+
 			fmtCur, fmtNum, fmtRate, fmtQty,
 		},
 
@@ -1173,6 +1268,17 @@ function oc_mount_app(el) {
 					this.fetchInquiryBreakdowns(newRef);
 				}
 			},
+			// Autosave a draft whenever any working state changes (debounced + gated)
+			form:                 { deep: true, handler: function () { this.autoSaveDraft(); } },
+			specState:            { deep: true, handler: function () { this.autoSaveDraft(); } },
+			machineSpecState:     { deep: true, handler: function () { this.autoSaveDraft(); } },
+			selectedSpecNames:    { deep: true, handler: function () { this.autoSaveDraft(); } },
+			manualCosts:          { deep: true, handler: function () { this.autoSaveDraft(); } },
+			additionalBreakdowns: { deep: true, handler: function () { this.autoSaveDraft(); } },
+			calc:                 { deep: true, handler: function () { this.autoSaveDraft(); } },
+			selectedMachine:      function () { this.autoSaveDraft(); },
+			flexoPrintMachine:    function () { this.autoSaveDraft(); },
+			matSearch:            function () { this.autoSaveDraft(); },
 		},
 
 		// ── TEMPLATE ────────────────────────────────────────────────
@@ -1625,6 +1731,7 @@ function oc_mount_app(el) {
           <option value="Production">Production</option>
           <option value="Material">Material</option>
           <option value="Preparation">Preparation</option>
+          <option value="Outsource">Outsource</option>
         </select>
         <input v-model.number="mc.qty" type="number" min="0" placeholder="Qty" class="oc-inp" style="width:60px" @input="scheduleCalc" />
         <input v-model.number="mc.rate" type="number" min="0" placeholder="Rate" class="oc-inp" style="width:78px" @input="scheduleCalc" />

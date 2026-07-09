@@ -39,7 +39,7 @@
    "fieldname": "cost_group",
    "fieldtype": "Select",
    "label": "Cost Group",
-   "options": "Preparation\nMaterial\nProduction"
+   "options": "Preparation\nMaterial\nProduction\nOutsource"
   },
   {
    "fieldname": "section_break_wevp",

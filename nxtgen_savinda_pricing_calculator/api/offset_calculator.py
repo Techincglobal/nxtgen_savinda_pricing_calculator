@@ -313,7 +313,7 @@ def calculate(payload):
         ups         = 0
 
     cost_rows = []
-    mat_total = prep_total = prod_total = 0.0
+    mat_total = prep_total = prod_total = out_total = 0.0
 
     # 1. Material (auto)
     auto_qty      = reel_area if pricing_type == "Flexo" else full_sheet_qty
@@ -421,8 +421,14 @@ def calculate(payload):
             machine_count_map=machine_count_map,
             global_extra_ctx=flexo_ctx,
         )
+        # Outsource-group specs get their own section + cost bucket in the breakdown.
+        if (spec.get("group") or "") == "Outsource":
+            for r in rows:
+                r["cost_group"] = "Outsource"
+            out_total += (mt + pp + pr)
+        else:
+            mat_total += mt; prep_total += pp; prod_total += pr
         cost_rows.extend(rows)
-        mat_total += mt; prep_total += pp; prod_total += pr
 
     # Extra production cost (user-defined %)
     extra_prod_pct = flt(form.get("extra_prod_cost_pct", 0))
@@ -457,6 +463,9 @@ def calculate(payload):
             mat_total += mc_amt
         elif gl == "preparation":
             prep_total += mc_amt
+        elif gl == "outsource":
+            mc_group = "Outsource"
+            out_total += mc_amt
         else:
             mc_group = "Production"
             prod_total += mc_amt
@@ -474,7 +483,7 @@ def calculate(payload):
             "is_auto":            False,
         })
 
-    grand = mat_total + prep_total + prod_total
+    grand = mat_total + prep_total + prod_total + out_total
     pm    = flt(form.get("profit_margin", 0)) / 100
     uc    = grand / item_qty if item_qty else 0
     cfg   = _get_config()
@@ -491,6 +500,7 @@ def calculate(payload):
             "material":    round(mat_total,  2),
             "preparation": round(prep_total, 2),
             "production":  round(prod_total, 2),
+            "outsource":   round(out_total,  2),
             "grand":       round(grand, 2),
         },
         "pricing": {
