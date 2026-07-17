@@ -14,6 +14,7 @@
   "auto_select",
   "pricing_type",
   "adds_colors",
+  "allow_foil_assignment",
   "section_break_machine_cfg",
   "has_machine",
   "column_break_mach1",
@@ -106,6 +107,13 @@
    "label": "Adds Colors",
    "default": "0",
    "description": "Selecting this spec increases the effective No of Colors by this amount (e.g. Gold Color = 1). Drives the Flexo printing formula and plate count. Leave 0 for none."
+  },
+  {
+   "fieldname": "allow_foil_assignment",
+   "fieldtype": "Check",
+   "default": "0",
+   "label": "Allow Foil Assignment (Flexo)",
+   "description": "When ticked, this spec shows a foil picker (COLD/HOT + %) in the calculator and produces its own foil cost line. Set Parent Spec = Print to nest it under printing. Foils are no longer assigned on the machine."
   },
   {
    "fieldname": "section_break_machine_cfg",
