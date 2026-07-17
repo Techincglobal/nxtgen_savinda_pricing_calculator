@@ -28,7 +28,7 @@ frappe.call({
 	callback: function (r) {
 		if (r.message) {
 			_cc.sscl_rate = parseFloat(r.message.sscl_rate || 2.5);
-			_cc.vat_rate  = parseFloat(r.message.vat_rate  || 18);
+			_cc.vat_rate = parseFloat(r.message.vat_rate || 18);
 		}
 	},
 });
@@ -529,15 +529,15 @@ function show_add_calc_popup(frm, cdt, cdn, item_name) {
 					{ fieldtype: "Section Break", label: "Reel Dimensions (mm)" },
 					{ fieldtype: "Float", fieldname: "reel_width_mm", label: "Reel Width (mm)", reqd: 1 },
 					{ fieldtype: "Column Break" },
-					{ fieldtype: "Float", fieldname: "product_width_mm", label: "Product Width (mm)", reqd: 1 },
 					{ fieldtype: "Section Break", label: "Product Dimensions (mm)" },
-					{ fieldtype: "Float", fieldname: "product_length_mm", label: "Product Length (mm)", reqd: 1 },
-					{ fieldtype: "Column Break" },
+					{ fieldtype: "Float", fieldname: "product_width_mm", label: "Product Width (mm)", reqd: 1 },
 					{ fieldtype: "Float", fieldname: "product_margin_mm", label: "Margin (mm)", default: 4 },
-					{ fieldtype: "Section Break" },
-					{ fieldtype: "Float", fieldname: "product_gap_mm", label: "Gap (mm)", default: 3 },
 					{ fieldtype: "Column Break" },
+					{ fieldtype: "Float", fieldname: "product_length_mm", label: "Product Length (mm)", reqd: 1 },
+					{ fieldtype: "Float", fieldname: "product_gap_mm", label: "Gap (mm)", default: 3 },
+					{ fieldtype: "Section Break" },
 					{ fieldtype: "Int", fieldname: "no_of_colors", label: "No of Colors", default: ci.colour || 0 },
+					{ fieldtype: "Column Break" },
 				]);
 			} else {
 				// Offset: sheet dimensions (saved to CB doctype fields)
@@ -673,10 +673,10 @@ function show_copy_calc_popup(frm, cdt, cdn, item_name) {
 					frappe.call({
 						method: "nxtgen_savinda_pricing_calculator.api.offset_calculator.copy_calculation",
 						args: {
-							source_cb:        source_cb,
+							source_cb: source_cb,
 							target_cost_item: item_name,
-							new_qty:          vals.new_qty,
-							description:      vals.description || "",
+							new_qty: vals.new_qty,
+							description: vals.description || "",
 						},
 						freeze: true,
 						freeze_message: "Copying calculation…",
@@ -741,11 +741,41 @@ function create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pric
 	if (pricingType !== "Flexo") {
 		cbDoc.full_sheet_l = vals.full_sheet_l;
 		cbDoc.full_sheet_w = vals.full_sheet_w;
-		cbDoc.cut_sheet_l  = vals.cut_sheet_l;
-		cbDoc.cut_sheetw   = vals.cut_sheet_w;
-		cbDoc.no_of_cuts   = vals.no_of_cuts;
-		cbDoc.no_of_ups    = vals.no_of_ups;
+		cbDoc.cut_sheet_l = vals.cut_sheet_l;
+		cbDoc.cut_sheetw = vals.cut_sheet_w;
+		cbDoc.no_of_cuts = vals.no_of_cuts;
+		cbDoc.no_of_ups = vals.no_of_ups;
 	}
+
+	// Seed ui_state so the calculator restores EVERY value entered in this dialog.
+	// Flexo reel dimensions have no dedicated CB columns — they live only in ui_state —
+	// so without this they were lost when the calculator opened.
+	var cbForm = {
+		pricing_type:  pricingType || "Offset",
+		customer_name: frm.doc.customer_name || "",
+		ref:           frm.doc.inquiry || "",
+		material_type: matType,
+		base_material: matType === "Custom" ? "" : (vals.base_material || ""),
+		custom_material_name: matType === "Custom" ? (vals.custom_material_name || "") : "",
+		material_rate: matType === "Custom" ? (parseFloat(vals.material_rate) || 0) : 0,
+		no_of_colors:  parseInt(vals.no_of_colors) || 0,
+		item_qty:      parseFloat(vals.item_qty) || 0,
+	};
+	if (pricingType === "Flexo") {
+		cbForm.reel_width_mm     = parseFloat(vals.reel_width_mm) || 0;
+		cbForm.product_width_mm  = parseFloat(vals.product_width_mm) || 0;
+		cbForm.product_length_mm = parseFloat(vals.product_length_mm) || 0;
+		cbForm.product_margin_mm = parseFloat(vals.product_margin_mm) || 0;
+		cbForm.product_gap_mm    = parseFloat(vals.product_gap_mm) || 0;
+	} else {
+		cbForm.full_sheet_l = parseFloat(vals.full_sheet_l) || 0;
+		cbForm.full_sheet_w = parseFloat(vals.full_sheet_w) || 0;
+		cbForm.cut_sheet_l  = parseFloat(vals.cut_sheet_l) || 0;
+		cbForm.cut_sheet_w  = parseFloat(vals.cut_sheet_w) || 0;
+		cbForm.no_of_cuts   = parseInt(vals.no_of_cuts) || 0;
+		cbForm.no_of_ups    = parseInt(vals.no_of_ups) || 0;
+	}
+	cbDoc.ui_state = JSON.stringify({ form: cbForm, selected_specs: [], machine_spec: null, calc_result: null });
 
 	// 1. Create the Calculation Breakdown
 	frappe.call({
@@ -772,8 +802,8 @@ function create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pric
 					});
 					// Save cut sheet sizes to Cost Item (Offset only)
 					if (pricingType !== "Flexo") {
-						doc.cut_sheet_l   = parseFloat(vals.cut_sheet_l)   || 0;
-						doc.cut_sheet_w   = parseFloat(vals.cut_sheet_w)   || 0;
+						doc.cut_sheet_l = parseFloat(vals.cut_sheet_l) || 0;
+						doc.cut_sheet_w = parseFloat(vals.cut_sheet_w) || 0;
 						doc.cut_sheet_l_2 = parseFloat(vals.cut_sheet_l_2) || 0;
 						doc.cut_sheet_w_2 = parseFloat(vals.cut_sheet_w_2) || 0;
 					}
@@ -798,7 +828,7 @@ function create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pric
 										if (json_bqtys && json_bqtys.length > 1) {
 											bqtys = json_bqtys;
 										}
-									} catch (e) {}
+									} catch (e) { }
 									if (!bqtys.length && group_name) {
 										// Group set → sheet split across all member quantities in this group
 										(frm.doc.pricing_list || []).forEach(function (r) {

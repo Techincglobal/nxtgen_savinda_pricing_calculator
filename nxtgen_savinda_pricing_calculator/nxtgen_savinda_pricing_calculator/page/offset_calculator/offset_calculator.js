@@ -190,6 +190,11 @@ function oc_mount_app(el) {
 				return out;
 			},
 			isFlexoDialog() { return this.isFlexo; },
+			// Foil-only assignment: a dedicated foil spec (Allow Foil Assignment, no machine).
+			// The dialog then shows ONLY the foil picker — no machine, cycles, inks or manual process.
+			isFoilOnlyDialog() {
+				return !!(this.inkDialog && this.inkDialog.allow_foil_assignment && !this.inkDialog.has_machine);
+			},
 			isDialogMachinePrinting() {
 				if (!this.inkDialog || !this.inkDialogState.machine) return false;
 				var mList = this.inkDialog.machines || [];
@@ -270,6 +275,7 @@ function oc_mount_app(el) {
 						spec_name: spec.spec_name,
 						group: spec.group || '',
 						has_machine: spec.has_machine || 0,
+						allow_foil_assignment: spec.allow_foil_assignment || 0,
 						adds_colors: spec.adds_colors || 0,
 						units: spec.units || 'Full sheet',
 						skip_machine_if_spec: spec.skip_machine_if_spec || '',
@@ -1291,7 +1297,7 @@ function oc_mount_app(el) {
       <div class="oc-pa-hdr">Production Assignment: <b>{{ inkDialog.spec_name }}</b></div>
       <div class="oc-pa-body">
         <!-- Manual Process toggle -->
-        <div class="oc-field">
+        <div class="oc-field" v-if="!isFoilOnlyDialog">
           <label class="oc-chk-lbl" style="font-weight:600">
             <input type="checkbox" v-model="inkDialogState.manual_process" class="oc-chk" />
             <span>Manual Process</span>
@@ -1299,8 +1305,8 @@ function oc_mount_app(el) {
           <div class="oc-hint">When checked, skips machine cost formulas and uses a fixed manual cost instead.</div>
         </div>
 
-        <!-- Machine + Cycles (hidden when Manual Process) -->
-        <template v-if="!inkDialogState.manual_process">
+        <!-- Machine + Cycles (hidden when Manual Process or foil-only spec) -->
+        <template v-if="!isFoilOnlyDialog && !inkDialogState.manual_process">
         <div class="oc-field">
           <label class="oc-sublbl">Select Machine</label>
           <select v-model="inkDialogState.machine" class="oc-inp oc-sel">
@@ -1316,7 +1322,7 @@ function oc_mount_app(el) {
         </template>
 
         <!-- Manual cost fields (shown when Manual Process) -->
-        <template v-if="inkDialogState.manual_process">
+        <template v-if="!isFoilOnlyDialog && inkDialogState.manual_process">
         <div class="oc-field">
           <label class="oc-sublbl">Manual Calculation Unit</label>
           <select v-model="inkDialogState.manual_unit" class="oc-inp oc-sel">
@@ -1389,11 +1395,12 @@ function oc_mount_app(el) {
             <span class="oc-pct-sym">%</span>
             <button @click="addDialogFoil" class="oc-btn oc-btn-blue oc-btn-sm">Add</button>
           </div>
-          <!-- Inks -->
+          <!-- Inks (hidden for a foil-only spec) -->
+          <template v-if="!isFoilOnlyDialog">
           <div class="oc-pa-section-hdr" style="margin-top:12px">Inks</div>
           <div v-if="!inkDialogState.inks.length" class="oc-no-inks">No inks assigned.</div>
           <div v-for="(ink, i) in inkDialogState.inks" :key="i" class="oc-ink-chip">
-            <span class="oc-ink-chip-label">{{ ink.ink_name }}</span>
+            <span class="oc-ink-chip-label">{{ ink.ink_name }} <span class="oc-ink-pct">({{ ink.percentage }}%)</span></span>
             <button @click="removeDialogInk(i)" class="oc-ink-rm">🗑</button>
           </div>
           <div class="oc-add-ink" style="margin-top:6px">
@@ -1401,8 +1408,11 @@ function oc_mount_app(el) {
               <option value="">Select Ink</option>
               <option v-for="ink in dialogInkList" :key="ink.ink_name" :value="ink.ink_name">{{ ink.ink_name }}</option>
             </select>
+            <input type="number" v-model.number="inkNewPct" min="1" max="100" class="oc-inp oc-pct-inp" />
+            <span class="oc-pct-sym">%</span>
             <button @click="addDialogInk" class="oc-btn oc-btn-blue oc-btn-sm">Add</button>
           </div>
+          </template>
         </template>
       </div>
       <div class="oc-pa-ftr">
@@ -1676,6 +1686,21 @@ function oc_mount_app(el) {
                   <input type="checkbox" class="oc-chk" :checked="effectiveSkip(spec.spec_name)" @change="toggleSkipMachine(spec.spec_name)" />
                   <span>{{ skipMachineLabel(spec.spec_name) }}</span>
                 </label>
+              </div>
+
+              <!-- Foil allocation — dedicated foil spec (opens the foil picker) -->
+              <div v-if="spec.allow_foil_assignment && !spec.has_machine" class="oc-machine-sec">
+                <div class="oc-assign-row">
+                  <div class="oc-assign-summary">
+                    <span v-if="(specState[spec.spec_name]._foils || []).length">
+                      <span v-for="(foil, fi) in (specState[spec.spec_name]._foils || [])" :key="'ff'+fi" class="oc-badge-ink" :style="foil.foil_group==='COLD'?'background:#bbdefb':'background:#ffe0b2'">
+                        {{ foil.foil_group }} {{ foil.foil_name }} ({{ foil.percentage }}%)
+                      </span>
+                    </span>
+                    <span v-else class="oc-no-assign">No foils assigned</span>
+                  </div>
+                  <button class="oc-btn-assign" @click.stop="openInkDialog(spec)">⚙ Assign Foils</button>
+                </div>
               </div>
 
               <div v-for="cf in spec.cost_facts" :key="cf.cost_fact" class="oc-cf">
