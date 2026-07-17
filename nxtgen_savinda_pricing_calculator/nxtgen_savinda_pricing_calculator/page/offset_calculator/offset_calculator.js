@@ -141,10 +141,17 @@ function oc_mount_app(el) {
 			},
 			specsByGroup() {
 				var g = {};
-				// Sort: Print first within each group, then alphabetically
+				// Printing spec first within each group (Offset "Print" and Flexo printing spec),
+				// then alphabetically. Flexo has no separate top machine card — printing is a
+				// spec shown at the top, just like Offset.
+				function isPrint(s) {
+					return s.spec_name === 'Print'
+						|| (s.has_machine && (s.machines || []).some(function (m) { return m.is_printing_machine; }));
+				}
 				var sorted = this.allSpecs.slice().sort(function (a, b) {
-					if (a.spec_name === 'Print') return -1;
-					if (b.spec_name === 'Print') return 1;
+					var pa = isPrint(a), pb = isPrint(b);
+					if (pa && !pb) return -1;
+					if (pb && !pa) return 1;
 					return a.spec_name < b.spec_name ? -1 : a.spec_name > b.spec_name ? 1 : 0;
 				});
 				sorted.forEach(function (s) {
@@ -1368,9 +1375,10 @@ function oc_mount_app(el) {
           </div>
         </template>
 
-        <!-- Flexo: Foils + Inks -->
+        <!-- Flexo: Foils (foil-only spec) + Inks (machine/printing spec) -->
         <template v-if="isFlexoDialog">
-          <!-- Foils -->
+          <!-- Foils — only on a dedicated foil spec; the printing/machine dialog has no foils -->
+          <template v-if="isFoilOnlyDialog">
           <div class="oc-pa-section-hdr">Foils</div>
           <div v-if="!inkDialogState.foils.length" class="oc-no-inks">No foils assigned.</div>
           <div v-for="(foil, i) in inkDialogState.foils" :key="i" class="oc-ink-chip"
@@ -1395,7 +1403,8 @@ function oc_mount_app(el) {
             <span class="oc-pct-sym">%</span>
             <button @click="addDialogFoil" class="oc-btn oc-btn-blue oc-btn-sm">Add</button>
           </div>
-          <!-- Inks (hidden for a foil-only spec) -->
+          </template>
+          <!-- Inks (only on machine/printing spec, not foil-only) -->
           <template v-if="!isFoilOnlyDialog">
           <div class="oc-pa-section-hdr" style="margin-top:12px">Inks</div>
           <div v-if="!inkDialogState.inks.length" class="oc-no-inks">No inks assigned.</div>
@@ -1517,25 +1526,8 @@ function oc_mount_app(el) {
         </div>
       </div>
 
-      <!-- ══ FLEXO: Printing Machine card ══ -->
-      <div v-if="isFlexo && flexoPrintingMachines.length" class="oc-auto-card">
-        <div class="oc-auto-card-title">
-          <span class="oc-auto-dot" :class="flexoPrintMachine ? 'on' : ''"></span>
-          Printing Machine
-          <span v-if="flexoPrintMachine" class="oc-auto-ok">✓ {{ flexoPrintMachine }}</span>
-        </div>
-        <div class="oc-field">
-          <label class="oc-lbl">Select Printing Machine</label>
-          <select :value="flexoPrintMachine" class="oc-inp oc-sel" @change="onFlexoPrintMachineChange($event.target.value)">
-            <option value="">— Select Machine —</option>
-            <option v-for="m in flexoPrintingMachines" :key="m.machine" :value="m.machine">{{ m.machine }}</option>
-          </select>
-        </div>
-        <div v-if="selectedFlexoPrintMachineInfo" class="oc-hint" style="margin-top:2px">
-          LKR {{ (selectedFlexoPrintMachineInfo.machine_cost_per_hour || 0).toLocaleString() }}/hr
-          &nbsp;·&nbsp; Capacity: {{ selectedFlexoPrintMachineInfo.color_capacity || '—' }} colors
-        </div>
-      </div>
+      <!-- Flexo printing is selected like Offset: the "Flexo Printing" spec appears at the
+           top of the spec list; its machine + inks are set via that spec's ⚙ Assign dialog. -->
 
       <!-- ══ OFFSET: Sheet Specs ══ -->
       <div v-if="isOffset">
