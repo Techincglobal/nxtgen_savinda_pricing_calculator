@@ -1116,18 +1116,19 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 				var descriptions = selected_bds.map(function (b) { return (b.description || "").trim(); }).filter(Boolean);
 				var combined_desc = descriptions.join(" + ");
 				var name = combined_desc ? subject + " - " + combined_desc : subject;
+				var comb_pk = _cs_packing(selected_bds[0]);
+				var comb_doc = {
+					doctype: "cost Item", cost_item_name: name,
+					inquiry: opp.name, subject: subject, page_type: "",
+					colour: cint_v(opp.custom_colour), material: "",
+					item_qty: total_qty, no_of_pages: 0,
+					breakdown: combined_desc, is_selected: 1,
+					breakdown_qtys_json: JSON.stringify(breakdown_qtys),
+				};
+				_apply_packing(comb_doc, comb_pk);
 				frappe.call({
 					method: "frappe.client.insert",
-					args: {
-						doc: {
-							doctype: "cost Item", cost_item_name: name,
-							inquiry: opp.name, subject: subject, page_type: "",
-							colour: cint_v(opp.custom_colour), material: "",
-							item_qty: total_qty, no_of_pages: 0,
-							breakdown: combined_desc, is_selected: 1,
-							breakdown_qtys_json: JSON.stringify(breakdown_qtys),
-						}
-					},
+					args: { doc: comb_doc },
 					callback: function (r) {
 						if (r.message) {
 							var row = frm.add_child("pricing_list");
@@ -1135,6 +1136,7 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 							row.item_name = name;
 							row.qty = total_qty;
 							if (group_name_val) row.group_name = group_name_val;
+							_apply_packing(row, comb_pk);
 						}
 						frm.refresh_field("pricing_list");
 						frm.save();
@@ -1159,17 +1161,18 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 				var bd_desc = (bd.description || "").trim();
 				var name = bd_desc ? subject + " - " + bd_desc : subject;
 				var qty = flt_v(bd.qty);
+				var bd_pk = _cs_packing(bd);
+				var bd_doc = {
+					doctype: "cost Item", cost_item_name: name,
+					inquiry: opp.name, subject: subject, page_type: "",
+					colour: cint_v(opp.custom_colour), material: "",
+					item_qty: qty, no_of_pages: 0,
+					breakdown: bd_desc, is_selected: 1,
+				};
+				_apply_packing(bd_doc, bd_pk);
 				frappe.call({
 					method: "frappe.client.insert",
-					args: {
-						doc: {
-							doctype: "cost Item", cost_item_name: name,
-							inquiry: opp.name, subject: subject, page_type: "",
-							colour: cint_v(opp.custom_colour), material: "",
-							item_qty: qty, no_of_pages: 0,
-							breakdown: bd_desc, is_selected: 1,
-						}
-					},
+					args: { doc: bd_doc },
 					callback: function (r) {
 						if (r.message) {
 							var row = frm.add_child("pricing_list");
@@ -1177,6 +1180,7 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 							row.item_name = name;
 							row.qty = qty;
 							if (group_name_val) row.group_name = group_name_val;
+							_apply_packing(row, bd_pk);
 						}
 						insert_bd_next(idx + 1);
 					},
@@ -1229,6 +1233,26 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 	setTimeout(update_preview, 100);
 }
 
+// Packing Info seeded ONCE from an inquiry breakdown row. Kept editable downstream;
+// the final saved value on the Cost Item is what flows forward (inquiry not re-read).
+function _cs_packing(bd) {
+	return {
+		packing_type:      (bd && bd.packing_type) || "",
+		winding_direction: (bd && bd.winding_direction) || "",
+		pcs_per_role:      (bd && bd.pcs_per_role) || 0,
+		up:                (bd && bd.up) || 0,
+		is_printed:        (bd && bd.is_printed) || "",
+	};
+}
+function _apply_packing(target, pk) {
+	if (!target || !pk) return;
+	target.packing_type      = pk.packing_type;
+	target.winding_direction = pk.winding_direction;
+	target.pcs_per_role      = pk.pcs_per_role;
+	target.up                = pk.up;
+	target.is_printed        = pk.is_printed;
+}
+
 function build_items(subject, pages, breakdowns, selected, total_bd_qty) {
 	var items = [];
 	pages.forEach(function (page, i) {
@@ -1242,15 +1266,18 @@ function build_items(subject, pages, breakdowns, selected, total_bd_qty) {
 					cost_item_name: name, page_type: page_type, colour: colour,
 					material: material, item_qty: flt_v(bd.qty) * n_pages, no_of_pages: n_pages,
 					breakdown: bd_desc, bd_qty: flt_v(bd.qty), is_selected: 1,
+					_packing: _cs_packing(bd),
 					_calc: "bd_qty(" + flt_v(bd.qty).toLocaleString() + ") × pages(" + n_pages + ")"
 				});
 			});
 		} else {
+			// Grouped-per-page item spans all breakdowns → seed packing from the first row.
 			items.push({
 				cost_item_name: subject + " - " + page_type + " - " + colour + "C",
 				page_type: page_type, colour: colour, material: material,
 				item_qty: n_pages * total_bd_qty, no_of_pages: n_pages,
 				breakdown: "", bd_qty: total_bd_qty, is_selected: 0,
+				_packing: _cs_packing(breakdowns[0]),
 				_calc: "pages(" + n_pages + ") × total_bd(" + total_bd_qty.toLocaleString() + ")"
 			});
 		}
@@ -1271,23 +1298,23 @@ function do_create_items(frm, opp, subject, pages, breakdowns, selected, total_b
 			return;
 		}
 		var ci = items[idx];
+		var ci_doc = {
+			doctype: "cost Item",
+			cost_item_name: ci.cost_item_name,
+			inquiry: opp.name,
+			subject: subject,
+			page_type: ci.page_type,
+			colour: ci.colour,
+			material: ci.material,
+			item_qty: ci.item_qty,
+			no_of_pages: ci.no_of_pages,
+			breakdown: ci.breakdown,
+			is_selected: ci.is_selected,
+		};
+		_apply_packing(ci_doc, ci._packing);
 		frappe.call({
 			method: "frappe.client.insert",
-			args: {
-				doc: {
-					doctype: "cost Item",
-					cost_item_name: ci.cost_item_name,
-					inquiry: opp.name,
-					subject: subject,
-					page_type: ci.page_type,
-					colour: ci.colour,
-					material: ci.material,
-					item_qty: ci.item_qty,
-					no_of_pages: ci.no_of_pages,
-					breakdown: ci.breakdown,
-					is_selected: ci.is_selected,
-				}
-			},
+			args: { doc: ci_doc },
 			callback: function (r) {
 				if (r.message) {
 					var row = frm.add_child("pricing_list");
@@ -1295,6 +1322,7 @@ function do_create_items(frm, opp, subject, pages, breakdowns, selected, total_b
 					row.item_name = ci.cost_item_name;
 					row.qty = ci.item_qty;
 					if (group_name) row.group_name = group_name;
+					_apply_packing(row, ci._packing);
 				}
 				insert_next(idx + 1);
 			},

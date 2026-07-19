@@ -81,6 +81,14 @@ def _ensure_custom_fields():
 					"insert_after": "customer_ref",
 					"description":  "Linked Cost Item — keeps this FG connected to its calculation breakdown for BOM creation. All variants of one product share the same Cost Item.",
 				},
+				{
+					"fieldname":    "custom_product_library",
+					"label":        "Product Library",
+					"fieldtype":    "Link",
+					"options":      "Product Library",
+					"insert_after": "custom_cost_item",
+					"description":  "Product-library record holding this FG's technical + reference data.",
+				},
 			],
 			"Material Request Plan Item": [
 				{
@@ -90,6 +98,52 @@ def _ensure_custom_fields():
 					"insert_after": "quantity",
 					"read_only":    1,
 					"description":  "Wastage portion included in Quantity (added at production planning). Kept separate for print formats.",
+				},
+			],
+			# Packing details carried from the Cost Sheet flow; editable on the SO per PO.
+			"Sales Order Item": [
+				{
+					"fieldname":    "custom_packing_type",
+					"label":        "Packing Type",
+					"fieldtype":    "Link",
+					"options":      "UOM",
+					"insert_after": "item_name",
+				},
+				{
+					"fieldname":    "custom_winding_direction",
+					"label":        "Winding Direction",
+					"fieldtype":    "Link",
+					"options":      "Winding Direction",
+					"insert_after": "custom_packing_type",
+				},
+				{
+					"fieldname":    "custom_is_printed",
+					"label":        "Is Printed",
+					"fieldtype":    "Select",
+					"options":      "\nYes\nNo",
+					"insert_after": "custom_winding_direction",
+				},
+				{
+					"fieldname":    "custom_pcs_per_role",
+					"label":        "PCS per Role/Sheet",
+					"fieldtype":    "Int",
+					"insert_after": "custom_is_printed",
+				},
+				{
+					"fieldname":    "custom_up",
+					"label":        "UP",
+					"fieldtype":    "Int",
+					"insert_after": "custom_pcs_per_role",
+				},
+			],
+			# Customer-facing common/marketing name for the material (hides the real item).
+			"Boards and Papers": [
+				{
+					"fieldname":    "common_name",
+					"label":        "Common Name (Customer-facing)",
+					"fieldtype":    "Data",
+					"insert_after": "item",
+					"description":  "Generic material name shown to the customer on the quotation instead of the real material.",
 				},
 			],
 		}, ignore_validate=True)

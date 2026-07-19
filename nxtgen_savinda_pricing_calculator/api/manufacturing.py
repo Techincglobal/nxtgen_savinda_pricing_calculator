@@ -5,7 +5,86 @@ import json
 import re
 
 import frappe
-from frappe.utils import flt
+from frappe.utils import cint, flt
+
+
+def _upsert_product_library(fg_item_code, cost_item=None, customer_ref=None):
+	"""Create a Product Library record for a new FG, pre-filled from the (final) cost Item
+	and its Calculation Breakdown. Non-fatal — never blocks FG creation."""
+	try:
+		if not fg_item_code or not frappe.db.exists("DocType", "Product Library"):
+			return
+		if frappe.db.exists("Product Library", {"fg_item": fg_item_code}):
+			return
+
+		item = frappe.db.get_value(
+			"Item", fg_item_code, ["item_name", "customer_ref"], as_dict=True
+		) or {}
+
+		ci = {}
+		cb = {}
+		if cost_item and frappe.db.exists("cost Item", cost_item):
+			ci = frappe.db.get_value(
+				"cost Item", cost_item,
+				["customer_ref", "colour", "inquiry", "cut_sheet_l", "cut_sheet_w"],
+				as_dict=True,
+			) or {}
+			cb_name = frappe.db.get_value(
+				"Cost Item Calculation", {"parent": cost_item},
+				"calculation_breakdown", order_by="idx asc",
+			)
+			if cb_name and frappe.db.exists("Calculation Breakdown", cb_name):
+				cb = frappe.db.get_value(
+					"Calculation Breakdown", cb_name,
+					["name", "pricing_type", "no_of_colors", "no_of_ups",
+					 "full_sheet_l", "full_sheet_w", "cut_sheet_l", "cut_sheetw",
+					 "ui_state"],
+					as_dict=True,
+				) or {}
+
+		pricing = (cb.get("pricing_type") or "").strip()
+		# Flexo reel/product dimensions live only in the CB ui_state JSON.
+		w = l = 0
+		if cb.get("ui_state"):
+			try:
+				form = (json.loads(cb["ui_state"]) or {}).get("form", {}) or {}
+				w = flt(form.get("reel_width_mm") or form.get("product_width_mm") or 0)
+				l = flt(form.get("product_length_mm") or 0)
+			except Exception:
+				pass
+
+		def _size(a, b):
+			a, b = flt(a), flt(b)
+			return f"{a} x {b}" if (a or b) else ""
+
+		pl = frappe.get_doc({
+			"doctype":               "Product Library",
+			"product_code":          fg_item_code,
+			"product_name":          item.get("item_name") or fg_item_code,
+			"customer_product_code": customer_ref or item.get("customer_ref") or ci.get("customer_ref") or "",
+			"department":            pricing if pricing in ("Offset", "Flexo") else "",
+			"flexo_type":            "Reel" if pricing == "Flexo" else "",
+			"fg_item":               fg_item_code,
+			"cost_item":             cost_item or "",
+			"calculation_breakdown": cb.get("name") or "",
+			"inquiry":               ci.get("inquiry") or "",
+			"no_of_colors":          cint(cb.get("no_of_colors") or ci.get("colour") or 0),
+			"no_of_ups":             cint(cb.get("no_of_ups") or 0),
+			"full_sheet_size":       _size(cb.get("full_sheet_l"), cb.get("full_sheet_w")),
+			"cut_sheet_size":        _size(cb.get("cut_sheet_l") or ci.get("cut_sheet_l"),
+			                               cb.get("cut_sheetw") or ci.get("cut_sheet_w")),
+			"width_mm":              w,
+			"length_mm":             l,
+		})
+		pl.flags.ignore_permissions = True
+		pl.insert(ignore_permissions=True)
+		if frappe.db.has_column("Item", "custom_product_library"):
+			frappe.db.set_value("Item", fg_item_code, "custom_product_library", pl.name)
+	except Exception:
+		frappe.log_error(
+			title="pricing_calculator: product library upsert failed",
+			message=frappe.get_traceback(),
+		)
 
 
 @frappe.whitelist()
@@ -47,6 +126,7 @@ def create_fg_item(item_name, description, item_group, department, stock_uom="No
 	if customer_ref and frappe.db.has_column("Item", "customer_ref"):
 		doc.customer_ref = customer_ref
 	doc.insert(ignore_permissions=True)
+	_upsert_product_library(doc.name, cost_item, customer_ref)
 	frappe.db.commit()
 
 	return {"item_code": doc.name, "item_name": doc.item_name}
@@ -145,6 +225,7 @@ def create_fg_variants(template_name, description, item_group, department,
 		if cost_item and frappe.db.has_column("Item", "custom_cost_item"):
 			doc.custom_cost_item = cost_item
 		doc.insert(ignore_permissions=True)
+		_upsert_product_library(doc.name, cost_item, r.get("customer_ref"))
 		created.append({"item_code": doc.name, "item_name": doc.item_name,
 		                "value": val, "customer_ref": r.get("customer_ref") or ""})
 
@@ -207,6 +288,25 @@ def create_customer_from_quotation(quotation):
 	return {"customer": existing}
 
 
+def _ci_packing(cost_item):
+	"""Packing Info snapshot from the (final, saved) cost Item — keyed for Sales Order Item
+	custom fields. Empty dict when unavailable."""
+	if not cost_item or not frappe.db.exists("cost Item", cost_item):
+		return {}
+	d = frappe.db.get_value(
+		"cost Item", cost_item,
+		["packing_type", "winding_direction", "pcs_per_role", "up", "is_printed"],
+		as_dict=True,
+	) or {}
+	return {
+		"custom_packing_type":      d.get("packing_type") or "",
+		"custom_winding_direction": d.get("winding_direction") or "",
+		"custom_pcs_per_role":      d.get("pcs_per_role") or 0,
+		"custom_up":                d.get("up") or 0,
+		"custom_is_printed":        d.get("is_printed") or "",
+	}
+
+
 @frappe.whitelist()
 def get_quotation_fg_items(quotation):
 	"""Return every FG item tied to this quotation's cost items — including
@@ -214,7 +314,14 @@ def get_quotation_fg_items(quotation):
 	doc = frappe.get_doc("Savinda Quotation", quotation)
 
 	ci_info = {}
+	packing_cache = {}
 	fgs = {}
+
+	def _pk(cost_item):
+		if cost_item not in packing_cache:
+			packing_cache[cost_item] = _ci_packing(cost_item)
+		return packing_cache[cost_item]
+
 	for row in doc.items:
 		if row.cost_item and row.cost_item not in ci_info:
 			ci_info[row.cost_item] = {
@@ -223,7 +330,7 @@ def get_quotation_fg_items(quotation):
 				"cb":   row.calculation_breakdown or "",
 			}
 		if row.finish_good and row.finish_good not in fgs:
-			fgs[row.finish_good] = {
+			fg = {
 				"item_code":             row.finish_good,
 				"item_name":             row.item_name or row.finish_good,
 				"qty":                   flt(row.qty),
@@ -231,6 +338,8 @@ def get_quotation_fg_items(quotation):
 				"cost_item":             row.cost_item or "",
 				"calculation_breakdown": row.calculation_breakdown or "",
 			}
+			fg.update(_pk(row.cost_item or ""))
+			fgs[row.finish_good] = fg
 
 	if ci_info and frappe.db.has_column("Item", "custom_cost_item"):
 		for it in frappe.get_all(
@@ -241,7 +350,7 @@ def get_quotation_fg_items(quotation):
 			if it.name in fgs:
 				continue
 			info = ci_info.get(it.custom_cost_item, {})
-			fgs[it.name] = {
+			fg = {
 				"item_code":             it.name,
 				"item_name":             it.item_name or it.name,
 				"qty":                   info.get("qty", 0),
@@ -249,5 +358,7 @@ def get_quotation_fg_items(quotation):
 				"cost_item":             it.custom_cost_item,
 				"calculation_breakdown": info.get("cb", ""),
 			}
+			fg.update(_pk(it.custom_cost_item))
+			fgs[it.name] = fg
 
 	return list(fgs.values())

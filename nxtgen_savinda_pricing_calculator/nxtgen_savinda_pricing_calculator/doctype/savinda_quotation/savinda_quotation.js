@@ -53,7 +53,7 @@ frappe.ui.form.on("Savinda Quotation", {
 		// Print Quotation button
 		if (!frm.is_new()) {
 			frm.add_custom_button(__("Print Quotation"), function () {
-				frappe.set_route("print", "Savinda Quotation", frm.doc.name, "Savinda Quotation Format");
+				frappe.set_route("print", "Savinda Quotation", frm.doc.name, "Savinda Quotation");
 			}, __("Actions"));
 		}
 
@@ -93,19 +93,35 @@ frappe.ui.form.on("Savinda Quotation", {
 			}, __("Actions"));
 
 			frm.add_custom_button(__("Mark as Lost"), function () {
-				frappe.confirm(
-					"Mark quotation <b>" + frm.doc.name + "</b> as <b style='color:#dc2626'>Lost</b>?",
-					function () {
-						frappe.call({
-							method: "frappe.client.set_value",
-							args:   { doctype: "Savinda Quotation", name: frm.doc.name, fieldname: "status", value: "Lost" },
-							callback: function () {
-								frm.reload_doc();
-								frappe.show_alert({ message: "Quotation marked as Lost.", indicator: "red" });
-							},
+				var d = new frappe.ui.Dialog({
+					title: __("Mark Quotation as Lost"),
+					fields: [
+						{
+							fieldtype: "Table MultiSelect", fieldname: "lost_reasons",
+							label: __("Lost Reasons"), options: "Opportunity Lost Reason Detail",
+						},
+						{ fieldtype: "Small Text", fieldname: "detailed_reason", label: __("Detailed Reason") },
+					],
+					primary_action_label: __("Declare Lost"),
+					primary_action: function (values) {
+						frm.set_value("status", "Lost");
+						frm.set_value("order_lost_reason", values.detailed_reason || "");
+						frm.clear_table("lost_reasons");
+						(values.lost_reasons || []).forEach(function (r) {
+							var reason = r.lost_reason || r;
+							if (reason) {
+								var row = frm.add_child("lost_reasons");
+								row.lost_reason = reason;
+							}
 						});
-					}
-				);
+						frm.refresh_field("lost_reasons");
+						d.hide();
+						frm.save(frm.doc.docstatus === 1 ? "Update" : undefined).then(function () {
+							frappe.show_alert({ message: "Quotation marked as Lost.", indicator: "red" });
+						});
+					},
+				});
+				d.show();
 			}, __("Actions"));
 		}
 
@@ -153,6 +169,14 @@ frappe.ui.form.on("Savinda Quotation", {
 		frappe.db.get_value("Customer", frm.doc.customer, "customer_name", function (r) {
 			if (r && r.customer_name) frm.set_value("customer_name", r.customer_name);
 		});
+	},
+
+	// ── Quotation currency → auto-fetch exchange rate (LKR per 1 unit) ──
+	currency: function (frm) {
+		_fetch_exchange_rate(frm);
+	},
+	date: function (frm) {
+		if (frm.doc.currency && frm.doc.currency !== _base_currency()) _fetch_exchange_rate(frm);
 	},
 
 	// Load the selected Terms & Conditions template into the editable Terms box (like SI)
@@ -227,6 +251,44 @@ function _show_load_dialog(frm) {
 //  at the base quantity is added (original behaviour).
 // ─────────────────────────────────────────────────────────────
 
+function _base_currency() {
+	return (frappe.boot && frappe.boot.sysdefaults && frappe.boot.sysdefaults.currency) || "LKR";
+}
+
+// Auto-fetch the exchange rate (company base per 1 unit of quotation currency) from
+// ERPNext Currency Exchange for the quotation date. The user can still override it.
+function _fetch_exchange_rate(frm) {
+	var base = _base_currency();
+	if (!frm.doc.currency || frm.doc.currency === base) {
+		frm.set_value("conversion_rate", 1);
+		return;
+	}
+	frappe.call({
+		method: "erpnext.setup.utils.get_exchange_rate",
+		args: {
+			from_currency: frm.doc.currency,
+			to_currency: base,
+			transaction_date: frm.doc.date || frappe.datetime.get_today(),
+		},
+		callback: function (r) {
+			if (r && r.message) {
+				frm.set_value("conversion_rate", flt_v(r.message));
+			}
+		},
+	});
+}
+
+// Carry the Cost Item's (final, saved) packing info onto a quotation row.
+// The inquiry is never re-read here — the Cost Item is the source of truth.
+function _apply_packing_q(qrow, ci) {
+	if (!qrow || !ci) return;
+	qrow.packing_type      = ci.packing_type || "";
+	qrow.winding_direction = ci.winding_direction || "";
+	qrow.pcs_per_role      = ci.pcs_per_role || 0;
+	qrow.up                = ci.up || 0;
+	qrow.is_printed        = ci.is_printed || "";
+}
+
 function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
 	frappe.call({
 		method: "frappe.client.get",
@@ -276,6 +338,7 @@ function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
 					? flt_v(cs_row.selling_unit_price)
 					: flt_v(cs_row.unit_price);
 				qrow.is_manually_set  = 0;
+				_apply_packing_q(qrow, ci);
 				loaded++;
 			}
 
@@ -341,6 +404,7 @@ function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
 									qrow.finishing_variant = 1;
 									qrow.qty               = qb.qty;
 									qrow.is_manually_set   = 0;
+									_apply_packing_q(qrow, ci);
 
 									if (r3.message && !r3.message.error) {
 										qrow.unit_cost     = flt_v(r3.message.unit_cost);
@@ -368,6 +432,7 @@ function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
 									qrow.unit_cost         = flt_v(cs_row.unit_price);
 									qrow.selling_price     = flt_v(cs_row.selling_unit_price) || flt_v(cs_row.unit_price);
 									qrow.is_manually_set   = 0;
+									_apply_packing_q(qrow, ci);
 									loaded++;
 									add_break_row(qb_idx + 1);
 								},
@@ -839,6 +904,9 @@ function _render_so_dialog(frm, fg_list) {
 			rate:      flt_v(it.rate),
 		};
 	});
+	// Packing snapshot per FG (carried onto the Sales Order line; editable there per PO)
+	var pk_map = {};
+	fg_list.forEach(function (it) { pk_map[it.item_code] = it; });
 
 	var d = new frappe.ui.Dialog({
 		title: "Create Sales Order — " + frm.doc.name,
@@ -875,14 +943,24 @@ function _render_so_dialog(frm, fg_list) {
 				return;
 			}
 			d.hide();
+			// Quotation currency + rate (LKR per 1 unit). Costing rates are in base LKR,
+			// so the SO line rate = base rate / conversion_rate (in the quotation currency).
+			var cur  = frm.doc.currency || _base_currency();
+			var crate = flt_v(frm.doc.conversion_rate) || 1;
 			var so_items = rows.map(function (x) {
+				var pk = pk_map[x.item_code] || {};
 				return {
 					doctype:       "Sales Order Item",
 					item_code:     x.item_code,
 					item_name:     x.item_name,
 					qty:           flt_v(x.qty) || 1,
-					rate:          flt_v(x.rate),
+					rate:          flt_v(x.rate) / crate,
 					delivery_date: vals.delivery_date,
+					custom_packing_type:      pk.custom_packing_type || "",
+					custom_winding_direction: pk.custom_winding_direction || "",
+					custom_pcs_per_role:      pk.custom_pcs_per_role || 0,
+					custom_up:                pk.custom_up || 0,
+					custom_is_printed:        pk.custom_is_printed || "",
 				};
 			});
 
@@ -894,6 +972,9 @@ function _render_so_dialog(frm, fg_list) {
 						customer:          vals.customer,
 						transaction_date:  frappe.datetime.get_today(),
 						delivery_date:     vals.delivery_date,
+						currency:          cur,
+						conversion_rate:   crate,
+						ignore_pricing_rule: 1,
 						items:             so_items,
 						status:            "Draft",
 					},

@@ -881,6 +881,41 @@ def get_costing_config():
     }
 
 
+@frappe.whitelist()
+def resolve_common_material_name(raw_material=None, base_material=None):
+    """Customer-facing common material name held on the Boards and Papers master.
+
+    Used to HIDE the real material on the customer quotation. Resolution order:
+      1. raw_material treated as a Boards and Papers record (e.g. cost Item.material).
+      2. base_material (an ERPNext Item) → its item_name → Boards and Papers (name == item).
+      3. base_material code → Boards and Papers directly.
+    Returns the common_name, or "" — NEVER the real material/item name.
+    """
+    if not frappe.db.has_column("Boards and Papers", "common_name"):
+        return ""
+
+    def _bp_common(name):
+        if not name:
+            return ""
+        cn = frappe.db.get_value("Boards and Papers", name, "common_name")
+        if cn:
+            return cn
+        return frappe.db.get_value("Boards and Papers", {"item": name}, "common_name") or ""
+
+    raw_material  = (raw_material or "").strip()
+    base_material = (base_material or "").strip()
+
+    cn = _bp_common(raw_material)
+    if cn:
+        return cn
+    if base_material:
+        iname = frappe.db.get_value("Item", base_material, "item_name") or base_material
+        cn = _bp_common(iname) or _bp_common(base_material)
+        if cn:
+            return cn
+    return ""
+
+
 def _get_item_rate(item_code, price_list):
     if not item_code: return 0.0
     if price_list:

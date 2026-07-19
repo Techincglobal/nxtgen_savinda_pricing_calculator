@@ -22,6 +22,13 @@
   "column_break_cs2",
   "cut_sheet_l_2",
   "cut_sheet_w_2",
+  "section_break_packing",
+  "packing_type",
+  "winding_direction",
+  "is_printed",
+  "column_break_pack",
+  "pcs_per_role",
+  "up",
   "section_break_calc",
   "item_qty",
   "breakdown",
@@ -129,6 +136,45 @@
    "fieldtype": "Float",
    "label": "Cut Sheet 2 — W",
    "description": "Second cut sheet width (optional)"
+  },
+  {
+   "fieldname": "section_break_packing",
+   "fieldtype": "Section Break",
+   "label": "Packing Info",
+   "collapsible": 1,
+   "description": "Seeded from the inquiry breakdown; editable here. The final saved values flow forward to the Quotation and Sales Order — the inquiry is not re-read downstream."
+  },
+  {
+   "fieldname": "packing_type",
+   "fieldtype": "Link",
+   "label": "Packing Type",
+   "options": "UOM"
+  },
+  {
+   "fieldname": "winding_direction",
+   "fieldtype": "Link",
+   "label": "Winding Direction",
+   "options": "Winding Direction"
+  },
+  {
+   "fieldname": "is_printed",
+   "fieldtype": "Select",
+   "label": "Is Printed",
+   "options": "\nYes\nNo"
+  },
+  {
+   "fieldname": "column_break_pack",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "pcs_per_role",
+   "fieldtype": "Int",
+   "label": "PCS per Role/Sheet"
+  },
+  {
+   "fieldname": "up",
+   "fieldtype": "Int",
+   "label": "UP"
   },
   {
    "fieldname": "section_break_calc",

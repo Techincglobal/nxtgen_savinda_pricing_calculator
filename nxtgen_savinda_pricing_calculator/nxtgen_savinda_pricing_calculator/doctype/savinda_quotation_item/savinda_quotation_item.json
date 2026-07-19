@@ -20,7 +20,14 @@
   "unit_cost",
   "column_break_3",
   "selling_price",
-  "is_manually_set"
+  "is_manually_set",
+  "section_break_packing",
+  "packing_type",
+  "winding_direction",
+  "is_printed",
+  "column_break_pack3",
+  "pcs_per_role",
+  "up"
  ],
  "fields": [
   {
@@ -140,6 +147,48 @@
    "fieldname": "is_manually_set",
    "fieldtype": "Check",
    "label": "Manually Set"
+  },
+  {
+   "fieldname": "section_break_packing",
+   "fieldtype": "Section Break",
+   "label": "Packing Info"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "packing_type",
+   "fieldtype": "Link",
+   "label": "Packing Type",
+   "options": "UOM"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "winding_direction",
+   "fieldtype": "Link",
+   "label": "Winding Direction",
+   "options": "Winding Direction"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "is_printed",
+   "fieldtype": "Select",
+   "label": "Is Printed",
+   "options": "\nYes\nNo"
+  },
+  {
+   "fieldname": "column_break_pack3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "pcs_per_role",
+   "fieldtype": "Int",
+   "label": "PCS per Role/Sheet"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "up",
+   "fieldtype": "Int",
+   "label": "UP"
   }
  ],
  "istable": 1,

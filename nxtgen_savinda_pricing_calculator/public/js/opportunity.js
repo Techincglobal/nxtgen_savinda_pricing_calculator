@@ -5,6 +5,12 @@ frappe.ui.form.on("Opportunity", {
 	refresh: function (frm) {
 		if (frm.doc.docstatus >= 2) return;  // cancelled — no action
 
+		// Savinda uses its own sales process (Cost Sheet → Savinda Quotation), NOT the
+		// native ERPNext sales cycle. Remove the standard "Create" sales buttons that
+		// ERPNext's own opportunity.js adds. This runs after core JS, so the buttons exist.
+		_remove_standard_sales_buttons(frm);
+		setTimeout(function () { _remove_standard_sales_buttons(frm); }, 300);
+
 		frm.add_custom_button(__("Create Cost Sheet"), function () {
 			// Check if a cost sheet already exists for this inquiry
 			frappe.call({
@@ -38,6 +44,13 @@ frappe.ui.form.on("Opportunity", {
 		}, __("Pricing"));
 	},
 });
+
+function _remove_standard_sales_buttons(frm) {
+	// The normal-ERP-sales-process buttons under the "Create" group.
+	["Quotation", "Customer", "Supplier Quotation", "Request For Quotation"].forEach(function (label) {
+		try { frm.remove_custom_button(label, __("Create")); } catch (e) { /* not present */ }
+	});
+}
 
 function create_cost_sheet(frm) {
 	// Carry compliance rows from Inquiry to Cost Sheet
