@@ -47,6 +47,7 @@ def after_install():
 	"""
 	_ensure_item_group_tree()
 	_ensure_custom_fields()
+	_ensure_roles()
 	_seed_install_only_fixtures()
 
 
@@ -54,10 +55,27 @@ def after_migrate():
 	"""Runs on every migrate/update.
 
 	Master/seed data is intentionally NOT re-imported here. We only keep the
-	Item Group tree healthy and ensure our custom fields exist.
+	Item Group tree healthy and ensure our custom fields + roles exist.
 	"""
 	_ensure_item_group_tree()
 	_ensure_custom_fields()
+	_ensure_roles()
+
+
+def _ensure_roles():
+	"""Create app roles if missing (idempotent, non-destructive)."""
+	for role in ("Artwork Approver",):
+		if not frappe.db.exists("Role", role):
+			try:
+				frappe.get_doc({
+					"doctype": "Role", "role_name": role, "desk_access": 1,
+				}).insert(ignore_permissions=True)
+			except Exception:
+				frappe.log_error(
+					title=f"pricing_calculator: create role failed ({role})",
+					message=frappe.get_traceback(),
+				)
+	frappe.db.commit()
 
 
 def _ensure_custom_fields():

@@ -103,7 +103,7 @@ function oc_mount_app(el) {
 					customer_name: '', ref: '', price_list: '', carton_size: '',
 					material_type: 'Existing', base_material: '', custom_material_name: '', material_rate: 0,
 					no_of_colors: 4, item_qty: 1000,
-					profit_margin: 15, extra_prod_cost_pct: 0, tax_sscl: false, tax_vat: false,
+					profit_margin: 15, extra_prod_cost_pct: 10, tax_sscl: false, tax_vat: false,
 					// Offset-specific
 					full_sheet_l: 0, full_sheet_w: 0,
 					cut_sheet_l: 0, cut_sheet_w: 0,
@@ -960,6 +960,16 @@ function oc_mount_app(el) {
 				window.open(frappe.urllib.get_full_url(url));
 			},
 
+			downloadCsv() {
+				if (!this.savedDocName) {
+					frappe.msgprint({ title: 'Save First', message: 'Save the calculation before downloading.', indicator: 'orange' });
+					return;
+				}
+				var url = '/api/method/nxtgen_savinda_pricing_calculator.api.offset_calculator.download_cost_breakdown_xlsx'
+					+ '?calculation_breakdown=' + encodeURIComponent(this.savedDocName);
+				window.open(frappe.urllib.get_full_url(url));
+			},
+
 			// Back to Cost Sheet
 			goBack() {
 				if (this.costSheetRef) {
@@ -1775,6 +1785,7 @@ function oc_mount_app(el) {
           <button class="oc-btn oc-btn-blue"  @click="saveCosting" :disabled="saveLoading">💾 {{ saveLoading ? 'Saving…' : 'Save' }}</button>
         </template>
         <button v-else class="oc-btn oc-btn-print" @click="printPage">🖨 Print / PDF</button>
+        <button v-if="savedDocName" class="oc-btn oc-btn-print" @click="downloadCsv" title="Download cost breakdown as Excel">⬇ Excel</button>
       </div>
     </div>
     <div class="oc-pb">
@@ -1860,6 +1871,8 @@ function oc_mount_app(el) {
                   <td class="r mono">{{ fmtCur(row.amount) }}</td>
                 </tr>
               </template>
+              <tr class="oc-subtot"><td colspan="7">Net Cost</td><td class="r mono">{{ fmtCur(calc.group_totals.net != null ? calc.group_totals.net : calc.group_totals.grand) }}</td></tr>
+              <tr v-if="calc.pricing && calc.pricing.extra_prod_amt" class="oc-subtot"><td colspan="7">Extra Production Cost ({{ calc.pricing.extra_prod_pct }}% of Production)</td><td class="r mono">{{ fmtCur(calc.pricing.extra_prod_amt) }}</td></tr>
               <tr class="oc-tot"><td colspan="7"><strong>TOTAL COST</strong></td><td class="r mono">{{ fmtCur(calc.group_totals.grand) }}</td></tr>
             </tbody>
           </table>

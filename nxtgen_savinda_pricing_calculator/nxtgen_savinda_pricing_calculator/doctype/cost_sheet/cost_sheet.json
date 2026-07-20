@@ -27,30 +27,103 @@
   "section_break_secondary",
   "operations",
   "qty_breaks",
+  "tab_break_artwork",
+  "section_break_artwork",
+  "artwork_no",
+  "artwork_version",
+  "artwork_file",
+  "color_reference",
+  "column_break_art",
+  "artwork_status",
+  "artwork_approved_by",
+  "artwork_approved_on",
+  "artwork_remarks",
   "section_break_m78s",
   "amended_from"
  ],
  "fields": [
   {
-   "collapsed": 1,
    "collapsible": 1,
    "fieldname": "section_break_compliance",
    "fieldtype": "Section Break",
    "label": "Compliance"
   },
   {
+   "description": "Auto-populated from Inquiry. Used for Finish Good creation.",
    "fieldname": "compliance",
    "fieldtype": "Table MultiSelect",
    "label": "Compliance",
-   "options": "Compliance Details",
-   "description": "Auto-populated from Inquiry. Used for Finish Good creation."
+   "options": "Compliance Details"
   },
   {
-   "collapsed": 1,
    "collapsible": 1,
    "fieldname": "section_break_secondary",
    "fieldtype": "Section Break",
    "label": "Finishing Operations & Qty Breaks"
+  },
+  {
+   "fieldname": "section_break_artwork",
+   "fieldtype": "Section Break",
+   "label": "Artwork & Approval"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "artwork_no",
+   "fieldtype": "Data",
+   "label": "Artwork No"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "artwork_version",
+   "fieldtype": "Data",
+   "label": "Artwork Version"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "artwork_file",
+   "fieldtype": "Attach",
+   "label": "Artwork File"
+  },
+  {
+   "fieldname": "color_reference",
+   "fieldtype": "Data",
+   "label": "Color Reference"
+  },
+  {
+   "fieldname": "column_break_art",
+   "fieldtype": "Column Break"
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "Pending",
+   "fieldname": "artwork_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Artwork Status",
+   "options": "Pending\nApproved\nRejected",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "artwork_approved_by",
+   "fieldtype": "Link",
+   "label": "Artwork Approved By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "artwork_approved_on",
+   "fieldtype": "Datetime",
+   "label": "Artwork Approved On",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "artwork_remarks",
+   "fieldtype": "Small Text",
+   "label": "Artwork Remarks"
   },
   {
    "fieldname": "section_break_m78s",
@@ -155,11 +228,11 @@
    "options": "Operation Details"
   },
   {
+   "description": "Quantities to price in the quotation (e.g. 5000, 20000, 100000). Leave empty to use each item's own base quantity.",
    "fieldname": "qty_breaks",
    "fieldtype": "Table",
    "label": "Quotation Qty Breaks",
-   "options": "Cost Sheet Qty Break",
-   "description": "Quantities to price in the quotation (e.g. 5000, 20000, 100000). Leave empty to use each item's own base quantity."
+   "options": "Cost Sheet Qty Break"
   },
   {
    "fieldname": "pricing_list",
@@ -171,13 +244,18 @@
    "fieldname": "breakdown",
    "fieldtype": "Button",
    "label": "Breakdown"
+  },
+  {
+   "fieldname": "tab_break_artwork",
+   "fieldtype": "Tab Break",
+   "label": "Artwork & Approval"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-05-06 00:00:00.000000",
+ "modified": "2026-07-20 07:22:10.658976",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Cost Sheet",
@@ -196,6 +274,11 @@
    "share": 1,
    "submit": 1,
    "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Artwork Approver"
   }
  ],
  "row_format": "Dynamic",
