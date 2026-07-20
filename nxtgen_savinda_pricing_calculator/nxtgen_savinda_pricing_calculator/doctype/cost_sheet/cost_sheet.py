@@ -18,6 +18,16 @@ class CostSheet(Document):
 	def validate(self):
 		self._calc_pricing_list_amounts()
 
+	def before_submit(self):
+		# Artwork must be approved before the Cost Sheet can be submitted.
+		if (self.artwork_status or "Pending") != "Approved":
+			frappe.throw(
+				"Artwork must be <b>Approved</b> before submitting this Cost Sheet "
+				"(current status: <b>{0}</b>). Ask an Artwork Approver to approve it.".format(
+					self.artwork_status or "Pending"
+				)
+			)
+
 	def on_submit(self):
 		"""Auto-submit all Calculation Breakdowns linked through Cost Items."""
 		submitted, skipped = [], []
@@ -119,6 +129,40 @@ class CostSheet(Document):
 			row.ammount = round(qty * unit_price, 2)
 			sell_unit   = flt(row.selling_unit_price)
 			row.selling_ammount = round(qty * sell_unit, 2)
+
+
+# ── Artwork approval ────────────────────────────────────────────
+
+ARTWORK_APPROVER_ROLE = "Artwork Approver"
+
+
+def _check_artwork_approver():
+	roles = frappe.get_roles(frappe.session.user)
+	if ARTWORK_APPROVER_ROLE not in roles and "System Manager" not in roles:
+		frappe.throw("Only users with the '" + ARTWORK_APPROVER_ROLE + "' role can approve or reject artwork.")
+
+
+def _set_artwork_status(cost_sheet, status, remarks=None):
+	_check_artwork_approver()
+	cs = frappe.get_doc("Cost Sheet", cost_sheet)
+	cs.artwork_status = status
+	cs.artwork_approved_by = frappe.session.user
+	cs.artwork_approved_on = frappe.utils.now()
+	if remarks is not None:
+		cs.artwork_remarks = remarks
+	cs.flags.ignore_permissions = True
+	cs.save(ignore_permissions=True)
+	return {"ok": True, "status": status}
+
+
+@frappe.whitelist()
+def approve_artwork(cost_sheet, remarks=None):
+	return _set_artwork_status(cost_sheet, "Approved", remarks)
+
+
+@frappe.whitelist()
+def reject_artwork(cost_sheet, remarks=None):
+	return _set_artwork_status(cost_sheet, "Rejected", remarks)
 
 
 # ── Module-level helpers ────────────────────────────────────────

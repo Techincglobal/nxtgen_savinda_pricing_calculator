@@ -24,6 +24,13 @@
   "column_break_tirb",
   "batch_no",
   "expiry_date",
+  "section_break_packing",
+  "packing_type",
+  "winding_direction",
+  "is_printed",
+  "column_break_pack2",
+  "pcs_per_role",
+  "up",
   "section_break_byhw",
   "sscl",
   "column_break_fpia",
@@ -136,6 +143,43 @@
    "fieldname": "expiry_date",
    "fieldtype": "Date",
    "label": "Expiry Date"
+  },
+  {
+   "fieldname": "section_break_packing",
+   "fieldtype": "Section Break",
+   "label": "Packing Info"
+  },
+  {
+   "fieldname": "packing_type",
+   "fieldtype": "Link",
+   "label": "Packing Type",
+   "options": "UOM"
+  },
+  {
+   "fieldname": "winding_direction",
+   "fieldtype": "Link",
+   "label": "Winding Direction",
+   "options": "Winding Direction"
+  },
+  {
+   "fieldname": "is_printed",
+   "fieldtype": "Select",
+   "label": "Is Printed",
+   "options": "\nYes\nNo"
+  },
+  {
+   "fieldname": "column_break_pack2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "pcs_per_role",
+   "fieldtype": "Int",
+   "label": "PCS per Role/Sheet"
+  },
+  {
+   "fieldname": "up",
+   "fieldtype": "Int",
+   "label": "UP"
   },
   {
    "fieldname": "section_break_byhw",

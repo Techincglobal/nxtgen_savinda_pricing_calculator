@@ -436,24 +436,9 @@ def calculate(payload):
             mat_total += mt; prep_total += pp; prod_total += pr
         cost_rows.extend(rows)
 
-    # Extra production cost (user-defined %)
-    extra_prod_pct = flt(form.get("extra_prod_cost_pct", 0))
-    if extra_prod_pct > 0 and prod_total > 0:
-        extra_prod_amt = round(prod_total * extra_prod_pct / 100, 2)
-        cost_rows.append({
-            "section":            "Spec",
-            "spec_name":          "Extra Production Cost",
-            "cost_fact":          f"Extra Production Cost ({extra_prod_pct}%)",
-            "cost_group":         "Production",
-            "selected_item":      "",
-            "selected_item_name": f"Extra Production Cost ({extra_prod_pct}%)",
-            "attribute_values":   {},
-            "req_qty":            round(extra_prod_pct, 4),
-            "rate":               round(prod_total / 100, 4),
-            "amount":             extra_prod_amt,
-            "is_auto":            True,
-        })
-        prod_total += extra_prod_amt
+    # NOTE: Extra Production Cost is NOT a breakdown line. It is applied after all
+    # costs (incl. manual) as a % of the total Production cost, and shown in the
+    # pricing summary as: Net Cost → Extra Production Cost → Total Cost.
 
     # Manual cost items (user-entered ad-hoc lines: name + qty + rate + cost group)
     for mc in (form.get("manual_costs") or []):
@@ -489,7 +474,33 @@ def calculate(payload):
             "is_auto":            False,
         })
 
-    grand = mat_total + prep_total + prod_total + out_total
+    # ── Authoritative group totals — derived from the DISPLAYED cost rows ──────
+    # The internal accumulators (mat_total/prod_total/…) can disagree with the
+    # rows shown in the breakdown: e.g. offset ink cost is added to the
+    # production accumulator (prod_total) while the ink rows themselves carry
+    # cost_group="Material". That made group_totals.production ~2x the sum of
+    # its own rows, so the Extra Production Cost was computed on an inflated
+    # base. We therefore compute each group total as the sum of the amounts of
+    # the rows in that group — exactly what the user sees — and base the extra
+    # on that. The grand total is unchanged (a cost only moves between groups,
+    # it is never double counted): sum(all rows) == old net_total.
+    def _group_sum(g):
+        return round(
+            sum(flt(r.get("amount", 0)) for r in cost_rows
+                if (r.get("cost_group") or "").strip().lower() == g),
+            2,
+        )
+
+    mat_g  = _group_sum("material")
+    prep_g = _group_sum("preparation")
+    prod_g = _group_sum("production")
+    out_g  = _group_sum("outsource")
+
+    # Net cost (all groups, before the extra-production add-on).
+    net_total      = round(mat_g + prep_g + prod_g + out_g, 2)
+    extra_prod_pct = flt(form.get("extra_prod_cost_pct", 0))
+    extra_prod_amt = round(prod_g * extra_prod_pct / 100, 2) if (extra_prod_pct and prod_g > 0) else 0.0
+    grand = round(net_total + extra_prod_amt, 2)
     pm    = flt(form.get("profit_margin", 0)) / 100
     uc    = grand / item_qty if item_qty else 0
     cfg   = _get_config()
@@ -505,20 +516,26 @@ def calculate(payload):
     qu    = (uc + sscl) * (1 + pm)
     vat   = qu * cfg["vat_rate"] if form.get("tax_vat") else 0
     su    = qu + vat
-    mc    = (((qu * item_qty) - (prep_total + mat_total)) / (qu * item_qty) * 100) if qu * item_qty else 0
+    mc    = (((qu * item_qty) - (prep_g + mat_g)) / (qu * item_qty) * 100) if qu * item_qty else 0
 
     return {
         "sheet":       sheet,
         "cost_rows":   cost_rows,
         "group_totals": {
-            "material":    round(mat_total,  2),
-            "preparation": round(prep_total, 2),
-            "production":  round(prod_total, 2),
-            "outsource":   round(out_total,  2),
+            "material":    round(mat_g,  2),
+            "preparation": round(prep_g, 2),
+            "production":  round(prod_g, 2),
+            "outsource":   round(out_g,  2),
+            "net":         round(net_total, 2),
+            "extra_production": round(extra_prod_amt, 2),
             "grand":       round(grand, 2),
         },
         "pricing": {
             "item_qty":    item_qty,
+            "net_cost":    round(net_total, 2),
+            "extra_prod_pct": round(extra_prod_pct, 4),
+            "extra_prod_amt": round(extra_prod_amt, 2),
+            "total_cost":  round(grand, 2),
             "unit_cost":   round(uc, 4),
             "sscl":        round(sscl * item_qty, 2),
             "quoted_cost": round(qu  * item_qty, 2),
@@ -879,6 +896,137 @@ def get_costing_config():
         "vat_rate":              round(cfg["vat_rate"] * 100, 4),
         "default_profit_margin": cfg["default_profit_margin"],
     }
+
+
+@frappe.whitelist()
+def resolve_common_material_name(raw_material=None, base_material=None):
+    """Customer-facing common material name held on the Boards and Papers master.
+
+    Used to HIDE the real material on the customer quotation. Resolution order:
+      1. raw_material treated as a Boards and Papers record (e.g. cost Item.material).
+      2. base_material (an ERPNext Item) → its item_name → Boards and Papers (name == item).
+      3. base_material code → Boards and Papers directly.
+    Returns the common_name, or "" — NEVER the real material/item name.
+    """
+    if not frappe.db.has_column("Boards and Papers", "common_name"):
+        return ""
+
+    def _bp_common(name):
+        if not name:
+            return ""
+        cn = frappe.db.get_value("Boards and Papers", name, "common_name")
+        if cn:
+            return cn
+        return frappe.db.get_value("Boards and Papers", {"item": name}, "common_name") or ""
+
+    raw_material  = (raw_material or "").strip()
+    base_material = (base_material or "").strip()
+
+    cn = _bp_common(raw_material)
+    if cn:
+        return cn
+    if base_material:
+        iname = frappe.db.get_value("Item", base_material, "item_name") or base_material
+        cn = _bp_common(iname) or _bp_common(base_material)
+        if cn:
+            return cn
+    return ""
+
+
+@frappe.whitelist()
+def download_cost_breakdown_xlsx(calculation_breakdown=None, cost_item=None):
+    """Stream the Product Costing Summary of a Calculation Breakdown as an Excel (.xlsx)
+    download. Accepts a CB name directly, or a cost Item (whose first linked CB is used)."""
+    from frappe.utils.xlsxutils import make_xlsx
+    from nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.utils.jinja import (
+        get_cb_print_data,
+    )
+
+    cb = calculation_breakdown
+    if not cb and cost_item:
+        cb = frappe.db.get_value(
+            "Cost Item Calculation", {"parent": cost_item},
+            "calculation_breakdown", order_by="idx asc",
+        )
+    if not cb or not frappe.db.exists("Calculation Breakdown", cb):
+        frappe.throw("No Calculation Breakdown found to export.")
+
+    d = get_cb_print_data(cb)
+    f = d.get("form", {}) or {}
+    is_flexo = d.get("is_flexo")
+
+    def q(v):
+        v = flt(v)
+        return int(v) if v == int(v) else round(v, 4)
+
+    rows = []
+    rows.append(["PRODUCT COSTING SUMMARY (%s)" % ("FLEXO" if is_flexo else "OFFSET")])
+    rows.append(["Sales Inquiry", d["doc"].ref or ""])
+    rows.append(["Customer", d["doc"].customer_name or ""])
+    rows.append(["Inquiry Breakdown", d.get("breakdown_name", "")])
+    rows.append(["Breakdown Quantity", q(d.get("item_qty", 0))])
+    rows.append(["Created At", "%s by %s" % (d.get("created_date"), d.get("created_by"))])
+    rows.append(["Updated At", "%s by %s" % (d.get("updated_date"), d.get("updated_by"))])
+    rows.append([])
+
+    rows.append(["PRODUCT SPECS"])
+    if is_flexo:
+        rows.append(["Sticker Size (L x W)", "%s x %s mm" % (int(flt(f.get("product_length_mm"))), int(flt(f.get("product_width_mm"))))])
+        rows.append(["Material Width", int(flt(f.get("reel_width_mm")))])
+        rows.append(["Ups", int(flt(d["sheet"].get("ups")))])
+        rows.append(["Colors", d["doc"].no_of_colors or 0])
+    else:
+        if d["doc"].carton_size:
+            rows.append(["Carton Size", d["doc"].carton_size])
+        rows.append(["Full Sheet Size", "%s x %s INCH" % (int(d.get("full_sheet_l") or 0), int(d.get("full_sheet_w") or 0))])
+        rows.append(["Cut Sheet Size", "%s x %s INCH" % (int(d.get("cut_sheet_l") or 0), int(d.get("cut_sheet_w") or 0))])
+        rows.append(["Ups", int(flt(d["sheet"].get("cut_sheet_ups")))])
+        rows.append(["Cuts", d["doc"].no_of_cuts or 0])
+        rows.append(["Colors", d["doc"].no_of_colors or 0])
+    rows.append([])
+
+    rows.append(["COST BREAKDOWN"])
+    rows.append(["DESCRIPTION", "ESTIMATED QTY", "UNIT PRICE (LKR)", "AMOUNT (LKR)"])
+    gt = d.get("group_totals", {}) or {}
+    groups = [
+        ("Preparation Costs", d.get("prep_rows", []), gt.get("preparation", 0)),
+        ("Material Costs", d.get("mat_rows", []), gt.get("material", 0)),
+        ("Over Head Costs" if is_flexo else "Production Costs", d.get("prod_rows", []), gt.get("production", 0)),
+    ]
+    for label, grp_rows, total in groups:
+        if not grp_rows:
+            continue
+        rows.append([label, "", "", round(flt(total), 2)])
+        for r in grp_rows:
+            rows.append([
+                r.get("_desc", ""),
+                q(r.get("req_qty", 0)),
+                round(flt(r.get("rate", 0)), 2) if r.get("rate") else "",
+                round(flt(r.get("amount", 0)), 2),
+            ])
+    rows.append([])
+
+    rows.append(["SUMMARY"])
+    rows.append(["Order Quantity", q(d.get("item_qty", 0))])
+    rows.append(["Net Cost", round(flt(d.get("net_cost", 0)), 2)])
+    if flt(d.get("extra_prod_amt", 0)):
+        rows.append(["Extra Production Cost (%s%% of Production)" % q(d.get("extra_prod_pct", 0)),
+                     round(flt(d.get("extra_prod_amt", 0)), 2)])
+    rows.append(["Total Cost/Value", round(flt(d.get("grand_total", 0)), 2)])
+    rows.append(["Unit Cost", round(flt(d.get("unit_cost", 0)), 4)])
+    rows.append(["SSCL (2.5%)", round(flt(d.get("sscl_per_unit", 0)), 4)])
+    rows.append(["Profit Margin", "%s %%" % q(d.get("profit_margin", 0))])
+    rows.append(["Quoted Price", round(flt(d.get("sell_unit", 0)), 4)])
+    rows.append(["VAT (18%)", round(flt(d.get("vat_per_unit", 0)), 4)])
+    rows.append(["Final Value", round(flt(d.get("final_value", 0)), 4)])
+    rows.append(["Material Contribution", "%s %%" % round(flt(d.get("mat_contrib", 0)), 2)])
+    rows.append([])
+    rows.append(["Remarks", f.get("remarks", "") or ""])
+
+    xlsx = make_xlsx(rows, "Costing Summary")
+    frappe.response["filename"] = "Costing - %s.xlsx" % cb
+    frappe.response["filecontent"] = xlsx.getvalue()
+    frappe.response["type"] = "binary"
 
 
 def _get_item_rate(item_code, price_list):

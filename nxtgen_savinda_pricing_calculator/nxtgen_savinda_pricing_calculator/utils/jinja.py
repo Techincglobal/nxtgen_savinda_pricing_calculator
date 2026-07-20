@@ -88,6 +88,11 @@ def get_cb_print_data(doc_name):
 	vat_per_unit  = vat_total  / item_qty if item_qty else 0
 	final_value   = sell_unit + vat_per_unit
 
+	# Extra production cost is applied on top of the net cost (not a breakdown line).
+	net_cost       = float(pricing.get("net_cost", 0)) or grand_total
+	extra_prod_amt = float(pricing.get("extra_prod_amt", 0))
+	extra_prod_pct = float(pricing.get("extra_prod_pct", 0))
+
 	# ── User display names ────────────────────────────────────────────────────
 	def user_name(user_id):
 		return frappe.db.get_value("User", user_id, "full_name") or user_id or ""
@@ -119,6 +124,9 @@ def get_cb_print_data(doc_name):
 		"mat_contrib":	  mat_contrib,
 		"profit_margin":  profit_margin,
 		"final_value":	  final_value,
+		"net_cost":		  net_cost,
+		"extra_prod_amt": extra_prod_amt,
+		"extra_prod_pct": extra_prod_pct,
 		# User info
 		"created_by":	  user_name(doc.owner),
 		"updated_by":	  user_name(doc.modified_by),

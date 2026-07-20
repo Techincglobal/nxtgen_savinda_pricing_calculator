@@ -47,6 +47,7 @@ def after_install():
 	"""
 	_ensure_item_group_tree()
 	_ensure_custom_fields()
+	_ensure_roles()
 	_seed_install_only_fixtures()
 
 
@@ -54,10 +55,27 @@ def after_migrate():
 	"""Runs on every migrate/update.
 
 	Master/seed data is intentionally NOT re-imported here. We only keep the
-	Item Group tree healthy and ensure our custom fields exist.
+	Item Group tree healthy and ensure our custom fields + roles exist.
 	"""
 	_ensure_item_group_tree()
 	_ensure_custom_fields()
+	_ensure_roles()
+
+
+def _ensure_roles():
+	"""Create app roles if missing (idempotent, non-destructive)."""
+	for role in ("Artwork Approver",):
+		if not frappe.db.exists("Role", role):
+			try:
+				frappe.get_doc({
+					"doctype": "Role", "role_name": role, "desk_access": 1,
+				}).insert(ignore_permissions=True)
+			except Exception:
+				frappe.log_error(
+					title=f"pricing_calculator: create role failed ({role})",
+					message=frappe.get_traceback(),
+				)
+	frappe.db.commit()
 
 
 def _ensure_custom_fields():
@@ -81,6 +99,14 @@ def _ensure_custom_fields():
 					"insert_after": "customer_ref",
 					"description":  "Linked Cost Item — keeps this FG connected to its calculation breakdown for BOM creation. All variants of one product share the same Cost Item.",
 				},
+				{
+					"fieldname":    "custom_product_library",
+					"label":        "Product Library",
+					"fieldtype":    "Link",
+					"options":      "Product Library",
+					"insert_after": "custom_cost_item",
+					"description":  "Product-library record holding this FG's technical + reference data.",
+				},
 			],
 			"Material Request Plan Item": [
 				{
@@ -90,6 +116,52 @@ def _ensure_custom_fields():
 					"insert_after": "quantity",
 					"read_only":    1,
 					"description":  "Wastage portion included in Quantity (added at production planning). Kept separate for print formats.",
+				},
+			],
+			# Packing details carried from the Cost Sheet flow; editable on the SO per PO.
+			"Sales Order Item": [
+				{
+					"fieldname":    "custom_packing_type",
+					"label":        "Packing Type",
+					"fieldtype":    "Link",
+					"options":      "UOM",
+					"insert_after": "item_name",
+				},
+				{
+					"fieldname":    "custom_winding_direction",
+					"label":        "Winding Direction",
+					"fieldtype":    "Link",
+					"options":      "Winding Direction",
+					"insert_after": "custom_packing_type",
+				},
+				{
+					"fieldname":    "custom_is_printed",
+					"label":        "Is Printed",
+					"fieldtype":    "Select",
+					"options":      "\nYes\nNo",
+					"insert_after": "custom_winding_direction",
+				},
+				{
+					"fieldname":    "custom_pcs_per_role",
+					"label":        "PCS per Role/Sheet",
+					"fieldtype":    "Int",
+					"insert_after": "custom_is_printed",
+				},
+				{
+					"fieldname":    "custom_up",
+					"label":        "UP",
+					"fieldtype":    "Int",
+					"insert_after": "custom_pcs_per_role",
+				},
+			],
+			# Customer-facing common/marketing name for the material (hides the real item).
+			"Boards and Papers": [
+				{
+					"fieldname":    "common_name",
+					"label":        "Common Name (Customer-facing)",
+					"fieldtype":    "Data",
+					"insert_after": "item",
+					"description":  "Generic material name shown to the customer on the quotation instead of the real material.",
 				},
 			],
 		}, ignore_validate=True)

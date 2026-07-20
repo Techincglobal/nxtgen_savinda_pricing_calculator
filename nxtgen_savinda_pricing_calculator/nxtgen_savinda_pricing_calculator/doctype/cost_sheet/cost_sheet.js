@@ -57,6 +57,42 @@ frappe.ui.form.on("Cost Sheet", {
 			}
 		}
 
+		// ── NPD Ticket (available once the cost sheet exists) ──
+		if (!frm.is_new()) {
+			frm.add_custom_button(__("Create NPD Ticket"), function () {
+				_npd_create_checked("Cost Sheet", frm.doc.name);
+			}, __("Actions"));
+		}
+
+		// ── Download cost breakdown CSV (per cost item) ──
+		if (!frm.is_new() && (frm.doc.pricing_list || []).length) {
+			frm.add_custom_button(__("Download Costing (Excel)"), function () {
+				_show_costing_csv_dialog(frm);
+			}, __("Actions"));
+		}
+
+		// ── Artwork approval (Artwork Approver role) ──────────
+		if (!frm.is_new()) {
+			var roles = frappe.user_roles || [];
+			var can_approve = roles.indexOf("Artwork Approver") >= 0 || roles.indexOf("System Manager") >= 0;
+			if (frm.doc.artwork_status) {
+				frm.dashboard.set_headline_alert(
+					"Artwork status: <b>" + frm.doc.artwork_status + "</b>"
+					+ (frm.doc.artwork_approved_by ? " — " + frm.doc.artwork_approved_by : "")
+				);
+			}
+			if (can_approve && frm.doc.artwork_status !== "Approved") {
+				frm.add_custom_button(__("Approve Artwork"), function () {
+					_artwork_action(frm, "approve_artwork", "Approve Artwork");
+				}, __("Artwork"));
+			}
+			if (can_approve && frm.doc.artwork_status !== "Rejected") {
+				frm.add_custom_button(__("Reject Artwork"), function () {
+					_artwork_action(frm, "reject_artwork", "Reject Artwork");
+				}, __("Artwork"));
+			}
+		}
+
 		// ── Submitted-only actions ─────────────────────────────
 		if (frm.doc.docstatus === 1) {
 			frm.add_custom_button(__("Create Quotation"), function () {
@@ -179,6 +215,119 @@ frappe.ui.form.on("Cost Sheet Items", {
 	},
 });
 
+
+// Create an NPD ticket, validating materials first. Unlinked materials open a mapping
+// table (sample material → pick actual Item) before creating.
+function _npd_create_checked(source_type, source_name) {
+	var M = "nxtgen_savinda_pricing_calculator.api.job_ticket.create_npd_checked";
+	frappe.call({
+		method: M, args: { source_type: source_type, source_name: source_name, force: 0 },
+		freeze: true, freeze_message: __("Checking materials…"),
+		callback: function (r) {
+			if (!r.message) return;
+			if (r.message.needs_confirm) {
+				_npd_material_map_dialog(M, source_type, source_name, r.message.unlinked || []);
+			} else if (r.message.job_ticket) {
+				frappe.set_route("Form", "Job Ticket", r.message.job_ticket);
+			}
+		},
+	});
+}
+
+function _npd_material_map_dialog(method, source_type, source_name, unlinked) {
+	var controls = [];
+	var d = new frappe.ui.Dialog({
+		title: __("Link Materials to Items"),
+		size: "large",
+		fields: [
+			{ fieldtype: "HTML", fieldname: "info", options:
+				"<div style='margin-bottom:8px;color:#555;font-size:12px'>These materials are not linked to an Item. "
+				+ "Pick the actual Item for each (leave blank to skip — it won't be added to the sample BOM), then Proceed.</div>" },
+			{ fieldtype: "HTML", fieldname: "tbl" },
+		],
+		primary_action_label: __("Proceed & Create NPD"),
+		primary_action: function () {
+			var map = {};
+			controls.forEach(function (c) { var v = c.ctrl.get_value(); if (v) map[c.name] = v; });
+			d.hide();
+			frappe.call({
+				method: method,
+				args: { source_type: source_type, source_name: source_name, force: 1, material_map: JSON.stringify(map) },
+				freeze: true, freeze_message: __("Creating NPD…"),
+				callback: function (r2) {
+					if (r2.message && r2.message.job_ticket) frappe.set_route("Form", "Job Ticket", r2.message.job_ticket);
+				},
+			});
+		},
+	});
+	var $w = d.fields_dict.tbl.$wrapper;
+	$w.html("<table class='table table-bordered' style='font-size:12px;margin:0'>"
+		+ "<thead><tr><th style='width:45%'>Sample Material</th><th>Actual Item</th></tr></thead><tbody></tbody></table>");
+	var $tb = $w.find("tbody");
+	(unlinked || []).forEach(function (name, i) {
+		var $tr = $("<tr>").appendTo($tb);
+		$("<td>").text(name).appendTo($tr);
+		var $td = $("<td>").appendTo($tr);
+		var ctrl = frappe.ui.form.make_control({
+			df: { fieldtype: "Link", options: "Item", fieldname: "item_" + i, placeholder: __("Select Item") },
+			parent: $td.get(0), render_input: true,
+		});
+		ctrl.set_value("");
+		controls.push({ name: name, ctrl: ctrl });
+	});
+	d.show();
+}
+
+// ── Download cost-breakdown CSV per cost item ─────────────────
+function _show_costing_csv_dialog(frm) {
+	var rows = (frm.doc.pricing_list || []).filter(function (r) { return r.item; });
+	if (!rows.length) { frappe.msgprint(__("No cost items to export.")); return; }
+	var d = new frappe.ui.Dialog({
+		title: __("Download Cost Breakdown (Excel)"),
+		size: "large",
+		fields: [{ fieldtype: "HTML", fieldname: "tbl" }],
+	});
+	var html = "<table class='table table-bordered' style='font-size:12px;margin:0'>"
+		+ "<thead><tr><th>Cost Item</th><th style='width:110px'></th></tr></thead><tbody>";
+	rows.forEach(function (r) {
+		html += "<tr><td>" + frappe.utils.escape_html(r.item_name || r.item) + "</td>"
+			+ "<td><button class='btn btn-xs btn-default csv-dl' data-item='"
+			+ frappe.utils.escape_html(r.item) + "'>⬇ Excel</button></td></tr>";
+	});
+	html += "</tbody></table>";
+	d.fields_dict.tbl.$wrapper.html(html);
+	d.fields_dict.tbl.$wrapper.on("click", ".csv-dl", function () {
+		var it = $(this).attr("data-item");
+		var url = "/api/method/nxtgen_savinda_pricing_calculator.api.offset_calculator.download_cost_breakdown_xlsx"
+			+ "?cost_item=" + encodeURIComponent(it);
+		window.open(frappe.urllib.get_full_url(url));
+	});
+	d.show();
+}
+
+// ── Artwork approve / reject (with optional remarks) ──────────
+function _artwork_action(frm, method, title) {
+	var d = new frappe.ui.Dialog({
+		title: __(title),
+		fields: [{ fieldtype: "Small Text", fieldname: "remarks", label: __("Remarks") }],
+		primary_action_label: __(title),
+		primary_action: function (v) {
+			frappe.call({
+				method: "nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.doctype.cost_sheet.cost_sheet." + method,
+				args: { cost_sheet: frm.doc.name, remarks: v.remarks || "" },
+				freeze: true,
+				callback: function (r) {
+					d.hide();
+					if (r.message && r.message.ok) {
+						frm.reload_doc();
+						frappe.show_alert({ message: "Artwork " + r.message.status, indicator: r.message.status === "Approved" ? "green" : "red" });
+					}
+				},
+			});
+		},
+	});
+	d.show();
+}
 
 // ─────────────────────────────────────────────────────────────
 //  RECALCULATE row amounts and re-render panel
@@ -1116,18 +1265,19 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 				var descriptions = selected_bds.map(function (b) { return (b.description || "").trim(); }).filter(Boolean);
 				var combined_desc = descriptions.join(" + ");
 				var name = combined_desc ? subject + " - " + combined_desc : subject;
+				var comb_pk = _cs_packing(selected_bds[0]);
+				var comb_doc = {
+					doctype: "cost Item", cost_item_name: name,
+					inquiry: opp.name, subject: subject, page_type: "",
+					colour: cint_v(opp.custom_colour), material: "",
+					item_qty: total_qty, no_of_pages: 0,
+					breakdown: combined_desc, is_selected: 1,
+					breakdown_qtys_json: JSON.stringify(breakdown_qtys),
+				};
+				_apply_packing(comb_doc, comb_pk);
 				frappe.call({
 					method: "frappe.client.insert",
-					args: {
-						doc: {
-							doctype: "cost Item", cost_item_name: name,
-							inquiry: opp.name, subject: subject, page_type: "",
-							colour: cint_v(opp.custom_colour), material: "",
-							item_qty: total_qty, no_of_pages: 0,
-							breakdown: combined_desc, is_selected: 1,
-							breakdown_qtys_json: JSON.stringify(breakdown_qtys),
-						}
-					},
+					args: { doc: comb_doc },
 					callback: function (r) {
 						if (r.message) {
 							var row = frm.add_child("pricing_list");
@@ -1135,6 +1285,7 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 							row.item_name = name;
 							row.qty = total_qty;
 							if (group_name_val) row.group_name = group_name_val;
+							_apply_packing(row, comb_pk);
 						}
 						frm.refresh_field("pricing_list");
 						frm.save();
@@ -1159,17 +1310,18 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 				var bd_desc = (bd.description || "").trim();
 				var name = bd_desc ? subject + " - " + bd_desc : subject;
 				var qty = flt_v(bd.qty);
+				var bd_pk = _cs_packing(bd);
+				var bd_doc = {
+					doctype: "cost Item", cost_item_name: name,
+					inquiry: opp.name, subject: subject, page_type: "",
+					colour: cint_v(opp.custom_colour), material: "",
+					item_qty: qty, no_of_pages: 0,
+					breakdown: bd_desc, is_selected: 1,
+				};
+				_apply_packing(bd_doc, bd_pk);
 				frappe.call({
 					method: "frappe.client.insert",
-					args: {
-						doc: {
-							doctype: "cost Item", cost_item_name: name,
-							inquiry: opp.name, subject: subject, page_type: "",
-							colour: cint_v(opp.custom_colour), material: "",
-							item_qty: qty, no_of_pages: 0,
-							breakdown: bd_desc, is_selected: 1,
-						}
-					},
+					args: { doc: bd_doc },
 					callback: function (r) {
 						if (r.message) {
 							var row = frm.add_child("pricing_list");
@@ -1177,6 +1329,7 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 							row.item_name = name;
 							row.qty = qty;
 							if (group_name_val) row.group_name = group_name_val;
+							_apply_packing(row, bd_pk);
 						}
 						insert_bd_next(idx + 1);
 					},
@@ -1229,6 +1382,26 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 	setTimeout(update_preview, 100);
 }
 
+// Packing Info seeded ONCE from an inquiry breakdown row. Kept editable downstream;
+// the final saved value on the Cost Item is what flows forward (inquiry not re-read).
+function _cs_packing(bd) {
+	return {
+		packing_type:      (bd && bd.packing_type) || "",
+		winding_direction: (bd && bd.winding_direction) || "",
+		pcs_per_role:      (bd && bd.pcs_per_role) || 0,
+		up:                (bd && bd.up) || 0,
+		is_printed:        (bd && bd.is_printed) || "",
+	};
+}
+function _apply_packing(target, pk) {
+	if (!target || !pk) return;
+	target.packing_type      = pk.packing_type;
+	target.winding_direction = pk.winding_direction;
+	target.pcs_per_role      = pk.pcs_per_role;
+	target.up                = pk.up;
+	target.is_printed        = pk.is_printed;
+}
+
 function build_items(subject, pages, breakdowns, selected, total_bd_qty) {
 	var items = [];
 	pages.forEach(function (page, i) {
@@ -1242,15 +1415,18 @@ function build_items(subject, pages, breakdowns, selected, total_bd_qty) {
 					cost_item_name: name, page_type: page_type, colour: colour,
 					material: material, item_qty: flt_v(bd.qty) * n_pages, no_of_pages: n_pages,
 					breakdown: bd_desc, bd_qty: flt_v(bd.qty), is_selected: 1,
+					_packing: _cs_packing(bd),
 					_calc: "bd_qty(" + flt_v(bd.qty).toLocaleString() + ") × pages(" + n_pages + ")"
 				});
 			});
 		} else {
+			// Grouped-per-page item spans all breakdowns → seed packing from the first row.
 			items.push({
 				cost_item_name: subject + " - " + page_type + " - " + colour + "C",
 				page_type: page_type, colour: colour, material: material,
 				item_qty: n_pages * total_bd_qty, no_of_pages: n_pages,
 				breakdown: "", bd_qty: total_bd_qty, is_selected: 0,
+				_packing: _cs_packing(breakdowns[0]),
 				_calc: "pages(" + n_pages + ") × total_bd(" + total_bd_qty.toLocaleString() + ")"
 			});
 		}
@@ -1271,23 +1447,23 @@ function do_create_items(frm, opp, subject, pages, breakdowns, selected, total_b
 			return;
 		}
 		var ci = items[idx];
+		var ci_doc = {
+			doctype: "cost Item",
+			cost_item_name: ci.cost_item_name,
+			inquiry: opp.name,
+			subject: subject,
+			page_type: ci.page_type,
+			colour: ci.colour,
+			material: ci.material,
+			item_qty: ci.item_qty,
+			no_of_pages: ci.no_of_pages,
+			breakdown: ci.breakdown,
+			is_selected: ci.is_selected,
+		};
+		_apply_packing(ci_doc, ci._packing);
 		frappe.call({
 			method: "frappe.client.insert",
-			args: {
-				doc: {
-					doctype: "cost Item",
-					cost_item_name: ci.cost_item_name,
-					inquiry: opp.name,
-					subject: subject,
-					page_type: ci.page_type,
-					colour: ci.colour,
-					material: ci.material,
-					item_qty: ci.item_qty,
-					no_of_pages: ci.no_of_pages,
-					breakdown: ci.breakdown,
-					is_selected: ci.is_selected,
-				}
-			},
+			args: { doc: ci_doc },
 			callback: function (r) {
 				if (r.message) {
 					var row = frm.add_child("pricing_list");
@@ -1295,6 +1471,7 @@ function do_create_items(frm, opp, subject, pages, breakdowns, selected, total_b
 					row.item_name = ci.cost_item_name;
 					row.qty = ci.item_qty;
 					if (group_name) row.group_name = group_name;
+					_apply_packing(row, ci._packing);
 				}
 				insert_next(idx + 1);
 			},

@@ -1,0 +1,354 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:PL-{#####}",
+ "creation": "2026-07-17 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "naming_rule": "Expression",
+ "field_order": [
+  "section_general",
+  "product_name",
+  "product_code",
+  "customer_product_code",
+  "category",
+  "department",
+  "column_break_gen",
+  "customer",
+  "fg_item",
+  "cost_item",
+  "calculation_breakdown",
+  "inquiry",
+  "section_refs",
+  "sales_order",
+  "quotation_no",
+  "column_break_refs",
+  "artwork_no",
+  "artwork_version",
+  "section_tech_offset",
+  "full_sheet_size",
+  "cut_sheet_size",
+  "product_size",
+  "pasting_type",
+  "column_break_off",
+  "no_of_colors",
+  "no_of_ups",
+  "proof_standard",
+  "printing_machine",
+  "section_tech_flexo",
+  "flexo_type",
+  "width_mm",
+  "length_mm",
+  "core_size",
+  "column_break_flx",
+  "pcs_per_roll",
+  "winding_direction",
+  "tolerance",
+  "remark",
+  "section_production",
+  "cold_foil",
+  "hot_foil",
+  "column_break_prod",
+  "embossing",
+  "lamination",
+  "die_cut_code",
+  "section_finishings",
+  "finishings"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_general",
+   "fieldtype": "Section Break",
+   "label": "General"
+  },
+  {
+   "fieldname": "product_name",
+   "fieldtype": "Data",
+   "label": "Product Name",
+   "in_list_view": 1,
+   "bold": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "product_code",
+   "fieldtype": "Data",
+   "label": "Product Code",
+   "in_list_view": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "customer_product_code",
+   "fieldtype": "Data",
+   "label": "Customer Product Code",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "category",
+   "fieldtype": "Data",
+   "label": "Category"
+  },
+  {
+   "fieldname": "department",
+   "fieldtype": "Select",
+   "label": "Department",
+   "options": "\nOffset\nFlexo\nDigital"
+  },
+  {
+   "fieldname": "column_break_gen",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "fg_item",
+   "fieldtype": "Link",
+   "label": "FG Item",
+   "options": "Item",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "cost_item",
+   "fieldtype": "Link",
+   "label": "Cost Item",
+   "options": "cost Item"
+  },
+  {
+   "fieldname": "calculation_breakdown",
+   "fieldtype": "Link",
+   "label": "Calculation Breakdown",
+   "options": "Calculation Breakdown"
+  },
+  {
+   "fieldname": "inquiry",
+   "fieldtype": "Link",
+   "label": "Inquiry",
+   "options": "Opportunity"
+  },
+  {
+   "fieldname": "section_refs",
+   "fieldtype": "Section Break",
+   "label": "References",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "sales_order",
+   "fieldtype": "Data",
+   "label": "Sales Order"
+  },
+  {
+   "fieldname": "quotation_no",
+   "fieldtype": "Data",
+   "label": "Quotation No"
+  },
+  {
+   "fieldname": "column_break_refs",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "artwork_no",
+   "fieldtype": "Data",
+   "label": "Artwork No"
+  },
+  {
+   "fieldname": "artwork_version",
+   "fieldtype": "Data",
+   "label": "Artwork Version"
+  },
+  {
+   "fieldname": "section_tech_offset",
+   "fieldtype": "Section Break",
+   "label": "Technical — Offset",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "full_sheet_size",
+   "fieldtype": "Data",
+   "label": "Full Sheet Size"
+  },
+  {
+   "fieldname": "cut_sheet_size",
+   "fieldtype": "Data",
+   "label": "Cut Sheet Size"
+  },
+  {
+   "fieldname": "product_size",
+   "fieldtype": "Data",
+   "label": "Product Size"
+  },
+  {
+   "fieldname": "pasting_type",
+   "fieldtype": "Select",
+   "label": "Pasting Type",
+   "options": "\nSide Pasting\nBoth Side\nNone"
+  },
+  {
+   "fieldname": "column_break_off",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "no_of_colors",
+   "fieldtype": "Int",
+   "label": "No of Colors"
+  },
+  {
+   "fieldname": "no_of_ups",
+   "fieldtype": "Int",
+   "label": "No of Ups"
+  },
+  {
+   "fieldname": "proof_standard",
+   "fieldtype": "Data",
+   "label": "Proof Standard"
+  },
+  {
+   "fieldname": "printing_machine",
+   "fieldtype": "Data",
+   "label": "Printing Machine"
+  },
+  {
+   "fieldname": "section_tech_flexo",
+   "fieldtype": "Section Break",
+   "label": "Technical — Flexo",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "flexo_type",
+   "fieldtype": "Select",
+   "label": "Flexo Type",
+   "options": "\nReel\nSheet"
+  },
+  {
+   "fieldname": "width_mm",
+   "fieldtype": "Float",
+   "label": "Width (mm)"
+  },
+  {
+   "fieldname": "length_mm",
+   "fieldtype": "Float",
+   "label": "Length (mm)"
+  },
+  {
+   "fieldname": "core_size",
+   "fieldtype": "Data",
+   "label": "Core Size"
+  },
+  {
+   "fieldname": "column_break_flx",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "pcs_per_roll",
+   "fieldtype": "Int",
+   "label": "PCS per Roll"
+  },
+  {
+   "fieldname": "winding_direction",
+   "fieldtype": "Link",
+   "label": "Winding Direction",
+   "options": "Winding Direction"
+  },
+  {
+   "fieldname": "tolerance",
+   "fieldtype": "Data",
+   "label": "Tolerance"
+  },
+  {
+   "fieldname": "remark",
+   "fieldtype": "Small Text",
+   "label": "Remark"
+  },
+  {
+   "fieldname": "section_production",
+   "fieldtype": "Section Break",
+   "label": "Production Data",
+   "collapsible": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "cold_foil",
+   "fieldtype": "Check",
+   "label": "Cold Foil"
+  },
+  {
+   "default": "0",
+   "fieldname": "hot_foil",
+   "fieldtype": "Check",
+   "label": "Hot Foil"
+  },
+  {
+   "fieldname": "column_break_prod",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "embossing",
+   "fieldtype": "Check",
+   "label": "Embossing"
+  },
+  {
+   "default": "0",
+   "fieldname": "lamination",
+   "fieldtype": "Check",
+   "label": "Lamination"
+  },
+  {
+   "fieldname": "die_cut_code",
+   "fieldtype": "Data",
+   "label": "Die Cut Code"
+  },
+  {
+   "fieldname": "section_finishings",
+   "fieldtype": "Section Break",
+   "label": "Finishings",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "finishings",
+   "fieldtype": "Table",
+   "label": "Finishings",
+   "options": "Product Library Finishing"
+  }
+ ],
+ "links": [],
+ "modified": "2026-07-17 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "Product Library",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "product_code,customer_product_code,customer",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "title_field": "product_name",
+ "track_changes": 1
+}
