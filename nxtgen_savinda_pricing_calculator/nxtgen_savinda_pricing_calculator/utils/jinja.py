@@ -23,6 +23,26 @@ def get_cb_print_data(doc_name):
 
 	form		 = state.get("form", {}) or {}
 	calc_result  = state.get("calc_result", {}) or {}
+
+	# Recompute the calculation live so the print always reflects the CURRENT
+	# calculation logic (e.g. the corrected Extra Production Cost base) instead
+	# of the calc_result snapshot stored the last time the CB was saved. Old
+	# CBs carry a stale snapshot in ui_state; recomputing keeps the printed PDF
+	# consistent with the calculator. Falls back to the stored snapshot on any
+	# error so printing never breaks.
+	try:
+		from nxtgen_savinda_pricing_calculator.api.offset_calculator import calculate as _calculate
+		_payload = {
+			"form":           form,
+			"machine_spec":   state.get("machine_spec"),
+			"selected_specs": state.get("selected_specs", []) or [],
+		}
+		_live = _calculate(json.dumps(_payload))
+		if _live and _live.get("cost_rows"):
+			calc_result = _live
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "get_cb_print_data live recompute failed")
+
 	sheet		 = calc_result.get("sheet", {}) or {}
 	pricing		 = calc_result.get("pricing", {}) or {}
 	group_totals = calc_result.get("group_totals", {}) or {}

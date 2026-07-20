@@ -84,6 +84,8 @@ def _enrich_spec(spec):
         "has_machine":         cint(doc.has_machine),
         "adds_colors":         cint(getattr(doc, "adds_colors", 0)),
         "allow_foil_assignment": cint(getattr(doc, "allow_foil_assignment", 0)),
+        "flexo_wastage_overwrite": cint(getattr(doc, "flexo_wastage_overwrite", 0)),
+        "flexo_wastage_pct":     flt(getattr(doc, "flexo_wastage_pct", 0)),
         "parent_spec":         getattr(doc, "parent_spec", "") or "",
         "auto_select":         cint(getattr(doc, "auto_select", 0)),
         "units":               doc.units or "Full sheet",
@@ -295,9 +297,25 @@ def calculate(payload):
     no_of_colors  = base_colors + added_colors
     form["no_of_colors"] = no_of_colors
 
+    # Flexo Wastage Overwrite: any selected/printing spec can tick "Wastage
+    # Overwrite" and set a %. When one or more do, the HIGHEST % is used as the
+    # effective Flexo wastage — replacing BOTH the reel material wastage (from
+    # the Costing Configuration flexo table) AND the default 25% foil wastage.
+    # When none are ticked, the config table % / 25% foil default apply.
+    flexo_wastage_override = None
+    if pricing_type == "Flexo":
+        _ovr = [
+            flt(s.get("flexo_wastage_pct", 0))
+            for s in ((selected_specs or []) + ([machine_spec] if machine_spec else []))
+            if cint(s.get("flexo_wastage_overwrite"))
+        ]
+        if _ovr:
+            flexo_wastage_override = max(_ovr)
+    foil_wastage_frac = (flt(flexo_wastage_override) / 100.0) if flexo_wastage_override is not None else 0.25
+
     # Route sheet calculation by pricing type
     if pricing_type == "Flexo":
-        sheet = _calc_flexo(form)
+        sheet = _calc_flexo(form, wastage_override_pct=flexo_wastage_override)
         reel_area      = sheet.get("reel_area", 0)
         reel_length    = sheet.get("reel_length", 0)
         ups            = sheet.get("ups", 0)
@@ -375,6 +393,7 @@ def calculate(payload):
             full_sheet_qty, cut_sheet_qty, cut_sheet_area, price_list,
             section="Machine", is_auto=True,
             reel_area=reel_area, reel_length=reel_length, ups=ups,
+            foil_wastage_frac=foil_wastage_frac,
         )
         cost_rows.extend(rows)
         mat_total += mt; prep_total += pp; prod_total += pr
@@ -426,6 +445,7 @@ def calculate(payload):
             all_selected_spec_names=all_selected_spec_names,
             machine_count_map=machine_count_map,
             global_extra_ctx=flexo_ctx,
+            foil_wastage_frac=foil_wastage_frac,
         )
         # Outsource-group specs get their own section + cost bucket in the breakdown.
         if (spec.get("group") or "") == "Outsource":
@@ -826,7 +846,7 @@ def get_offset_inks():
     return frappe.get_all(
         "Offset Ink",
         filters={"is_active": 1},
-        fields=["ink_name", "price_per_kg", "consumption_per_sqinch", "min_qty", "min_value"],
+        fields=["ink_name", "price_per_kg", "consumption_per_sqm", "consumption_per_sqinch", "min_qty", "min_value"],
         order_by="ink_name asc",
     )
 
@@ -980,7 +1000,8 @@ def download_cost_breakdown_xlsx(calculation_breakdown=None, cost_item=None):
             rows.append(["Carton Size", d["doc"].carton_size])
         rows.append(["Full Sheet Size", "%s x %s INCH" % (int(d.get("full_sheet_l") or 0), int(d.get("full_sheet_w") or 0))])
         rows.append(["Cut Sheet Size", "%s x %s INCH" % (int(d.get("cut_sheet_l") or 0), int(d.get("cut_sheet_w") or 0))])
-        rows.append(["Ups", int(flt(d["sheet"].get("cut_sheet_ups")))])
+        rows.append(["Cut Sheet Ups", int(flt(d["sheet"].get("cut_sheet_ups")))])
+        rows.append(["Full Sheet Ups", int(flt(f.get("no_of_ups") or d["doc"].no_of_ups or 0))])
         rows.append(["Cuts", d["doc"].no_of_cuts or 0])
         rows.append(["Colors", d["doc"].no_of_colors or 0])
     rows.append([])
@@ -1077,7 +1098,7 @@ def _calc_sheet(form, breakdown_qtys=None):
     }
 
 
-def _calc_flexo(form):
+def _calc_flexo(form, wastage_override_pct=None):
     reel_width   = flt(form.get("reel_width_mm", 0))
     prod_w       = flt(form.get("product_width_mm", 0))
     prod_l       = flt(form.get("product_length_mm", 0))
@@ -1114,6 +1135,11 @@ def _calc_flexo(form):
             setup_m = sm; wastage_pct = wp
             break
 
+    # A ticked "Wastage Overwrite" spec replaces the table wastage % (highest
+    # wins, resolved by the caller). Setup metrage (a fixed length) is kept.
+    if wastage_override_pct is not None:
+        wastage_pct = flt(wastage_override_pct) / 100.0
+
     wastage_area = setup_m * reel_width_m + reel_area_net * wastage_pct
     reel_area    = reel_area_net + wastage_area
 
@@ -1131,12 +1157,14 @@ def _calc_flexo(form):
     }
 
 
-def _calc_spec_foil_cost(spec_name, machine_assignment, reel_area):
+def _calc_spec_foil_cost(spec_name, machine_assignment, reel_area, wastage_frac=0.25):
     """Calculate Flexo foil costs for all foils assigned to a Flexo spec.
     Formula per foil:
-      qty_sqm = reel_area × (pct/100) × 1.25 (25% wastage)
+      qty_sqm = reel_area × (pct/100) × (1 + wastage_frac)
       cost    = qty_sqm × cost_per_sqm
-    Cold Foil Varnish is auto-added for any COLD foils.
+    wastage_frac defaults to 0.25 (25%) but is replaced by the Wastage Overwrite
+    value (as a fraction) when a spec enables it. Cold Foil Varnish is
+    auto-added for any COLD foils.
     """
     foils = machine_assignment.get("foils", [])
     if not foils or not reel_area:
@@ -1162,7 +1190,7 @@ def _calc_spec_foil_cost(spec_name, machine_assignment, reel_area):
         min_qty_v    = flt(getattr(foil_doc, "min_qty",   0) or 0)
         min_val_v    = flt(getattr(foil_doc, "min_value", 0) or 0)
 
-        qty  = reel_area * foil_pct * 1.25   # 25% wastage
+        qty  = reel_area * foil_pct * (1 + flt(wastage_frac))   # wastage (default 25%)
         cost = round(qty * cost_per_sqm, 2)
         if min_qty_v and qty  < min_qty_v: qty  = min_qty_v; cost = round(qty * cost_per_sqm, 2)
         if min_val_v and cost < min_val_v: cost = flt(min_val_v)
@@ -1216,9 +1244,10 @@ def _calc_spec_foil_cost(spec_name, machine_assignment, reel_area):
 
 def _calc_flexo_ink_cost(spec_name, machine_assignment, reel_area):
     """Calculate Flexo ink costs for assigned inks.
-    Formula: qty_kg = consumption_per_sqm × reel_area × (pct/100); cost = qty_kg × price_per_kg
-    The per-ink consumption percentage is set in the Production Assignment dialog,
-    exactly like the Offset ink calculation.
+    Formula: qty_kg = reel_area × (grams_per_sqm / 1000); cost = qty_kg × price_per_kg
+    Flexo ink consumption is entered directly in grams per m² in the Production
+    Assignment dialog (defaulted from the ink master's consumption_per_sqm × 1000),
+    NOT as a percentage like Offset.
     """
     inks = machine_assignment.get("inks", [])
     if not inks or not reel_area:
@@ -1229,7 +1258,6 @@ def _calc_flexo_ink_cost(spec_name, machine_assignment, reel_area):
 
     for ink_row in inks:
         ink_name = (ink_row.get("ink_name") or "").strip()
-        ink_pct  = flt(ink_row.get("percentage", 100)) / 100.0
         if not ink_name:
             continue
         try:
@@ -1241,7 +1269,14 @@ def _calc_flexo_ink_cost(spec_name, machine_assignment, reel_area):
         except Exception:
             continue
 
-        qty  = reel_area * consumption * ink_pct
+        # grams per m²: use the dialog value if given, else default from the ink
+        # master (consumption_per_sqm is stored in kg/m² → ×1000 for g/m²).
+        g_per_sqm = ink_row.get("grams_per_sqm")
+        if g_per_sqm in (None, ""):
+            g_per_sqm = consumption * 1000.0
+        g_per_sqm = flt(g_per_sqm)
+
+        qty  = reel_area * (g_per_sqm / 1000.0)
         cost = round(qty * price_per_kg, 2)
         if min_qty_v and qty  < min_qty_v: qty  = min_qty_v; cost = round(qty * price_per_kg, 2)
         if min_val_v and cost < min_val_v: cost = flt(min_val_v)
@@ -1252,7 +1287,7 @@ def _calc_flexo_ink_cost(spec_name, machine_assignment, reel_area):
             "cost_group":         "Material",
             "selected_item":      ink_name,
             "selected_item_name": ink_name,
-            "attribute_values":   {"ink": ink_name, "percentage": flt(ink_row.get("percentage", 100))},
+            "attribute_values":   {"ink": ink_name, "grams_per_sqm": g_per_sqm},
             "req_qty":            round(qty, 8),
             "rate":               round(price_per_kg, 4),
             "amount":             cost,
@@ -1269,7 +1304,7 @@ def _process_spec(spec, form, sheet, item_qty, no_of_colors, material_rate,
                   section="Spec", is_auto=False,
                   reel_area=0, reel_length=0, ups=0,
                   all_selected_spec_names=None, machine_count_map=None,
-                  global_extra_ctx=None):
+                  global_extra_ctx=None, foil_wastage_frac=0.25):
     all_rows = []; mat = prep = prod = 0.0
 
     # Build foil count context from machine_assignment (used in Flexo formulas)
@@ -1400,7 +1435,7 @@ def _process_spec(spec, form, sheet, item_qty, no_of_colors, material_rate,
     if (form.get("pricing_type") or "Offset").strip() == "Flexo" \
             and spec.get("allow_foil_assignment") and machine_assignment.get("foils"):
         foil_rows, foil_cost = _calc_spec_foil_cost(
-            spec.get("spec_name", ""), machine_assignment, reel_area
+            spec.get("spec_name", ""), machine_assignment, reel_area, foil_wastage_frac
         )
         for fr in foil_rows:
             fr["section"] = section

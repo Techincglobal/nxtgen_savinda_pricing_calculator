@@ -413,19 +413,19 @@ function render_panel(frm, cdt, cdn) {
 							+ "&cost_sheet=" + encodeURIComponent(frm.doc.name)
 							+ "&pricing_type=" + encodeURIComponent(frm.doc.pricing_type || "Offset")
 							+ "&view_only=1";
-						var print_url = "/printview?doctype=Calculation+Breakdown&name="
+						var print_url = "/api/method/frappe.utils.print_format.download_pdf?doctype=Calculation+Breakdown&name="
 							+ encodeURIComponent(c.calculation_breakdown || "")
-							+ "&format=Product+Costing+Summary&no_letterhead=0";
+							+ "&format=Product+Costing+Summary&no_letterhead=1";
 						action_td = "<td style='padding:5px 8px;text-align:center;white-space:nowrap'>"
 							+ "<a href='" + view_url + "' target='_blank' "
 							+ "class='btn btn-xs btn-default' style='font-size:10.5px;margin-right:3px'>View</a>"
 							+ "<a href='" + print_url + "' target='_blank' "
-							+ "class='btn btn-xs btn-primary' style='font-size:10.5px'>Print</a>"
+							+ "class='btn btn-xs btn-primary' style='font-size:10.5px' title='Download PDF'>PDF</a>"
 							+ "</td>";
 					} else {
-						var draft_print_url = "/printview?doctype=Calculation+Breakdown&name="
+						var draft_print_url = "/api/method/frappe.utils.print_format.download_pdf?doctype=Calculation+Breakdown&name="
 							+ encodeURIComponent(c.calculation_breakdown || "")
-							+ "&format=Product+Costing+Summary&no_letterhead=0";
+							+ "&format=Product+Costing+Summary&no_letterhead=1";
 						action_td = "<td style='padding:5px 8px;text-align:center;white-space:nowrap'>"
 							+ "<button class='btn-edit-calc btn btn-xs btn-default' "
 							+ "data-cb='" + c.calculation_breakdown + "' style='margin-right:4px' title='Open Calculator'>✏️</button>"
