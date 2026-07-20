@@ -129,7 +129,7 @@ function oc_mount_app(el) {
 				allFoils: [],
 				inkDialog: null,
 				inkDialogState: { machine: '', cycles: 1, csc: false, inks: [], foils: [], manual_process: false, manual_unit: 'Fixed Amount', manual_unit_cost: 0 },
-				inkNewInk: '', inkNewPct: 100,
+				inkNewInk: '', inkNewPct: 100, inkNewGsm: '',
 				foilNewName: '', foilNewGroup: 'COLD', foilNewPct: 100,
 			};
 		},
@@ -283,6 +283,8 @@ function oc_mount_app(el) {
 						group: spec.group || '',
 						has_machine: spec.has_machine || 0,
 						allow_foil_assignment: spec.allow_foil_assignment || 0,
+						flexo_wastage_overwrite: spec.flexo_wastage_overwrite || 0,
+						flexo_wastage_pct: spec.flexo_wastage_pct || 0,
 						adds_colors: spec.adds_colors || 0,
 						units: spec.units || 'Full sheet',
 						skip_machine_if_spec: spec.skip_machine_if_spec || '',
@@ -718,11 +720,31 @@ function oc_mount_app(el) {
 			},
 			addDialogInk() {
 				var name = this.inkNewInk;
-				var pct  = parseFloat(this.inkNewPct) || 100;
 				if (!name) return;
-				this.inkDialogState.inks.push({ ink_name: name, percentage: pct });
+				if (this.isFlexo) {
+					// Flexo: consumption entered as grams per m² (default from master).
+					var gsm = parseFloat(this.inkNewGsm);
+					if (!(gsm >= 0)) {
+						var doc = (this.allInks || []).find(function (x) { return x.ink_name === name; });
+						gsm = doc && doc.consumption_per_sqm ? doc.consumption_per_sqm * 1000 : 0;
+					}
+					this.inkDialogState.inks.push({ ink_name: name, grams_per_sqm: gsm });
+					this.inkNewGsm = '';
+				} else {
+					// Offset: consumption as a percentage of the master rate.
+					var pct = parseFloat(this.inkNewPct) || 100;
+					this.inkDialogState.inks.push({ ink_name: name, percentage: pct });
+					this.inkNewPct = 100;
+				}
 				this.inkNewInk = '';
-				this.inkNewPct = 100;
+			},
+			// Prefill the Flexo g/m² box from the selected ink's master consumption.
+			prefillInkGsm() {
+				var name = this.inkNewInk;
+				var doc = (this.allInks || []).find(function (x) { return x.ink_name === name; });
+				this.inkNewGsm = (doc && doc.consumption_per_sqm)
+					? Math.round(doc.consumption_per_sqm * 1000 * 10000) / 10000
+					: 0;
 			},
 			removeDialogInk(idx) {
 				this.inkDialogState.inks.splice(idx, 1);
@@ -954,9 +976,9 @@ function oc_mount_app(el) {
 					frappe.msgprint({ title: 'Save First', message: 'Save the calculation before printing.', indicator: 'orange' });
 					return;
 				}
-				var url = '/printview?doctype=Calculation+Breakdown&name='
+				var url = '/api/method/frappe.utils.print_format.download_pdf?doctype=Calculation+Breakdown&name='
 					+ encodeURIComponent(this.savedDocName)
-					+ '&format=Product+Costing+Summary&no_letterhead=0';
+					+ '&format=Product+Costing+Summary&no_letterhead=1';
 				window.open(frappe.urllib.get_full_url(url));
 			},
 
@@ -1419,16 +1441,16 @@ function oc_mount_app(el) {
           <div class="oc-pa-section-hdr" style="margin-top:12px">Inks</div>
           <div v-if="!inkDialogState.inks.length" class="oc-no-inks">No inks assigned.</div>
           <div v-for="(ink, i) in inkDialogState.inks" :key="i" class="oc-ink-chip">
-            <span class="oc-ink-chip-label">{{ ink.ink_name }} <span class="oc-ink-pct">({{ ink.percentage }}%)</span></span>
+            <span class="oc-ink-chip-label">{{ ink.ink_name }} <span class="oc-ink-pct">({{ ink.grams_per_sqm }} g/m²)</span></span>
             <button @click="removeDialogInk(i)" class="oc-ink-rm">🗑</button>
           </div>
           <div class="oc-add-ink" style="margin-top:6px">
-            <select v-model="inkNewInk" class="oc-inp oc-sel oc-ink-sel">
+            <select v-model="inkNewInk" @change="prefillInkGsm" class="oc-inp oc-sel oc-ink-sel">
               <option value="">Select Ink</option>
               <option v-for="ink in dialogInkList" :key="ink.ink_name" :value="ink.ink_name">{{ ink.ink_name }}</option>
             </select>
-            <input type="number" v-model.number="inkNewPct" min="1" max="100" class="oc-inp oc-pct-inp" />
-            <span class="oc-pct-sym">%</span>
+            <input type="number" v-model.number="inkNewGsm" min="0" step="0.001" class="oc-inp oc-pct-inp" title="Grams per m²" />
+            <span class="oc-pct-sym">g/m²</span>
             <button @click="addDialogInk" class="oc-btn oc-btn-blue oc-btn-sm">Add</button>
           </div>
           </template>

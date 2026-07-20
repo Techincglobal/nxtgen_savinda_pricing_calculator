@@ -15,6 +15,8 @@
   "pricing_type",
   "adds_colors",
   "allow_foil_assignment",
+  "flexo_wastage_overwrite",
+  "flexo_wastage_pct",
   "section_break_machine_cfg",
   "has_machine",
   "column_break_mach1",
@@ -236,6 +238,19 @@
    "label": "Quality Inspection Template",
    "options": "Quality Inspection Template",
    "description": "If set, QI will be required on the output SFG of this operation."
+  },
+  {
+   "fieldname": "flexo_wastage_overwrite",
+   "fieldtype": "Check",
+   "label": "Wastage Overwrite (Flexo)",
+   "description": "When ticked, this spec's Wastage Override % replaces the default Flexo material and foil wastage. If several selected specs tick this, the highest % is used."
+  },
+  {
+   "fieldname": "flexo_wastage_pct",
+   "fieldtype": "Percent",
+   "label": "Wastage Override %",
+   "depends_on": "eval:doc.flexo_wastage_overwrite",
+   "mandatory_depends_on": "eval:doc.flexo_wastage_overwrite"
   }
  ],
  "links": [],
