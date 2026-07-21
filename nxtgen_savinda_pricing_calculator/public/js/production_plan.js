@@ -62,6 +62,13 @@ frappe.ui.form.on("Production Plan", {
 			}, __("Actions"));
 		}
 
+		// Manufacturing planning — pull FGs into the planning table with print data.
+		if (!frm.is_new() && frm.doc.docstatus === 0 && frm.doc.custom_ticket_type) {
+			frm.add_custom_button(__("Get Finished Goods for Manufacture"), function () {
+				_get_manufacture_fg_dialog(frm);
+			}, __("Actions"));
+		}
+
 		// Procurement — create a Purchase Request (Material Request) from raw materials.
 		if (!frm.is_new() && frm.doc.docstatus === 0 && frm.doc.custom_ticket_type
 			&& (frm.doc.mr_items || []).length) {
@@ -96,6 +103,63 @@ frappe.ui.form.on("Production Plan", {
 		}
 	},
 });
+
+// "Get Finished Goods for Manufacture" — list FGs with editable qty, then populate the
+// planning table (print data computed from each item's cost calculation).
+function _get_manufacture_fg_dialog(frm) {
+	frappe.call({
+		method: "nxtgen_savinda_pricing_calculator.api.production_plan.get_manufacture_fg_list",
+		args: { production_plan: frm.doc.name }, freeze: true,
+		callback: function (r) {
+			var items = r.message || [];
+			if (!items.length) { frappe.msgprint(__("No finished goods found on this plan.")); return; }
+			var is_offset = (frm.doc.custom_pricing_type || "Offset") !== "Flexo";
+			var rows = items.map(function (it, i) {
+				return "<tr>"
+					+ "<td style='text-align:center'><input type='checkbox' class='fg-sel' data-idx='" + i + "' checked></td>"
+					+ "<td>" + frappe.utils.escape_html(it.item_name || it.fg_item || "") + "</td>"
+					+ "<td><input type='number' class='fg-qty' data-idx='" + i + "' value='" + (it.qty || 0) + "' style='width:120px'></td>"
+					+ "</tr>";
+			}).join("");
+			var html = "<table class='table table-bordered' style='font-size:12px;margin-bottom:0'>"
+				+ "<thead><tr><th style='width:40px'></th><th>Item</th><th style='width:130px'>Qty</th></tr></thead>"
+				+ "<tbody>" + rows + "</tbody></table>";
+			var fields = [];
+			if (is_offset) {
+				fields.push({ fieldtype: "Check", fieldname: "consolidate", label: __("Consolidate Sales Order Items"),
+					description: __("Treat the selection as one combined print run — full/cut sheet qty & wastage on the first row only; other rows show only ups & cuts.") });
+			}
+			fields.push({ fieldtype: "HTML", fieldname: "tbl", options: html });
+			var d = new frappe.ui.Dialog({
+				title: __("Get Finished Goods for Manufacture"), size: "large", fields: fields,
+				primary_action_label: __("Add to Planning"),
+				primary_action: function (v) {
+					var $w = d.fields_dict.tbl.$wrapper;
+					var sel = [];
+					$w.find(".fg-sel:checked").each(function () {
+						var idx = parseInt($(this).attr("data-idx"), 10);
+						var qty = parseFloat($w.find(".fg-qty[data-idx='" + idx + "']").val()) || 0;
+						var it = items[idx];
+						sel.push({ fg_item: it.fg_item, item_name: it.item_name, cost_item: it.cost_item,
+							calculation_breakdown: it.calculation_breakdown, qty: qty });
+					});
+					if (!sel.length) { frappe.msgprint(__("Select at least one item.")); return; }
+					frappe.call({
+						method: "nxtgen_savinda_pricing_calculator.api.production_plan.add_planning_items",
+						args: { production_plan: frm.doc.name, selections: JSON.stringify(sel), consolidate: (v.consolidate ? 1 : 0) },
+						freeze: true, freeze_message: __("Calculating…"),
+						callback: function (r2) {
+							d.hide();
+							frappe.show_alert({ message: __("Added {0} item(s) to planning.", [(r2.message || {}).added || 0]), indicator: "green" });
+							frm.reload_doc();
+						},
+					});
+				},
+			});
+			d.show();
+		},
+	});
+}
 
 function _show_wastage_dialog(frm) {
 	var rows = (frm.doc.mr_items || []).filter(function (r) { return r.item_code; });

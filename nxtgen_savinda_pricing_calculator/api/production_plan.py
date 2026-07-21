@@ -11,6 +11,8 @@ Production Plan as the printed Job Ticket + NPD Request → FG → BOM → Produ
 
 Reuses the source populators / context helpers from api.job_ticket.
 """
+import json
+
 import frappe
 from frappe.utils import cint, flt, now, now_datetime, today
 
@@ -41,13 +43,7 @@ def _first_fg_context_from_so(so):
 	return None, {}, {}, "Offset"
 
 
-# ── NPD Request: seed from a source ──────────────────────────────────────────
-def _npd_append_item(doc, desc, qty, ctx, cb, pl, pricing_type):
-	line = jt_api._item_line_from_cb(desc, qty, ctx, cb, pl, pricing_type)
-	line["item_name"] = line.pop("description", "") or desc
-	doc.append("items", line)
-
-
+# ── NPD Request: seed from a source (LIGHT — header only; FGs live on the Cost Sheet) ──
 def _npd_from_cost_sheet(doc, cs_name):
 	cs = frappe.get_doc("Cost Sheet", cs_name)
 	doc.cost_sheet = cs.name
@@ -57,24 +53,16 @@ def _npd_from_cost_sheet(doc, cs_name):
 	doc.job_title = cs.get("subject") or doc.job_title
 	if cs.get("colour"):
 		doc.colors = cint(cs.get("colour"))
-	materials = []
-	first = None
+	# Pricing type + a few display fields from the first cost item's Calculation Breakdown.
 	for r in (cs.get("pricing_list") or []):
 		if not r.get("item"):
 			continue
 		ctx = jt_api._cost_item_context(r.get("item"))
 		cb = jt_api._cb_fields(ctx.get("calculation_breakdown"))
+		if not cb:
+			continue
 		pl = jt_api._pl(ctx.get("product_library"))
-		pricing = (pl.get("department") if pl else "") or cb.get("pricing_type") or "Offset"
-		ci = frappe.db.get_value("cost Item", r.get("item"), ["cost_item_name", "item_qty"], as_dict=True) or {}
-		desc = ci.get("cost_item_name") or r.get("item_name") or r.get("item")
-		_npd_append_item(doc, desc, r.get("qty") or ci.get("item_qty") or 0, ctx, cb, pl, pricing)
-		jt_api._build_ticket_materials(ctx.get("calculation_breakdown"), pricing, cb.get("no_of_colors"), merge_into=materials)
-		if first is None and cb:
-			first = (cb, pl, pricing)
-	if first:
-		cb, pl, pricing = first
-		doc.pricing_type = pricing
+		doc.pricing_type = (pl.get("department") if pl else "") or cb.get("pricing_type") or "Offset"
 		doc.colors = doc.colors or cint(cb.get("no_of_colors"))
 		if cb.get("base_material"):
 			doc.material = frappe.db.get_value("Item", cb["base_material"], "item_name") or cb["base_material"]
@@ -83,8 +71,7 @@ def _npd_from_cost_sheet(doc, cs_name):
 		if pl:
 			doc.finishings = jt_api._finishings_text(pl)
 			doc.color_ref = pl.get("color_reference") or doc.color_ref
-	for m in materials:
-		doc.append("bom_materials", m)
+		break
 
 
 def _npd_from_inquiry(doc, opp_name):
@@ -218,6 +205,117 @@ def create_fg_items(npd_request, details=None):
 			pl_overrides=pl_over,
 		)
 		frappe.db.set_value("NPD Request Item", row.name, "fg_item", res["item_code"])
+		created.append(res["item_code"])
+	frappe.db.commit()
+	return {"created": created, "existing": existing}
+
+
+# ── Create FG on the Cost Sheet (for the light NPD flow: FGs are made here first) ─
+def _dept_for_pricing(pricing):
+	return (
+		frappe.db.get_value("Department", {"department_name": pricing}, "name")
+		or frappe.db.get_value("Department", {"is_group": 0}, "name")
+		or frappe.db.get_value("Department", {}, "name")
+	)
+
+
+def _fg_item_group_default(cost_sheet):
+	return (
+		frappe.db.get_value("Cost Sheet", cost_sheet, "item_group")
+		or frappe.db.get_value("Item Group", {"item_group_name": "Finished Goods"}, "name")
+		or frappe.db.get_value("Item Group", {"is_group": 0}, "name")
+	)
+
+
+def _cost_sheet_fg_defaults(ci, cost_sheet, ig):
+	"""Proposed Item + Product Library values for one Cost Sheet cost item."""
+	ci_doc = frappe.db.get_value(
+		"cost Item", ci, ["cost_item_name", "colour", "material"], as_dict=True) or {}
+	cb = frappe.db.get_value(
+		"Cost Item Calculation", {"parent": ci}, "calculation_breakdown", order_by="idx asc")
+	cbd = jt_api._cb_fields(cb) if cb else {}
+	pricing = (cbd.get("pricing_type") or "Offset")
+	is_flexo = pricing == "Flexo"
+	return {
+		"cost_item": ci,
+		"item_name": ci_doc.get("cost_item_name") or ci,
+		"item_group": ig,
+		"department": _dept_for_pricing(pricing),
+		"stock_uom": "Nos",
+		"customer_ref": "",
+		"pl_department": pricing,
+		"pl_flexo_type": "Reel" if is_flexo else "",
+		"pl_customer_product_code": "",
+		"pl_no_of_colors": cint(cbd.get("no_of_colors") or ci_doc.get("colour") or 0),
+		"pl_no_of_ups": cint(cbd.get("no_of_ups") or 0),
+		"pl_full_sheet_size": jt_api._size_str(cbd.get("full_sheet_l"), cbd.get("full_sheet_w")),
+		"pl_cut_sheet_size": jt_api._size_str(cbd.get("cut_sheet_l"), cbd.get("cut_sheetw")),
+		"pl_product_size": "",
+		"pl_width_mm": flt(cbd.get("_reel_width")),
+		"pl_length_mm": flt(cbd.get("_reel_length")),
+		"pl_artwork_no": frappe.db.get_value("Cost Sheet", cost_sheet, "artwork_no") or "",
+		"pl_artwork_version": frappe.db.get_value("Cost Sheet", cost_sheet, "artwork_version") or "",
+	}
+
+
+@frappe.whitelist()
+def get_cost_sheet_fg_preview(cost_sheet):
+	"""Proposed FG + Product Library details for each Cost Sheet cost item that has no FG."""
+	cs = frappe.get_doc("Cost Sheet", cost_sheet)
+	ig = _fg_item_group_default(cost_sheet)
+	lines, existing = [], []
+	seen = set()
+	is_flexo = False
+	for row in (cs.get("pricing_list") or []):
+		ci = row.get("item")
+		if not ci or ci in seen:
+			continue
+		seen.add(ci)
+		fg = frappe.db.get_value("Item", {"custom_cost_item": ci}, "name")
+		if fg:
+			existing.append(fg)
+			continue
+		d = _cost_sheet_fg_defaults(ci, cost_sheet, ig)
+		if d.get("pl_department") == "Flexo":
+			is_flexo = True
+		lines.append(d)
+	return {"lines": lines, "existing": existing, "is_flexo": is_flexo}
+
+
+@frappe.whitelist()
+def create_fg_from_cost_sheet(cost_sheet, details=None):
+	"""Create an FG Item for each Cost Sheet cost item that has none yet (light NPD flow)."""
+	from nxtgen_savinda_pricing_calculator.api.manufacturing import create_fg_item
+
+	if isinstance(details, str):
+		details = frappe.parse_json(details) or []
+	by_ci = {d.get("cost_item"): d for d in (details or []) if d.get("cost_item")}
+
+	cs = frappe.get_doc("Cost Sheet", cost_sheet)
+	ig_default = _fg_item_group_default(cost_sheet)
+	created, existing = [], []
+	seen = set()
+	for row in (cs.get("pricing_list") or []):
+		ci = row.get("item")
+		if not ci or ci in seen:
+			continue
+		seen.add(ci)
+		fg = frappe.db.get_value("Item", {"custom_cost_item": ci}, "name")
+		if fg:
+			existing.append(fg)
+			continue
+		d = by_ci.get(ci) or _cost_sheet_fg_defaults(ci, cost_sheet, ig_default)
+		dept = d.get("department") or _dept_for_pricing("Offset")
+		if not dept:
+			frappe.throw("No Department found. Create a Department (with an abbreviation) first.")
+		name = (d.get("item_name") or ci).strip()
+		pl_over = {k: d.get("pl_" + k) for k in _PL_KEYS if d.get("pl_" + k) not in (None, "")}
+		res = create_fg_item(
+			item_name=name, description=name,
+			item_group=(d.get("item_group") or ig_default), department=dept,
+			stock_uom=(d.get("stock_uom") or "Nos"), cost_item=ci,
+			customer_ref=(d.get("customer_ref") or None), pl_overrides=pl_over,
+		)
 		created.append(res["item_code"])
 	frappe.db.commit()
 	return {"created": created, "existing": existing}
@@ -384,24 +482,50 @@ def _ticket_line(fg, qty, geom, bom_no):
 	return line
 
 
+def _fgs_from_cost_sheet(cs_name):
+	"""FG Items behind a Cost Sheet's cost items (via Item.custom_cost_item), each with its
+	first Calculation Breakdown. Used by the light NPD flow (FGs are created on the Cost
+	Sheet, so the NPD pulls them from there)."""
+	out, seen = [], set()
+	if not cs_name or not frappe.db.exists("Cost Sheet", cs_name):
+		return out
+	cs = frappe.get_doc("Cost Sheet", cs_name)
+	for row in (cs.get("pricing_list") or []):
+		ci = row.get("item")
+		if not ci:
+			continue
+		cb = frappe.db.get_value(
+			"Cost Item Calculation", {"parent": ci}, "calculation_breakdown", order_by="idx asc") or ""
+		for it in frappe.get_all("Item", filters={"custom_cost_item": ci}, fields=["name", "item_name"]):
+			if it.name in seen:
+				continue
+			seen.add(it.name)
+			out.append({
+				"fg_item": it.name, "item_name": it.item_name or it.name,
+				"cost_item": ci, "calculation_breakdown": cb,
+			})
+	return out
+
+
 def _gather_ticket(source_type, source_name):
 	"""Return (ticket_type, pricing_type, header_dict, ticket_lines) for a source."""
 	if source_type == "NPD Request":
 		src = frappe.get_doc("NPD Request", source_name)
 		pricing = src.pricing_type or "Offset"
+		sample_qty = flt(src.get("sample_qty")) or 1
 		lines = []
-		for row in src.items:
-			geom = {"description": row.item_name, "size": row.size,
-				"cost_item": row.cost_item, "calculation_breakdown": row.calculation_breakdown}
-			for f in _TICKET_GEOM_FIELDS:
-				geom.setdefault(f, row.get(f))
-			bom = _resolve_bom_no(row.fg_item) if row.fg_item else None
-			lines.append(_ticket_line(row.fg_item, row.qty, geom, bom))
+		# NPD Request is now a light doc — FGs come from its Cost Sheet's cost items
+		# (FG Items are created on the Cost Sheet before the NPD).
+		for fg in _fgs_from_cost_sheet(src.get("cost_sheet")):
+			geom = {"description": fg["item_name"], "cost_item": fg["cost_item"],
+				"calculation_breakdown": fg["calculation_breakdown"]}
+			bom = _resolve_bom_no(fg["fg_item"]) if fg["fg_item"] else None
+			lines.append(_ticket_line(fg["fg_item"], sample_qty, geom, bom))
 		header = {
 			"custom_npd_request": src.name, "custom_customer": src.customer,
 			"custom_customer_name": src.customer_name, "custom_colors": cint(src.colors),
-			"custom_job_title": src.job_title, "custom_job_board": src.material,
-			"custom_material": src.material, "custom_finishings": src.finishings,
+			"custom_job_title": src.job_title, "custom_material": src.material,
+			"custom_job_board": src.material, "custom_finishings": src.finishings,
 			"custom_color_ref": src.color_ref, "custom_quote_no": src.quote_no,
 			"custom_remarks": src.remarks, "custom_art_no": src.artwork_no,
 			"custom_art_version": src.artwork_version,
@@ -582,6 +706,139 @@ def sync_boms(production_plan):
 	return {"resolved": resolved, "still_missing": still}
 
 
+# ── Manufacturing planning: "Get Finished Goods for Manufacture" ─────────────
+@frappe.whitelist()
+def get_manufacture_fg_list(production_plan):
+	"""FG list (with default qty + cost links) to show in the Get-Finished-Goods dialog."""
+	pp = frappe.get_doc("Production Plan", production_plan)
+	out = []
+	seen = set()
+	for tl in (pp.get("custom_ticket_items") or []):
+		key = (tl.get("fg_item") or "", tl.get("calculation_breakdown") or "", tl.get("description") or "")
+		if key in seen:
+			continue
+		seen.add(key)
+		out.append({
+			"fg_item": tl.get("fg_item") or "",
+			"item_name": tl.get("description") or tl.get("fg_item") or "",
+			"cost_item": tl.get("cost_item") or "",
+			"calculation_breakdown": tl.get("calculation_breakdown") or "",
+			"qty": flt(tl.get("qty")) or 1,
+		})
+	if not out:
+		# Native plan without ticket items — fall back to the source lines.
+		source_type, source_name = _resolve_source(pp)
+		if source_type:
+			_ttype, _pr, _hdr, lines = _gather_ticket(source_type, source_name)
+			for tl in lines:
+				out.append({
+					"fg_item": tl.get("fg_item") or "",
+					"item_name": tl.get("description") or tl.get("fg_item") or "",
+					"cost_item": tl.get("cost_item") or "",
+					"calculation_breakdown": tl.get("calculation_breakdown") or "",
+					"qty": flt(tl.get("qty")) or 1,
+				})
+	return out
+
+
+def _recompute_sheet(cb_name, qty):
+	"""Recompute the calculator sheet for a Calculation Breakdown at a given qty.
+	Returns (sheet_dict, form_dict)."""
+	from nxtgen_savinda_pricing_calculator.api.offset_calculator import calculate
+	doc = frappe.get_doc("Calculation Breakdown", cb_name)
+	state = json.loads(doc.ui_state or "{}") or {}
+	form = dict(state.get("form", {}) or {})
+	if qty:
+		form["item_qty"] = flt(qty)
+	payload = {
+		"form": form,
+		"machine_spec": state.get("machine_spec"),
+		"selected_specs": state.get("selected_specs", []) or [],
+	}
+	res = calculate(json.dumps(payload)) or {}
+	return res.get("sheet", {}) or {}, form
+
+
+def _plan_print_data(cb_name, qty, pricing_type):
+	"""Print figures for one planning row at the given qty."""
+	out = {"ups": 0, "cuts": 0, "full_sheet_qty": 0.0, "cut_sheet_qty": 0.0, "wastage": 0.0, "reel_area": 0.0}
+	if not cb_name:
+		return out
+	try:
+		sheet, form = _recompute_sheet(cb_name, qty)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "planning recompute failed")
+		return out
+	out["cuts"] = cint(form.get("no_of_cuts"))
+	if (pricing_type or "Offset") == "Flexo":
+		out["ups"] = cint(sheet.get("ups"))
+		out["reel_area"] = flt(sheet.get("reel_area"))
+	else:
+		out["ups"] = cint(form.get("no_of_ups"))
+		out["full_sheet_qty"] = flt(sheet.get("full_sheet_qty"))
+		out["cut_sheet_qty"] = flt(sheet.get("cut_sheet_qty"))
+		out["wastage"] = flt(sheet.get("wastage"))
+	return out
+
+
+@frappe.whitelist()
+def add_planning_items(production_plan, selections, consolidate=0):
+	"""Add selected FGs to the Offset/Flexo planning table with print data computed from
+	each item's cost calculation at the (possibly edited) qty.
+
+	consolidate (Offset only): the selection is ONE combined print run — full/cut sheet qty
+	and wastage are computed for the whole group (first item's CB at the total qty) and put
+	on the FIRST row only; every row still carries its own ups & cuts."""
+	if isinstance(selections, str):
+		selections = frappe.parse_json(selections) or []
+	consolidate = cint(consolidate)
+
+	pp = frappe.get_doc("Production Plan", production_plan)
+	pricing = pp.get("custom_pricing_type") or "Offset"
+	is_flexo = pricing == "Flexo"
+	# NPD samples don't run full sheets — only ups & cuts are needed for the print.
+	npd_mode = (pp.get("custom_ticket_type") or "Job") == "NPD"
+	field = "custom_flexo_planning" if is_flexo else "custom_offset_planning"
+
+	# Combined-run sheet figures (offset consolidate): first CB at the total selected qty.
+	combined = None
+	if consolidate and not is_flexo and not npd_mode and selections:
+		total_qty = sum(flt(s.get("qty")) for s in selections)
+		combined = _plan_print_data(selections[0].get("calculation_breakdown"), total_qty, pricing)
+
+	pp.set(field, [])
+	for i, sel in enumerate(selections):
+		cb = sel.get("calculation_breakdown")
+		qty = flt(sel.get("qty"))
+		pd = _plan_print_data(cb, qty, pricing)
+		row = {
+			"fg_item": sel.get("fg_item") or "",
+			"item_name": sel.get("item_name") or sel.get("fg_item") or "",
+			"cost_item": sel.get("cost_item") or "",
+			"calculation_breakdown": cb or "",
+			"qty": qty, "ups": pd["ups"], "cuts": pd["cuts"],
+		}
+		if is_flexo:
+			row["reel_area"] = pd["reel_area"]
+		elif npd_mode:
+			pass  # NPD sample: ups & cuts only, no sheet qty.
+		elif consolidate:
+			# Sheet qty + wastage only on the first row (the combined run).
+			if i == 0:
+				row["full_sheet_qty"] = (combined or pd)["full_sheet_qty"]
+				row["cut_sheet_qty"] = (combined or pd)["cut_sheet_qty"]
+				row["wastage"] = (combined or pd)["wastage"]
+				row["is_first"] = 1
+		else:
+			row["full_sheet_qty"] = pd["full_sheet_qty"]
+			row["cut_sheet_qty"] = pd["cut_sheet_qty"]
+			row["wastage"] = pd["wastage"]
+		pp.append(field, row)
+
+	pp.save(ignore_permissions=True)
+	return {"added": len(selections), "field": field, "pricing_type": pricing}
+
+
 # ── Procurement: create a Purchase Request (Material Request) from raw materials ─
 @frappe.whitelist()
 def create_purchase_request(production_plan):
@@ -688,19 +945,51 @@ def on_production_plan_update(doc, method=None):
 
 	name = doc.name
 	if new_state == "Draft" and before is None:
-		notify_role("BOM Team", "Production Plan created: " + name, _msg(doc, "was created — please review the BOM."), doc)
-		notify_role("Supply Chain", "Production Plan created: " + name, _msg(doc, "was created — please prepare stock validation."), doc)
-	elif new_state == "Artwork Pending":
-		notify_role("Artwork Approver", "Artwork approval needed: " + name, _msg(doc, "is awaiting artwork approval."), doc)
+		# Artwork is validated on the Cost Sheet — pull its status + the quotation onto the
+		# plan (SO plans) rather than approving artwork here.
+		_fetch_artwork_quotation(doc)
+		notify_role("BOM Team", "Production Plan created: " + name, _msg(doc, "was created — please validate / create the BOM."), doc)
+		notify_role("Supply Chain", "Production Plan created: " + name, _msg(doc, "was created — stock validation follows BOM validation."), doc)
+	elif new_state == "BOM Validation":
+		notify_role("BOM Team", "BOM validation needed: " + name, _msg(doc, "needs BOM validation — create/confirm BOMs (Open BOM Builder / Sync BOMs), then Confirm BOM."), doc)
 	elif new_state == "Supply Chain Validation":
-		_stamp(name, {"custom_artwork_status": "Approved", "custom_artwork_by": _fullname(), "custom_artwork_on": now()})
-		notify_role("Supply Chain", "Stock validation needed: " + name, _msg(doc, "artwork approved — please validate stock."), doc)
+		# BOM confirmed by the BOM team → stamp and hand off to Supply Chain.
+		_stamp(name, {"custom_bom_confirmed": 1, "custom_bom_by": _fullname(), "custom_bom_on": now()})
+		notify_role("Supply Chain", "Stock validation needed: " + name, _msg(doc, "BOM confirmed — please validate stock."), doc)
 	elif new_state == "Approved":
 		_run_stock_stub(doc)
 		_stamp(name, {"custom_stock_validated": 1, "custom_checked_by": _fullname(), "custom_checked_on": now()})
 		notify_role("Manufacturing User", "Ready to submit: " + name, _msg(doc, "is approved — ready to submit."), doc)
 	elif new_state == "Rejected":
-		_stamp(name, {"custom_artwork_status": "Rejected"})
 		notify_role("CS Team", "Production Plan rejected: " + name, _msg(doc, "was rejected."), doc)
 	elif new_state == "Submitted":
 		notify_role("CS Team", "Production Plan submitted: " + name, _msg(doc, "was submitted — production documents can now be created."), doc)
+
+
+def _fetch_artwork_quotation(doc):
+	"""For a plan sourced from a Sales Order, pull the artwork-approval status and quotation
+	from the linked Cost Sheet / Savinda Quotation (artwork is validated on the Cost Sheet,
+	not on the plan). Best-effort; never blocks."""
+	try:
+		cost_item = None
+		for tl in (doc.get("custom_ticket_items") or []):
+			if tl.get("cost_item"):
+				cost_item = tl.cost_item
+				break
+		if not cost_item:
+			return
+		cs = frappe.db.get_value("Cost Sheet Items", {"item": cost_item}, "parent")
+		if not cs:
+			return
+		vals = {}
+		aw = frappe.db.get_value("Cost Sheet", cs, "artwork_status")
+		if aw:
+			vals["custom_artwork_status"] = aw
+		sq = frappe.db.get_value(
+			"Savinda Quotation", {"cost_sheet": cs}, "name", order_by="creation desc")
+		if sq and not doc.get("custom_quote_no"):
+			vals["custom_quote_no"] = sq
+		if vals:
+			_stamp(doc.name, vals)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "fetch artwork/quotation failed")

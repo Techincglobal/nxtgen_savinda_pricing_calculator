@@ -29,29 +29,8 @@ frappe.ui.form.on("NPD Request", {
 		}
 
 		// ── Actions ──
-		frm.add_custom_button(__("Create FG Items"), function () {
-			_fg_create_popup(frm);
-		}, __("Actions"));
-
-		frm.add_custom_button(__("Confirm BOM"), function () {
-			frappe.call({
-				method: PP + "confirm_bom", args: { npd_request: frm.doc.name },
-				freeze: true, freeze_message: __("Confirming BOM…"),
-				callback: function (r) {
-					var m = r.message || {};
-					if (m.ok) {
-						frappe.show_alert({ message: __("BOM confirmed."), indicator: "green" });
-						frm.reload_doc();
-					} else {
-						frappe.msgprint({
-							title: __("BOM not confirmed"),
-							message: __("Resolve these first:<br>• {0}", [(m.missing || []).join("<br>• ")]),
-							indicator: "orange",
-						});
-					}
-				},
-			});
-		}, __("Actions"));
+		// FG Items are created on the Cost Sheet (before the NPD); the BOM team creates/
+		// confirms BOMs on the Production Plan (BOM Validation). The NPD stays light.
 
 		// Open BOM Builder from the NPD's related Cost Sheet (BOM team creates BOMs here).
 		if (frm.doc.cost_sheet) {
@@ -93,88 +72,6 @@ frappe.ui.form.on("NPD Request", {
 		}, __("Actions"));
 	},
 });
-
-// FG creation popup — fetch proposed Item + Product Library details from the source,
-// let the user review/edit, then create the FG(s) + Product Library.
-function _fg_create_popup(frm) {
-	var PP = "nxtgen_savinda_pricing_calculator.api.production_plan.";
-	frappe.call({
-		method: PP + "get_fg_preview", args: { npd_request: frm.doc.name }, freeze: true,
-		callback: function (r) {
-			var m = r.message || {};
-			var lines = m.lines || [];
-			if (!lines.length) {
-				frappe.msgprint({ title: __("FG Items"),
-					message: __("All requested lines already have an FG Item."), indicator: "blue" });
-				return;
-			}
-			var fields = [{ fieldtype: "HTML", fieldname: "hdr", options:
-				"<div style='color:#555;font-size:12px;margin-bottom:6px'>"
-				+ __("Review the product details fetched from the source. Change anything if needed, then create the FG item(s) + Product Library.")
-				+ "</div>" }];
-			var meta = [];
-			lines.forEach(function (ln, i) {
-				var p = "l" + i + "__";
-				meta.push({ idx: i, row_name: ln.row_name, cost_item: ln.cost_item });
-				fields.push({ fieldtype: "Section Break", label: __("Product: ") + (ln.requested_name || ln.item_name) });
-				fields.push({ fieldtype: "Data", fieldname: p + "item_name", label: __("Item Name"), reqd: 1, default: ln.item_name });
-				fields.push({ fieldtype: "Link", options: "Item Group", fieldname: p + "item_group", label: __("Item Group"), default: ln.item_group });
-				fields.push({ fieldtype: "Link", options: "Department", fieldname: p + "department", label: __("Department"), default: ln.department });
-				fields.push({ fieldtype: "Link", options: "UOM", fieldname: p + "stock_uom", label: __("Stock UOM"), default: ln.stock_uom });
-				fields.push({ fieldtype: "Data", fieldname: p + "customer_ref", label: __("Customer Ref"), default: ln.customer_ref });
-				fields.push({ fieldtype: "Column Break" });
-				fields.push({ fieldtype: "Data", fieldname: p + "pl_customer_product_code", label: __("Customer Product Code"), default: ln.pl_customer_product_code });
-				fields.push({ fieldtype: "Int", fieldname: p + "pl_no_of_colors", label: __("No of Colors"), default: ln.pl_no_of_colors });
-				fields.push({ fieldtype: "Int", fieldname: p + "pl_no_of_ups", label: __("No of Ups"), default: ln.pl_no_of_ups });
-				fields.push({ fieldtype: "Data", fieldname: p + "pl_product_size", label: __("Product Size"), default: ln.pl_product_size });
-				if (m.is_flexo) {
-					fields.push({ fieldtype: "Float", fieldname: p + "pl_width_mm", label: __("Width (mm)"), default: ln.pl_width_mm });
-					fields.push({ fieldtype: "Float", fieldname: p + "pl_length_mm", label: __("Length (mm)"), default: ln.pl_length_mm });
-					fields.push({ fieldtype: "Data", fieldname: p + "pl_core_size", label: __("Core Size"), default: ln.pl_core_size });
-				} else {
-					fields.push({ fieldtype: "Data", fieldname: p + "pl_full_sheet_size", label: __("Full Sheet Size"), default: ln.pl_full_sheet_size });
-					fields.push({ fieldtype: "Data", fieldname: p + "pl_cut_sheet_size", label: __("Cut Sheet Size"), default: ln.pl_cut_sheet_size });
-				}
-				fields.push({ fieldtype: "Data", fieldname: p + "pl_artwork_no", label: __("Artwork No"), default: ln.pl_artwork_no });
-				fields.push({ fieldtype: "Data", fieldname: p + "pl_artwork_version", label: __("Artwork Version"), default: ln.pl_artwork_version });
-			});
-			var d = new frappe.ui.Dialog({
-				title: __("Create FG Items — Review Details"), size: "large", fields: fields,
-				primary_action_label: __("Create FG"),
-				primary_action: function (v) {
-					var details = meta.map(function (mt) {
-						var p = "l" + mt.idx + "__";
-						return {
-							row_name: mt.row_name, cost_item: mt.cost_item,
-							item_name: v[p + "item_name"], item_group: v[p + "item_group"],
-							department: v[p + "department"], stock_uom: v[p + "stock_uom"],
-							customer_ref: v[p + "customer_ref"],
-							pl_customer_product_code: v[p + "pl_customer_product_code"],
-							pl_no_of_colors: v[p + "pl_no_of_colors"], pl_no_of_ups: v[p + "pl_no_of_ups"],
-							pl_product_size: v[p + "pl_product_size"],
-							pl_full_sheet_size: v[p + "pl_full_sheet_size"], pl_cut_sheet_size: v[p + "pl_cut_sheet_size"],
-							pl_width_mm: v[p + "pl_width_mm"], pl_length_mm: v[p + "pl_length_mm"],
-							pl_core_size: v[p + "pl_core_size"],
-							pl_artwork_no: v[p + "pl_artwork_no"], pl_artwork_version: v[p + "pl_artwork_version"],
-						};
-					});
-					frappe.call({
-						method: PP + "create_fg_items",
-						args: { npd_request: frm.doc.name, details: JSON.stringify(details) },
-						freeze: true, freeze_message: __("Creating FG Items…"),
-						callback: function (r2) {
-							d.hide();
-							var mm = r2.message || {};
-							frappe.show_alert({ message: __("FG created: ") + ((mm.created || []).join(", ") || "—"), indicator: "green" });
-							frm.reload_doc();
-						},
-					});
-				},
-			});
-			d.show();
-		},
-	});
-}
 
 function _artwork_action(frm, method, title) {
 	var d = new frappe.ui.Dialog({

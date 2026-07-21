@@ -33,10 +33,6 @@
   "section_finishings",
   "finishings",
   "remarks",
-  "section_items",
-  "items",
-  "section_materials",
-  "bom_materials",
   "section_flexo_hdr",
   "winding_direction",
   "core_size",
@@ -68,74 +64,326 @@
   "amended_from"
  ],
  "fields": [
-  {"fieldname": "pricing_type", "fieldtype": "Select", "label": "Pricing Type", "options": "Offset\nFlexo", "default": "Offset", "reqd": 1, "in_list_view": 1, "in_standard_filter": 1},
-  {"fieldname": "sample_qty", "fieldtype": "Int", "label": "Req. Sample Quantity"},
-  {"fieldname": "naming_series", "fieldtype": "Select", "label": "Series", "options": "NPD-.YYYY.-.#####", "default": "NPD-.YYYY.-.#####", "reqd": 1, "hidden": 1},
-  {"fieldname": "column_break_top", "fieldtype": "Column Break"},
-  {"fieldname": "npd_date", "fieldtype": "Date", "label": "NPD Date", "default": "Today", "in_list_view": 1},
-  {"fieldname": "production_plan", "fieldtype": "Link", "label": "Production Plan", "options": "Production Plan", "read_only": 1},
-  {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "Draft\nSubmitted\nCancelled", "default": "Draft", "read_only": 1, "in_list_view": 1, "in_standard_filter": 1},
-
-  {"fieldname": "section_sources", "fieldtype": "Section Break", "label": "Sources"},
-  {"fieldname": "inquiry", "fieldtype": "Link", "label": "Inquiry (INQ No.)", "options": "Opportunity", "in_list_view": 1},
-  {"fieldname": "cost_sheet", "fieldtype": "Link", "label": "Cost Sheet", "options": "Cost Sheet"},
-  {"fieldname": "column_break_src", "fieldtype": "Column Break"},
-  {"fieldname": "quote_no", "fieldtype": "Data", "label": "Quote No"},
-  {"fieldname": "attention_to", "fieldtype": "Data", "label": "Attention To"},
-
-  {"fieldname": "section_party", "fieldtype": "Section Break", "label": "Customer & Product"},
-  {"fieldname": "customer", "fieldtype": "Link", "label": "Customer", "options": "Customer"},
-  {"fieldname": "customer_name", "fieldtype": "Data", "label": "Customer Name", "in_list_view": 1},
-  {"fieldname": "sales_person", "fieldtype": "Data", "label": "Sales Person"},
-  {"fieldname": "column_break_party", "fieldtype": "Column Break"},
-  {"fieldname": "job_title", "fieldtype": "Data", "label": "Job Title"},
-  {"fieldname": "material", "fieldtype": "Data", "label": "Material"},
-  {"fieldname": "size", "fieldtype": "Data", "label": "Size"},
-  {"fieldname": "color_ref", "fieldtype": "Data", "label": "Color Reference"},
-  {"fieldname": "colors", "fieldtype": "Int", "label": "Colors"},
-
-  {"fieldname": "section_finishings", "fieldtype": "Section Break", "label": "Finishings & Remarks"},
-  {"fieldname": "finishings", "fieldtype": "Small Text", "label": "Finishings"},
-  {"fieldname": "remarks", "fieldtype": "Small Text", "label": "Remarks"},
-
-  {"fieldname": "section_items", "fieldtype": "Section Break", "label": "Requested Items"},
-  {"fieldname": "items", "fieldtype": "Table", "label": "Items", "options": "NPD Request Item"},
-
-  {"fieldname": "section_materials", "fieldtype": "Section Break", "label": "BOM Materials (reference, with wastage)", "collapsible": 1},
-  {"fieldname": "bom_materials", "fieldtype": "Table", "label": "BOM Materials", "options": "NPD Request Material"},
-
-  {"fieldname": "section_flexo_hdr", "fieldtype": "Section Break", "label": "Reel / Winding Details", "depends_on": "eval:doc.pricing_type=='Flexo'", "collapsible": 1},
-  {"fieldname": "winding_direction", "fieldtype": "Link", "label": "Winding Direction", "options": "Winding Direction"},
-  {"fieldname": "core_size", "fieldtype": "Data", "label": "Core Size"},
-  {"fieldname": "no_of_ups_per_reel", "fieldtype": "Int", "label": "No of Ups per Reel"},
-  {"fieldname": "column_break_flexo_hdr", "fieldtype": "Column Break"},
-  {"fieldname": "no_of_labels_per_reel", "fieldtype": "Int", "label": "No of Labels per Reel"},
-  {"fieldname": "no_of_inner_pages", "fieldtype": "Int", "label": "No of Inner Pages"},
-  {"fieldname": "no_of_cover_pages", "fieldtype": "Int", "label": "No of Cover Pages"},
-
-  {"fieldname": "tab_break_artwork", "fieldtype": "Tab Break", "label": "Artwork & Approval"},
-  {"fieldname": "section_break_artwork", "fieldtype": "Section Break", "label": "Artwork & Approval"},
-  {"fieldname": "artwork_no", "fieldtype": "Data", "label": "Artwork No"},
-  {"fieldname": "artwork_version", "fieldtype": "Data", "label": "Artwork Version"},
-  {"fieldname": "artwork_file", "fieldtype": "Attach", "label": "Artwork File"},
-  {"fieldname": "color_reference", "fieldtype": "Data", "label": "Color Reference"},
-  {"fieldname": "column_break_art", "fieldtype": "Column Break"},
-  {"fieldname": "artwork_status", "fieldtype": "Select", "label": "Artwork Status", "options": "Pending\nApproved\nRejected", "default": "Pending", "read_only": 1, "allow_on_submit": 1, "in_list_view": 1, "in_standard_filter": 1},
-  {"fieldname": "artwork_approved_by", "fieldtype": "Link", "label": "Artwork Approved By", "options": "User", "read_only": 1, "allow_on_submit": 1},
-  {"fieldname": "artwork_approved_on", "fieldtype": "Datetime", "label": "Artwork Approved On", "read_only": 1, "allow_on_submit": 1},
-  {"fieldname": "artwork_remarks", "fieldtype": "Small Text", "label": "Artwork Remarks", "allow_on_submit": 1},
-
-  {"fieldname": "section_approvals", "fieldtype": "Section Break", "label": "Approval Signatures", "collapsible": 1},
-  {"fieldname": "created_by_name", "fieldtype": "Data", "label": "Created By"},
-  {"fieldname": "created_on", "fieldtype": "Datetime", "label": "Created On"},
-  {"fieldname": "approved_by_name", "fieldtype": "Data", "label": "Approved By", "allow_on_submit": 1},
-  {"fieldname": "approved_on", "fieldtype": "Datetime", "label": "Approved On", "allow_on_submit": 1},
-  {"fieldname": "column_break_appr", "fieldtype": "Column Break"},
-  {"fieldname": "bom_confirmed", "fieldtype": "Check", "label": "BOM Confirmed", "read_only": 1, "allow_on_submit": 1},
-  {"fieldname": "bom_by", "fieldtype": "Data", "label": "BOM Confirmed By", "read_only": 1, "allow_on_submit": 1},
-  {"fieldname": "bom_on", "fieldtype": "Datetime", "label": "BOM Confirmed On", "read_only": 1, "allow_on_submit": 1},
-
-  {"fieldname": "amended_from", "fieldtype": "Link", "label": "Amended From", "options": "NPD Request", "no_copy": 1, "print_hide": 1, "read_only": 1}
+  {
+   "fieldname": "pricing_type",
+   "fieldtype": "Select",
+   "label": "Pricing Type",
+   "options": "Offset\nFlexo",
+   "default": "Offset",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "sample_qty",
+   "fieldtype": "Int",
+   "label": "Req. Sample Quantity"
+  },
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "NPD-.YYYY.-.#####",
+   "default": "NPD-.YYYY.-.#####",
+   "reqd": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "column_break_top",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "npd_date",
+   "fieldtype": "Date",
+   "label": "NPD Date",
+   "default": "Today",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "production_plan",
+   "fieldtype": "Link",
+   "label": "Production Plan",
+   "options": "Production Plan",
+   "read_only": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nSubmitted\nCancelled",
+   "default": "Draft",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "section_sources",
+   "fieldtype": "Section Break",
+   "label": "Sources"
+  },
+  {
+   "fieldname": "inquiry",
+   "fieldtype": "Link",
+   "label": "Inquiry (INQ No.)",
+   "options": "Opportunity",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "cost_sheet",
+   "fieldtype": "Link",
+   "label": "Cost Sheet",
+   "options": "Cost Sheet"
+  },
+  {
+   "fieldname": "column_break_src",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "quote_no",
+   "fieldtype": "Data",
+   "label": "Quote No"
+  },
+  {
+   "fieldname": "attention_to",
+   "fieldtype": "Data",
+   "label": "Attention To"
+  },
+  {
+   "fieldname": "section_party",
+   "fieldtype": "Section Break",
+   "label": "Customer & Product"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "Customer Name",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "sales_person",
+   "fieldtype": "Data",
+   "label": "Sales Person"
+  },
+  {
+   "fieldname": "column_break_party",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "job_title",
+   "fieldtype": "Data",
+   "label": "Job Title"
+  },
+  {
+   "fieldname": "material",
+   "fieldtype": "Data",
+   "label": "Material"
+  },
+  {
+   "fieldname": "size",
+   "fieldtype": "Data",
+   "label": "Size"
+  },
+  {
+   "fieldname": "color_ref",
+   "fieldtype": "Data",
+   "label": "Color Reference"
+  },
+  {
+   "fieldname": "colors",
+   "fieldtype": "Int",
+   "label": "Colors"
+  },
+  {
+   "fieldname": "section_finishings",
+   "fieldtype": "Section Break",
+   "label": "Finishings & Remarks"
+  },
+  {
+   "fieldname": "finishings",
+   "fieldtype": "Small Text",
+   "label": "Finishings"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "section_flexo_hdr",
+   "fieldtype": "Section Break",
+   "label": "Reel / Winding Details",
+   "depends_on": "eval:doc.pricing_type=='Flexo'",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "winding_direction",
+   "fieldtype": "Link",
+   "label": "Winding Direction",
+   "options": "Winding Direction"
+  },
+  {
+   "fieldname": "core_size",
+   "fieldtype": "Data",
+   "label": "Core Size"
+  },
+  {
+   "fieldname": "no_of_ups_per_reel",
+   "fieldtype": "Int",
+   "label": "No of Ups per Reel"
+  },
+  {
+   "fieldname": "column_break_flexo_hdr",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "no_of_labels_per_reel",
+   "fieldtype": "Int",
+   "label": "No of Labels per Reel"
+  },
+  {
+   "fieldname": "no_of_inner_pages",
+   "fieldtype": "Int",
+   "label": "No of Inner Pages"
+  },
+  {
+   "fieldname": "no_of_cover_pages",
+   "fieldtype": "Int",
+   "label": "No of Cover Pages"
+  },
+  {
+   "fieldname": "tab_break_artwork",
+   "fieldtype": "Tab Break",
+   "label": "Artwork & Approval"
+  },
+  {
+   "fieldname": "section_break_artwork",
+   "fieldtype": "Section Break",
+   "label": "Artwork & Approval"
+  },
+  {
+   "fieldname": "artwork_no",
+   "fieldtype": "Data",
+   "label": "Artwork No"
+  },
+  {
+   "fieldname": "artwork_version",
+   "fieldtype": "Data",
+   "label": "Artwork Version"
+  },
+  {
+   "fieldname": "artwork_file",
+   "fieldtype": "Attach",
+   "label": "Artwork File"
+  },
+  {
+   "fieldname": "color_reference",
+   "fieldtype": "Data",
+   "label": "Color Reference"
+  },
+  {
+   "fieldname": "column_break_art",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "artwork_status",
+   "fieldtype": "Select",
+   "label": "Artwork Status",
+   "options": "Pending\nApproved\nRejected",
+   "default": "Pending",
+   "read_only": 1,
+   "allow_on_submit": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "artwork_approved_by",
+   "fieldtype": "Link",
+   "label": "Artwork Approved By",
+   "options": "User",
+   "read_only": 1,
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "artwork_approved_on",
+   "fieldtype": "Datetime",
+   "label": "Artwork Approved On",
+   "read_only": 1,
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "artwork_remarks",
+   "fieldtype": "Small Text",
+   "label": "Artwork Remarks",
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "section_approvals",
+   "fieldtype": "Section Break",
+   "label": "Approval Signatures",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "created_by_name",
+   "fieldtype": "Data",
+   "label": "Created By"
+  },
+  {
+   "fieldname": "created_on",
+   "fieldtype": "Datetime",
+   "label": "Created On"
+  },
+  {
+   "fieldname": "approved_by_name",
+   "fieldtype": "Data",
+   "label": "Approved By",
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved On",
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "column_break_appr",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "bom_confirmed",
+   "fieldtype": "Check",
+   "label": "BOM Confirmed",
+   "read_only": 1,
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "bom_by",
+   "fieldtype": "Data",
+   "label": "BOM Confirmed By",
+   "read_only": 1,
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "bom_on",
+   "fieldtype": "Datetime",
+   "label": "BOM Confirmed On",
+   "read_only": 1,
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "options": "NPD Request",
+   "no_copy": 1,
+   "print_hide": 1,
+   "read_only": 1
+  }
  ],
  "links": [],
  "modified": "2026-07-21 00:00:00.000000",
@@ -144,11 +392,66 @@
  "name": "NPD Request",
  "owner": "Administrator",
  "permissions": [
-  {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager", "share": 1, "submit": 1, "cancel": 1, "amend": 1, "write": 1},
-  {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "CS Team", "share": 1, "submit": 1, "cancel": 1, "amend": 1, "write": 1},
-  {"create": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "Sales User", "share": 1, "submit": 1, "write": 1},
-  {"email": 1, "print": 1, "read": 1, "report": 1, "role": "BOM Team", "share": 1, "write": 1},
-  {"email": 1, "print": 1, "read": 1, "report": 1, "role": "Artwork Approver", "share": 1, "write": 1}
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "CS Team",
+   "share": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales User",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "BOM Team",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Artwork Approver",
+   "share": 1,
+   "write": 1
+  }
  ],
  "search_fields": "customer_name,inquiry,job_title",
  "sort_field": "modified",

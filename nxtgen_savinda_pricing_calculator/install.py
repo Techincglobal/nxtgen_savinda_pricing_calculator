@@ -120,17 +120,19 @@ WORKFLOW_NAME = "Production Plan Approval"
 
 
 def _ensure_workflow():
-	"""Seed the Production Plan approval Workflow (idempotent, non-destructive).
+	"""Seed / reconcile the Production Plan approval Workflow.
 
-	States + transitions gate CS Team -> Artwork Approver -> Supply Chain -> submit.
-	An existing Workflow of this name is left untouched (respects live edits)."""
+	Artwork is validated on the Cost Sheet, so there is NO artwork state here — the flow is
+	CS Team -> BOM Team (BOM Validation) -> Supply Chain (Stock Validation) -> submit. The
+	definition is code-owned: an existing Workflow of this name is RECONCILED to match the
+	code (states/transitions rebuilt) so definition changes apply on migrate."""
 	if not frappe.db.table_exists("Workflow"):
 		return
 	try:
 		# (state, doc_status, owning role, style)
 		states = [
 			("Draft",                   "0", "CS Team",            ""),
-			("Artwork Pending",         "0", "Artwork Approver",   "Warning"),
+			("BOM Validation",          "0", "BOM Team",           "Warning"),
 			("Supply Chain Validation", "0", "Supply Chain",       "Warning"),
 			("Approved",                "0", "Supply Chain",       "Success"),
 			("Submitted",               "1", "Manufacturing User", "Success"),
@@ -142,7 +144,7 @@ def _ensure_workflow():
 					"doctype": "Workflow State", "workflow_state_name": state, "style": style,
 				}).insert(ignore_permissions=True)
 
-		actions = ["Send for Artwork", "Approve Artwork", "Reject Artwork",
+		actions = ["Send for BOM", "Confirm BOM", "Reject BOM",
 		           "Validate Stock", "Submit Plan", "Reopen"]
 		for action in actions:
 			if not frappe.db.exists("Workflow Action Master", action):
@@ -150,25 +152,25 @@ def _ensure_workflow():
 					"doctype": "Workflow Action Master", "workflow_action_name": action,
 				}).insert(ignore_permissions=True)
 
-		if frappe.db.exists("Workflow", WORKFLOW_NAME):
-			return
-
 		# (from_state, action, next_state, allowed role)
 		transitions = [
-			("Draft",                   "Send for Artwork", "Artwork Pending",         "CS Team"),
-			("Artwork Pending",         "Approve Artwork",  "Supply Chain Validation", "Artwork Approver"),
-			("Artwork Pending",         "Reject Artwork",   "Rejected",                "Artwork Approver"),
-			("Supply Chain Validation", "Validate Stock",   "Approved",                "Supply Chain"),
-			("Approved",                "Submit Plan",      "Submitted",               "Manufacturing User"),
-			("Rejected",                "Reopen",           "Draft",                   "CS Team"),
+			("Draft",                   "Send for BOM",   "BOM Validation",          "CS Team"),
+			("BOM Validation",          "Confirm BOM",    "Supply Chain Validation", "BOM Team"),
+			("BOM Validation",          "Reject BOM",     "Rejected",                "BOM Team"),
+			("Supply Chain Validation", "Validate Stock", "Approved",                "Supply Chain"),
+			("Approved",                "Submit Plan",    "Submitted",               "Manufacturing User"),
+			("Rejected",                "Reopen",         "Draft",                   "CS Team"),
 		]
-		wf = frappe.new_doc("Workflow")
+		wf = (frappe.get_doc("Workflow", WORKFLOW_NAME)
+		      if frappe.db.exists("Workflow", WORKFLOW_NAME) else frappe.new_doc("Workflow"))
 		wf.workflow_name = WORKFLOW_NAME
 		wf.document_type = "Production Plan"
 		wf.workflow_state_field = "workflow_state"
 		wf.is_active = 1
 		wf.send_email_alert = 0
 		wf.override_status = 0
+		wf.set("states", [])
+		wf.set("transitions", [])
 		for state, ds, role, _style in states:
 			wf.append("states", {"state": state, "doc_status": ds, "allow_edit": role})
 		for frm_state, action, to_state, role in transitions:
@@ -181,7 +183,7 @@ def _ensure_workflow():
 				"state": frm_state, "action": action, "next_state": to_state,
 				"allowed": "System Manager", "allow_self_approval": 1,
 			})
-		wf.insert(ignore_permissions=True)
+		wf.save(ignore_permissions=True)
 		frappe.db.commit()
 	except Exception:
 		frappe.log_error(
@@ -395,6 +397,12 @@ def _ensure_custom_fields():
 				# po_items holds only the BOM-ready subset (ERPNext requires bom_no there).
 				{"fieldname": "custom_items_section", "label": "Job Ticket Items", "fieldtype": "Section Break", "insert_after": "custom_remarks"},
 				{"fieldname": "custom_ticket_items", "label": "Items", "fieldtype": "Table", "options": "Job Ticket Item", "insert_after": "custom_items_section"},
+				# Manufacturing planning FG lines (print data) — populated by "Get Finished
+				# Goods for Manufacture". Offset shows sheet qty/cuts/ups/wastage; Flexo ups/cuts.
+				{"fieldname": "custom_offset_planning_sec", "label": "Manufacturing Planning (Offset)", "fieldtype": "Section Break", "insert_after": "custom_ticket_items", "depends_on": "eval:doc.custom_pricing_type=='Offset'"},
+				{"fieldname": "custom_offset_planning", "label": "Offset Planning", "fieldtype": "Table", "options": "Production Planning Item", "insert_after": "custom_offset_planning_sec"},
+				{"fieldname": "custom_flexo_planning_sec", "label": "Manufacturing Planning (Flexo)", "fieldtype": "Section Break", "insert_after": "custom_offset_planning", "depends_on": "eval:doc.custom_pricing_type=='Flexo'"},
+				{"fieldname": "custom_flexo_planning", "label": "Flexo Planning", "fieldtype": "Table", "options": "Production Planning Item", "insert_after": "custom_flexo_planning_sec"},
 				# Artwork + approval stamps (allow_on_submit so the workflow can fill them post-submit)
 				{"fieldname": "custom_appr_section", "label": "Ticket Approvals", "fieldtype": "Section Break", "insert_after": "custom_remarks", "collapsible": 1},
 				{"fieldname": "custom_artwork_status", "label": "Artwork Status", "fieldtype": "Select", "options": "Pending\nApproved\nRejected", "default": "Pending", "insert_after": "custom_appr_section", "read_only": 1, "allow_on_submit": 1},
