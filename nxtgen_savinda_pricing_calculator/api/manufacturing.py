@@ -8,9 +8,11 @@ import frappe
 from frappe.utils import cint, flt
 
 
-def _upsert_product_library(fg_item_code, cost_item=None, customer_ref=None):
+def _upsert_product_library(fg_item_code, cost_item=None, customer_ref=None, overrides=None):
 	"""Create a Product Library record for a new FG, pre-filled from the (final) cost Item
-	and its Calculation Breakdown. Non-fatal — never blocks FG creation."""
+	and its Calculation Breakdown. `overrides` (a dict keyed by Product Library fieldname)
+	wins over the computed defaults — used when the user reviews/edits the details in the
+	FG-creation popup. Non-fatal — never blocks FG creation."""
 	try:
 		if not fg_item_code or not frappe.db.exists("DocType", "Product Library"):
 			return
@@ -57,7 +59,7 @@ def _upsert_product_library(fg_item_code, cost_item=None, customer_ref=None):
 			a, b = flt(a), flt(b)
 			return f"{a} x {b}" if (a or b) else ""
 
-		pl = frappe.get_doc({
+		pl_data = {
 			"doctype":               "Product Library",
 			"product_code":          fg_item_code,
 			"product_name":          item.get("item_name") or fg_item_code,
@@ -75,7 +77,15 @@ def _upsert_product_library(fg_item_code, cost_item=None, customer_ref=None):
 			                               cb.get("cut_sheetw") or ci.get("cut_sheet_w")),
 			"width_mm":              w,
 			"length_mm":             l,
-		})
+		}
+		# User-reviewed overrides (from the FG-creation popup) win over defaults.
+		if overrides and isinstance(overrides, dict):
+			meta = frappe.get_meta("Product Library")
+			for k, v in overrides.items():
+				if v in (None, "") or not meta.has_field(k):
+					continue
+				pl_data[k] = v
+		pl = frappe.get_doc(pl_data)
 		pl.flags.ignore_permissions = True
 		pl.insert(ignore_permissions=True)
 		if frappe.db.has_column("Item", "custom_product_library"):
@@ -89,7 +99,7 @@ def _upsert_product_library(fg_item_code, cost_item=None, customer_ref=None):
 
 @frappe.whitelist()
 def create_fg_item(item_name, description, item_group, department, stock_uom="Nos",
-                   cost_item=None, customer_ref=None):
+                   cost_item=None, customer_ref=None, pl_overrides=None):
 	"""
 	Create a Finished Good ERPNext Item with all mandatory custom fields resolved.
 	- custom_department_abbr  fetched from Department.custom_abbr
@@ -126,7 +136,9 @@ def create_fg_item(item_name, description, item_group, department, stock_uom="No
 	if customer_ref and frappe.db.has_column("Item", "customer_ref"):
 		doc.customer_ref = customer_ref
 	doc.insert(ignore_permissions=True)
-	_upsert_product_library(doc.name, cost_item, customer_ref)
+	if isinstance(pl_overrides, str):
+		pl_overrides = json.loads(pl_overrides or "{}")
+	_upsert_product_library(doc.name, cost_item, customer_ref, overrides=pl_overrides)
 	frappe.db.commit()
 
 	return {"item_code": doc.name, "item_name": doc.item_name}

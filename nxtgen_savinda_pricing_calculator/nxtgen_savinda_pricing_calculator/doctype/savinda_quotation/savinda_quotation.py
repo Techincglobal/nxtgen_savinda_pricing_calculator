@@ -33,6 +33,24 @@ class SavindaQuotation(Document):
 			if cn:
 				self.customer_name = cn
 		self._apply_common_material()
+		self._apply_lowest_profit_margin()
+
+	def _apply_lowest_profit_margin(self):
+		"""Header profit margin = the LOWEST profit margin among the quoted items'
+		Calculation Breakdowns (the most conservative margin across the quotation)."""
+		if not self.meta.has_field("profit_margin"):
+			return
+		margins = []
+		for it in (self.items or []):
+			if not it.calculation_breakdown:
+				continue
+			pm = frappe.db.get_value(
+				"Calculation Breakdown", it.calculation_breakdown, "profit_margin"
+			)
+			if pm is not None:
+				margins.append(flt(pm))
+		if margins:
+			self.profit_margin = min(margins)
 
 	def _validate_currency(self):
 		"""Costing is in company base (LKR); the quotation may be presented in another

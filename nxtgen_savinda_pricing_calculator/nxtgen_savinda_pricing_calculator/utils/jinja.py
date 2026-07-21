@@ -158,3 +158,168 @@ def get_cb_print_data(doc_name):
 		"cut_sheet_l":	  float(doc.cut_sheet_l or 0),
 		"cut_sheet_w":	  cut_sheet_w,
 	}
+
+
+def _company_logo():
+	return frappe.db.get_single_value("Website Settings", "banner_image") or ""
+
+
+def _user_name(user_id):
+	return frappe.db.get_value("User", user_id, "full_name") or user_id or ""
+
+
+def get_ticket_print_data(production_plan_name):
+	"""Data for the Job Ticket print (from a Production Plan)."""
+	doc = frappe.get_doc("Production Plan", production_plan_name)
+	is_flexo = (doc.get("custom_pricing_type") or "Offset") == "Flexo"
+
+	lines = []
+	# Prefer the full ticket item list (includes items still awaiting a BOM); fall back to
+	# po_items for older plans created before custom_ticket_items existed.
+	ticket_rows = doc.get("custom_ticket_items") or []
+	if ticket_rows:
+		for r in ticket_rows:
+			item_name = r.get("description") or (frappe.db.get_value("Item", r.fg_item, "item_name") if r.get("fg_item") else "") or r.get("fg_item") or ""
+			lines.append({
+				"item_code": r.get("fg_item") or "", "item_name": item_name,
+				"description": r.get("description") or item_name,
+				"qty": float(r.get("qty") or 0),
+				"has_bom": 1 if r.get("has_bom") else 0,
+				"product_code": r.get("product_code") or "",
+				"size": r.get("size") or "",
+				"batch_no": r.get("batch_no") or "",
+				"pack_date": r.get("pack_date"),
+				"exp_date": r.get("exp_date"),
+				"full_sheets": r.get("full_sheets") or 0,
+				"cut_sheets": r.get("cut_sheets") or 0,
+				"full_sheet_size": r.get("full_sheet_size") or "",
+				"cut_sheet_size": r.get("cut_sheet_size") or "",
+				"cuts": r.get("cuts") or 0,
+				"ups": r.get("ups") or 0,
+				"reel_length": r.get("reel_length") or 0,
+				"reel_width": r.get("reel_width") or 0,
+				"reel_area": r.get("reel_area") or 0,
+				"slit_width": r.get("slit_width") or "",
+			})
+	else:
+		for r in (doc.get("po_items") or []):
+			item_name = frappe.db.get_value("Item", r.item_code, "item_name") or r.item_code
+			lines.append({
+				"item_code": r.item_code, "item_name": item_name,
+				"description": r.get("description") or item_name,
+				"qty": float(r.planned_qty or 0),
+				"has_bom": 1,
+				"product_code": r.get("custom_product_code") or "",
+				"size": r.get("custom_size") or "",
+				"batch_no": r.get("custom_batch_no") or "",
+				"pack_date": r.get("custom_pack_date"),
+				"exp_date": r.get("custom_exp_date"),
+				"full_sheets": r.get("custom_full_sheets") or 0,
+				"cut_sheets": r.get("custom_cut_sheets") or 0,
+				"full_sheet_size": r.get("custom_full_sheet_size") or "",
+				"cut_sheet_size": r.get("custom_cut_sheet_size") or "",
+				"cuts": r.get("custom_cuts") or 0,
+				"ups": r.get("custom_ups") or 0,
+				"reel_length": r.get("custom_reel_length") or 0,
+				"reel_width": r.get("custom_reel_width") or 0,
+				"reel_area": r.get("custom_reel_area") or 0,
+				"slit_width": r.get("custom_slit_width") or "",
+			})
+
+	materials = []
+	for m in (doc.get("mr_items") or []):
+		materials.append({
+			"item_code": m.item_code,
+			"item_name": m.get("item_name") or frappe.db.get_value("Item", m.item_code, "item_name") or m.item_code,
+			"uom": m.get("uom") or m.get("stock_uom") or "",
+			"quantity": float(m.get("quantity") or 0),
+			"wastage_qty": float(m.get("custom_wastage_qty") or 0),
+		})
+
+	return {
+		"doc": doc,
+		"is_flexo": is_flexo,
+		"ticket_type": doc.get("custom_ticket_type") or "Job",
+		"logo": _company_logo(),
+		"lines": lines,
+		"materials": materials,
+		"header": {
+			"customer": doc.get("custom_customer_name") or doc.get("custom_customer") or "",
+			"job_title": doc.get("custom_job_title") or "",
+			"job_board": doc.get("custom_job_board") or "",
+			"material": doc.get("custom_material") or "",
+			"colors": doc.get("custom_colors") or 0,
+			"art_no": doc.get("custom_art_no") or "",
+			"art_version": doc.get("custom_art_version") or "",
+			"color_ref": doc.get("custom_color_ref") or "",
+			"po_no": doc.get("custom_po_no") or "",
+			"req_date": doc.get("custom_req_date"),
+			"quote_no": doc.get("custom_quote_no") or "",
+			"printing_machine": doc.get("custom_printing_machine") or "",
+			"finishings": doc.get("custom_finishings") or "",
+			"remarks": doc.get("custom_remarks") or "",
+			"npd_request": doc.get("custom_npd_request") or "",
+			"job_date": doc.get("posting_date"),
+		},
+		"approvals": [
+			{"label": "Created by",              "by": doc.get("custom_created_by") or "", "on": doc.get("custom_created_on")},
+			{"label": "Artwork approved by",     "by": doc.get("custom_artwork_by") or "", "on": doc.get("custom_artwork_on")},
+			{"label": "Checked by - Supply chain", "by": doc.get("custom_checked_by") or "", "on": doc.get("custom_checked_on")},
+			{"label": "Quoted by",               "by": doc.get("custom_quoted_by") or "", "on": doc.get("custom_quoted_on")},
+			{"label": "BOM By",                  "by": doc.get("custom_bom_by") or "", "on": doc.get("custom_bom_on")},
+		],
+		"created_date": format_date(doc.creation),
+	}
+
+
+def get_npd_print_data(npd_name):
+	"""Data for the NPD Request print (2-signature request-stage document)."""
+	doc = frappe.get_doc("NPD Request", npd_name)
+	is_flexo = (doc.get("pricing_type") or "Offset") == "Flexo"
+
+	lines = []
+	for r in (doc.get("items") or []):
+		lines.append({
+			"item_name": r.get("item_name") or "",
+			"fg_item": r.get("fg_item") or "",
+			"qty": float(r.get("qty") or 0),
+			"size": r.get("size") or "",
+			"product_code": r.get("product_code") or "",
+			"full_sheets": r.get("full_sheets") or 0,
+			"cut_sheets": r.get("cut_sheets") or 0,
+			"full_sheet_size": r.get("full_sheet_size") or "",
+			"cut_sheet_size": r.get("cut_sheet_size") or "",
+			"cuts": r.get("cuts") or 0,
+			"ups": r.get("ups") or 0,
+			"reel_length": r.get("reel_length") or 0,
+			"reel_width": r.get("reel_width") or 0,
+			"reel_area": r.get("reel_area") or 0,
+			"slit_width": r.get("slit_width") or "",
+			"repeat_teeth": r.get("repeat_teeth") or "",
+			"repeat_ups": r.get("repeat_ups") or 0,
+			"repeat_gaps": r.get("repeat_gaps") or "",
+			"across_ups": r.get("across_ups") or 0,
+			"across_gaps": r.get("across_gaps") or 0,
+			"material_width": r.get("material_width") or "",
+		})
+
+	materials = []
+	for m in (doc.get("bom_materials") or []):
+		materials.append({
+			"item": m.get("item") or "",
+			"item_name": m.get("item_name") or m.get("item") or "",
+			"uom": m.get("uom") or "",
+			"quantity": float(m.get("quantity") or 0),
+		})
+
+	return {
+		"doc": doc,
+		"is_flexo": is_flexo,
+		"logo": _company_logo(),
+		"lines": lines,
+		"materials": materials,
+		"created_by": doc.get("created_by_name") or "",
+		"created_on": doc.get("created_on"),
+		"approved_by": doc.get("approved_by_name") or "",
+		"approved_on": doc.get("approved_on"),
+	}

@@ -59,11 +59,11 @@ frappe.ui.form.on("Savinda Quotation", {
 
 		// ── Status colour indicator ───────────────────────────
 		var status_colour = {
-			"Draft":     "grey",
-			"Sent":      "blue",
-			"Accepted":  "green",
-			"Won":       "darkgreen",
-			"Lost":      "red",
+			"Draft": "grey",
+			"Sent": "blue",
+			"Accepted": "green",
+			"Won": "darkgreen",
+			"Lost": "red",
 			"Cancelled": "grey",
 		};
 		frm.set_indicator_formatter("status", function (doc) {
@@ -82,7 +82,7 @@ frappe.ui.form.on("Savinda Quotation", {
 					function () {
 						frappe.call({
 							method: "frappe.client.set_value",
-							args:   { doctype: "Savinda Quotation", name: frm.doc.name, fieldname: "status", value: "Won" },
+							args: { doctype: "Savinda Quotation", name: frm.doc.name, fieldname: "status", value: "Won" },
 							callback: function () {
 								frm.reload_doc();
 								frappe.show_alert({ message: "Quotation marked as Won ✓", indicator: "green" });
@@ -282,11 +282,11 @@ function _fetch_exchange_rate(frm) {
 // The inquiry is never re-read here — the Cost Item is the source of truth.
 function _apply_packing_q(qrow, ci) {
 	if (!qrow || !ci) return;
-	qrow.packing_type      = ci.packing_type || "";
+	qrow.packing_type = ci.packing_type || "";
 	qrow.winding_direction = ci.winding_direction || "";
-	qrow.pcs_per_role      = ci.pcs_per_role || 0;
-	qrow.up                = ci.up || 0;
-	qrow.is_printed        = ci.is_printed || "";
+	qrow.pcs_per_role = ci.pcs_per_role || 0;
+	qrow.up = ci.up || 0;
+	qrow.is_printed = ci.is_printed || "";
 }
 
 function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
@@ -305,7 +305,7 @@ function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
 				frm.set_value("inquiry", cs.inquiry);
 			if (!frm.doc.customer_name && cs.customer_name)
 				frm.set_value("customer_name", cs.customer_name);
-
+			console.log(cs);
 			var cs_rows = cs.pricing_list || [];
 			if (!cs_rows.length) {
 				frappe.msgprint({ message: "No items found in Cost Sheet pricing list.", indicator: "orange" });
@@ -324,20 +324,21 @@ function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
 			// Adds a single quotation row using base cost sheet data (no recalculation)
 			function _add_base_row(ci, cs_row, qty_override, variant) {
 				var qrow = frm.add_child("items");
-				qrow.item_name        = ci.cost_item_name || cs_row.item_name || cs_row.item;
-				qrow.cost_item        = cs_row.item;
+				qrow.item_name = ci.cost_item_name || cs_row.item_name || cs_row.item;
+				qrow.cost_item = cs_row.item;
 				qrow.calculation_breakdown = (ci.calculations && ci.calculations[0])
 					? (ci.calculations[0].calculation_breakdown || "") : "";
-				qrow.size             = _format_size(ci);
-				qrow.material         = ci.material || "";
-				qrow.finishing        = ci.breakdown || "";
+				qrow.size = _format_size(ci);
+				qrow.material = ci.material || "";
+				qrow.finishing = ci.breakdown || "";
 				qrow.finishing_variant = variant || 1;
-				qrow.qty              = qty_override !== undefined ? qty_override : flt_v(cs_row.qty);
-				qrow.unit_cost        = flt_v(cs_row.unit_price);
-				qrow.selling_price    = flt_v(cs_row.selling_unit_price) > 0
+				qrow.qty = qty_override !== undefined ? qty_override : flt_v(cs_row.qty);
+				qrow.unit_cost = flt_v(cs_row.unit_price);
+				qrow.selling_price = flt_v(cs_row.selling_unit_price) > 0
 					? flt_v(cs_row.selling_unit_price)
 					: flt_v(cs_row.unit_price);
-				qrow.is_manually_set  = 0;
+				qrow.is_manually_set = 0;
+				// Header profit_margin (lowest across items) is set server-side in validate().
 				_apply_packing_q(qrow, ci);
 				loaded++;
 			}
@@ -375,12 +376,12 @@ function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
 						// finishing_variant stays 1 so all rows for this item group
 						// together on the printed quotation.
 						var base_info = {
-							item_name:  ci.cost_item_name || cs_row.item_name || cs_row.item,
-							cost_item:  cs_row.item,
-							cb_name:    cb_name,
-							size:       _format_size(ci),
-							material:   ci.material || "",
-							finishing:  ci.breakdown || "",
+							item_name: ci.cost_item_name || cs_row.item_name || cs_row.item,
+							cost_item: cs_row.item,
+							cb_name: cb_name,
+							size: _format_size(ci),
+							material: ci.material || "",
+							finishing: ci.breakdown || "",
 						};
 
 						function add_break_row(qb_idx) {
@@ -395,23 +396,23 @@ function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
 								args: { calculation_breakdown: cb_name, qty: qb.qty },
 								callback: function (r3) {
 									var qrow = frm.add_child("items");
-									qrow.item_name         = base_info.item_name;
-									qrow.cost_item         = base_info.cost_item;
+									qrow.item_name = base_info.item_name;
+									qrow.cost_item = base_info.cost_item;
 									qrow.calculation_breakdown = base_info.cb_name;
-									qrow.size              = base_info.size;
-									qrow.material          = base_info.material;
-									qrow.finishing         = base_info.finishing;
+									qrow.size = base_info.size;
+									qrow.material = base_info.material;
+									qrow.finishing = base_info.finishing;
 									qrow.finishing_variant = 1;
-									qrow.qty               = qb.qty;
-									qrow.is_manually_set   = 0;
+									qrow.qty = qb.qty;
+									qrow.is_manually_set = 0;
 									_apply_packing_q(qrow, ci);
 
 									if (r3.message && !r3.message.error) {
-										qrow.unit_cost     = flt_v(r3.message.unit_cost);
+										qrow.unit_cost = flt_v(r3.message.unit_cost);
 										qrow.selling_price = flt_v(r3.message.sell_unit);
 									} else {
 										// Fallback if CB has no ui_state yet
-										qrow.unit_cost     = flt_v(cs_row.unit_price);
+										qrow.unit_cost = flt_v(cs_row.unit_price);
 										qrow.selling_price = flt_v(cs_row.selling_unit_price) || flt_v(cs_row.unit_price);
 									}
 
@@ -421,17 +422,17 @@ function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
 								error: function () {
 									// Network / server error — fall back to base price
 									var qrow = frm.add_child("items");
-									qrow.item_name         = base_info.item_name;
-									qrow.cost_item         = base_info.cost_item;
+									qrow.item_name = base_info.item_name;
+									qrow.cost_item = base_info.cost_item;
 									qrow.calculation_breakdown = base_info.cb_name;
-									qrow.size              = base_info.size;
-									qrow.material          = base_info.material;
-									qrow.finishing         = base_info.finishing;
+									qrow.size = base_info.size;
+									qrow.material = base_info.material;
+									qrow.finishing = base_info.finishing;
 									qrow.finishing_variant = 1;
-									qrow.qty               = qb.qty;
-									qrow.unit_cost         = flt_v(cs_row.unit_price);
-									qrow.selling_price     = flt_v(cs_row.selling_unit_price) || flt_v(cs_row.unit_price);
-									qrow.is_manually_set   = 0;
+									qrow.qty = qb.qty;
+									qrow.unit_cost = flt_v(cs_row.unit_price);
+									qrow.selling_price = flt_v(cs_row.selling_unit_price) || flt_v(cs_row.unit_price);
+									qrow.is_manually_set = 0;
 									_apply_packing_q(qrow, ci);
 									loaded++;
 									add_break_row(qb_idx + 1);
@@ -443,11 +444,11 @@ function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
 					error: function () {
 						// Cost Item fetch failed — add one fallback row
 						var qrow = frm.add_child("items");
-						qrow.item_name         = cs_row.item_name || cs_row.item;
-						qrow.cost_item         = cs_row.item;
-						qrow.qty               = flt_v(cs_row.qty);
-						qrow.unit_cost         = flt_v(cs_row.unit_price);
-						qrow.selling_price     = flt_v(cs_row.selling_unit_price) || flt_v(cs_row.unit_price);
+						qrow.item_name = cs_row.item_name || cs_row.item;
+						qrow.cost_item = cs_row.item;
+						qrow.qty = flt_v(cs_row.qty);
+						qrow.unit_cost = flt_v(cs_row.unit_price);
+						qrow.selling_price = flt_v(cs_row.selling_unit_price) || flt_v(cs_row.unit_price);
 						qrow.finishing_variant = 1;
 						loaded++;
 						process_item(cs_row_idx + 1);
@@ -788,13 +789,13 @@ function _create_fg_for_item(frm, pending_rows, idx, ig_default) {
 					method: "nxtgen_savinda_pricing_calculator.api.manufacturing.create_fg_variants",
 					args: {
 						template_name: vals.item_name_field,
-						description:   vals.description || vals.item_name_field,
-						item_group:    vals.item_group || "Finished Goods",
-						department:    vals.department,
-						stock_uom:     vals.stock_uom || "Nos",
-						attribute:     vals.variant_attribute || "Size",
-						variants:      JSON.stringify(variants),
-						cost_item:     row.cost_item || "",
+						description: vals.description || vals.item_name_field,
+						item_group: vals.item_group || "Finished Goods",
+						department: vals.department,
+						stock_uom: vals.stock_uom || "Nos",
+						attribute: vals.variant_attribute || "Size",
+						variants: JSON.stringify(variants),
+						cost_item: row.cost_item || "",
 					},
 					freeze: true,
 					freeze_message: "Creating template + variant items...",
@@ -820,12 +821,12 @@ function _create_fg_for_item(frm, pending_rows, idx, ig_default) {
 			frappe.call({
 				method: "nxtgen_savinda_pricing_calculator.api.manufacturing.create_fg_item",
 				args: {
-					item_name:   vals.item_name_field,
+					item_name: vals.item_name_field,
 					description: vals.description || vals.item_name_field,
-					item_group:  vals.item_group || "Finished Goods",
-					department:  vals.department,
-					stock_uom:   vals.stock_uom || "Nos",
-					cost_item:   row.cost_item || "",
+					item_group: vals.item_group || "Finished Goods",
+					department: vals.department,
+					stock_uom: vals.stock_uom || "Nos",
+					cost_item: row.cost_item || "",
 				},
 				freeze: true,
 				freeze_message: "Creating FG item...",
@@ -897,11 +898,11 @@ function _render_so_dialog(frm, fg_list) {
 	// Pre-fill the grid (all rows ticked by default)
 	var grid_data = fg_list.map(function (it) {
 		return {
-			include:   1,
+			include: 1,
 			item_code: it.item_code,
 			item_name: it.item_name,
-			qty:       flt_v(it.qty),
-			rate:      flt_v(it.rate),
+			qty: flt_v(it.qty),
+			rate: flt_v(it.rate),
 		};
 	});
 	// Packing snapshot per FG (carried onto the Sales Order line; editable there per PO)
@@ -945,22 +946,22 @@ function _render_so_dialog(frm, fg_list) {
 			d.hide();
 			// Quotation currency + rate (LKR per 1 unit). Costing rates are in base LKR,
 			// so the SO line rate = base rate / conversion_rate (in the quotation currency).
-			var cur  = frm.doc.currency || _base_currency();
+			var cur = frm.doc.currency || _base_currency();
 			var crate = flt_v(frm.doc.conversion_rate) || 1;
 			var so_items = rows.map(function (x) {
 				var pk = pk_map[x.item_code] || {};
 				return {
-					doctype:       "Sales Order Item",
-					item_code:     x.item_code,
-					item_name:     x.item_name,
-					qty:           flt_v(x.qty) || 1,
-					rate:          flt_v(x.rate) / crate,
+					doctype: "Sales Order Item",
+					item_code: x.item_code,
+					item_name: x.item_name,
+					qty: flt_v(x.qty) || 1,
+					rate: flt_v(x.rate) / crate,
 					delivery_date: vals.delivery_date,
-					custom_packing_type:      pk.custom_packing_type || "",
+					custom_packing_type: pk.custom_packing_type || "",
 					custom_winding_direction: pk.custom_winding_direction || "",
-					custom_pcs_per_role:      pk.custom_pcs_per_role || 0,
-					custom_up:                pk.custom_up || 0,
-					custom_is_printed:        pk.custom_is_printed || "",
+					custom_pcs_per_role: pk.custom_pcs_per_role || 0,
+					custom_up: pk.custom_up || 0,
+					custom_is_printed: pk.custom_is_printed || "",
 				};
 			});
 
@@ -968,15 +969,15 @@ function _render_so_dialog(frm, fg_list) {
 				method: "frappe.client.insert",
 				args: {
 					doc: {
-						doctype:           "Sales Order",
-						customer:          vals.customer,
-						transaction_date:  frappe.datetime.get_today(),
-						delivery_date:     vals.delivery_date,
-						currency:          cur,
-						conversion_rate:   crate,
+						doctype: "Sales Order",
+						customer: vals.customer,
+						transaction_date: frappe.datetime.get_today(),
+						delivery_date: vals.delivery_date,
+						currency: cur,
+						conversion_rate: crate,
 						ignore_pricing_rule: 1,
-						items:             so_items,
-						status:            "Draft",
+						items: so_items,
+						status: "Draft",
 					},
 				},
 				freeze: true,

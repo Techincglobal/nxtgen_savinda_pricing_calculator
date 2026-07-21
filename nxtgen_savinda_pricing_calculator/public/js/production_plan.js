@@ -9,6 +9,91 @@ frappe.ui.form.on("Production Plan", {
 				_show_wastage_dialog(frm);
 			}, __("Actions"));
 		}
+
+		// Fetch/refresh the Job Ticket header + line specs from the source (SO / NPD).
+		if (!frm.is_new() && (frm.doc.po_items || []).length) {
+			frm.add_custom_button(__("Fetch Job Ticket Details"), function () {
+				frappe.call({
+					method: "nxtgen_savinda_pricing_calculator.api.production_plan.fetch_ticket_details",
+					args: { production_plan: frm.doc.name },
+					freeze: true, freeze_message: __("Fetching…"),
+					callback: function () {
+						frappe.show_alert({ message: __("Job Ticket details fetched."), indicator: "green" });
+						frm.reload_doc();
+					},
+				});
+			}, __("Actions"));
+		}
+
+		// BOM team helpers — for ticket plans still awaiting BOMs (draft only).
+		if (!frm.is_new() && frm.doc.docstatus === 0 && frm.doc.custom_ticket_type) {
+			if (frm.doc.custom_needs_bom) {
+				frm.dashboard.set_headline(
+					'<span class="indicator orange">Some items have no BOM</span> — Open BOM Builder to create them, then Sync BOMs.'
+				);
+			}
+			frm.add_custom_button(__("Open BOM Builder"), function () {
+				frappe.call({
+					method: "nxtgen_savinda_pricing_calculator.api.production_plan.bom_builder_url",
+					args: { production_plan: frm.doc.name },
+					callback: function (r) {
+						if (r.message) { window.open(r.message); }
+						else { frappe.msgprint(__("No source (Sales Order / Cost Sheet) available to open the BOM Builder.")); }
+					},
+				});
+			}, __("Actions"));
+
+			frm.add_custom_button(__("Sync BOMs"), function () {
+				frappe.call({
+					method: "nxtgen_savinda_pricing_calculator.api.production_plan.sync_boms",
+					args: { production_plan: frm.doc.name },
+					freeze: true, freeze_message: __("Syncing BOMs…"),
+					callback: function (r) {
+						var m = r.message || {};
+						frappe.msgprint({
+							title: __("Sync BOMs"),
+							message: __("Resolved: {0}<br>Still without BOM: {1}",
+								[(m.resolved || []).join(", ") || "—", (m.still_missing || []).join(", ") || "—"]),
+							indicator: (m.still_missing || []).length ? "orange" : "green",
+						});
+						frm.reload_doc();
+					},
+				});
+			}, __("Actions"));
+		}
+
+		// Procurement — create a Purchase Request (Material Request) from raw materials.
+		if (!frm.is_new() && frm.doc.docstatus === 0 && frm.doc.custom_ticket_type
+			&& (frm.doc.mr_items || []).length) {
+			frm.add_custom_button(__("Create Purchase Request"), function () {
+				frappe.call({
+					method: "nxtgen_savinda_pricing_calculator.api.production_plan.create_purchase_request",
+					args: { production_plan: frm.doc.name },
+					freeze: true, freeze_message: __("Creating Purchase Request…"),
+					callback: function (r) {
+						var m = r.message || {};
+						if (m.material_request) {
+							frappe.msgprint({
+								title: __("Purchase Request"),
+								message: __("Created: <a href='/app/material-request/{0}' target='_blank'>{0}</a>", [m.material_request]),
+								indicator: "green",
+							});
+							frm.reload_doc();
+						}
+					},
+				});
+			}, __("Actions"));
+		}
+
+		// Job Ticket PDF — only for plans created through the ticket flow.
+		if (!frm.is_new() && frm.doc.custom_ticket_type) {
+			frm.add_custom_button(__("Job Ticket PDF"), function () {
+				var url = "/api/method/frappe.utils.print_format.download_pdf?doctype=Production+Plan&name="
+					+ encodeURIComponent(frm.doc.name)
+					+ "&format=Job+Ticket&no_letterhead=1";
+				window.open(frappe.urllib.get_full_url(url));
+			}, __("Actions"));
+		}
 	},
 });
 

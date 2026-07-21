@@ -40,6 +40,30 @@ def get_bom_context(source_type, source_name):
 				"cost_item":             frappe.db.get_value("Item", row.item_code, "custom_cost_item") or "",
 			})
 
+	elif source_type == "Cost Sheet":
+		# FGs behind a Cost Sheet's cost items (used for the NPD → BOM Builder path).
+		cs = frappe.get_doc("Cost Sheet", source_name)
+		customer = cs.get("customer_name") or ""
+		seen = set()
+		for row in (cs.get("pricing_list") or []):
+			ci = row.get("item")
+			if not ci:
+				continue
+			cb = frappe.db.get_value(
+				"Cost Item Calculation", {"parent": ci}, "calculation_breakdown", order_by="idx asc") or ""
+			qty = flt(row.get("qty")) or flt(frappe.db.get_value("cost Item", ci, "item_qty")) or 0
+			for it in frappe.get_all("Item", filters={"custom_cost_item": ci}, fields=["name", "item_name"]):
+				if it.name in seen:
+					continue
+				seen.add(it.name)
+				fg_items.append({
+					"item_code":             it.name,
+					"item_name":             it.item_name or it.name,
+					"qty":                   qty,
+					"calculation_breakdown": cb,
+					"cost_item":             ci,
+				})
+
 	elif source_type == "Savinda Quotation":
 		sq = frappe.get_doc("Savinda Quotation", source_name)
 		customer = sq.customer_name or ""
