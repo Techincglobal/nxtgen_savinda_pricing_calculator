@@ -1,0 +1,79 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-21 15:05:39.758290",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "no_of_boxes",
+  "column_break_jupt",
+  "pcs_per_box",
+  "column_break_khcc",
+  "total",
+  "column_break_tgwa",
+  "weight_of_one_box"
+ ],
+ "fields": [
+  {
+   "description": "\u0db4\u0dd9\u0da7\u0dca\u0da7\u0dd2 \u0d9c\u0dab\u0db1",
+   "fieldname": "no_of_boxes",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Number Of Boxes",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_jupt",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "\u0d91\u0d9a\u0dca \u0db4\u0dd9\u0da7\u0dca\u0da7\u0dd2\u0dba\u0d9a \u0d87\u0dad\u0dd2 \u0db4\u0dca\u200d\u0dbb\u0db8\u0dcf\u0dab\u0dba",
+   "fieldname": "pcs_per_box",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Pcs Per Box",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_khcc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_tgwa",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "\u0d91\u0d9a\u0dad\u0dd4\u0dc0",
+   "fieldname": "total",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Total",
+   "read_only": 1
+  },
+  {
+   "description": "\u0d91\u0d9a\u0dca \u0db4\u0dd9\u0da7\u0dca\u0da7\u0dd2\u0dba\u0d9a \u0db6\u0dbb (\u0d9c\u0dca\u200d\u0dbb\u0dd1\u0db8\u0dca)",
+   "fieldname": "weight_of_one_box",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Weight of One Box(g)",
+   "reqd": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-21 16:50:12.811802",
+ "modified_by": "Administrator",
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "Packing Details",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -49,6 +49,7 @@ doctype_js = {
 	"Opportunity":     "public/js/opportunity.js",
 	"Sales Order":     "public/js/sales_order.js",
 	"Production Plan": "public/js/production_plan.js",
+	"Delivery Note":   "public/js/delivery_note.js",
 }
 
 jinja = {
@@ -64,6 +65,10 @@ doc_events = {
 	"Production Plan": {
 		"before_save": "nxtgen_savinda_pricing_calculator.api.production_plan.on_production_plan_before_save",
 		"on_update": "nxtgen_savinda_pricing_calculator.api.production_plan.on_production_plan_update",
+	},
+	"Delivery Note": {
+		"on_submit": "nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.doctype.packing.packing.mark_packings_delivered",
+		"on_cancel": "nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.doctype.packing.packing.mark_packings_delivered",
 	},
 }
 

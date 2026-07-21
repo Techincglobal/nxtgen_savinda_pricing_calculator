@@ -295,6 +295,17 @@ def _ensure_custom_fields():
 					"description":  "Product-library record holding this FG's technical + reference data.",
 				},
 			],
+			"Delivery Note Item": [
+				{
+					"fieldname":    "custom_packing",
+					"label":        "Packing",
+					"fieldtype":    "Link",
+					"options":      "Packing",
+					"insert_after": "against_sales_order",
+					"read_only":    1,
+					"description":  "Packing record delivered on this line (set by 'Get from Packing').",
+				},
+			],
 			"Material Request Plan Item": [
 				{
 					"fieldname":    "custom_wastage_qty",
