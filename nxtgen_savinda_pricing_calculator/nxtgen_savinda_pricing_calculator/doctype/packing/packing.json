@@ -1,0 +1,158 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:PACK-{########}",
+ "creation": "2026-07-21 14:58:07.627055",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "job__npd_number",
+  "type",
+  "column_break_sefb",
+  "item",
+  "is_deliverd",
+  "section_break_aoby",
+  "order_qty",
+  "delivered_qty",
+  "column_break_xayd",
+  "new_qty",
+  "section_break_utrg",
+  "packages",
+  "section_break_asha",
+  "column_break_myag",
+  "dividers",
+  "column_break_ikei",
+  "packed_qty",
+  "extra",
+  "total"
+ ],
+ "fields": [
+  {
+   "fieldname": "job__npd_number",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Job / NPD Number ",
+   "options": "Production Plan"
+  },
+  {
+   "fieldname": "column_break_sefb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "job__npd_number.custom_ticket_type",
+   "fetch_if_empty": 1,
+   "fieldname": "type",
+   "fieldtype": "Select",
+   "label": "Type",
+   "options": "Job\nNPD"
+  },
+  {
+   "fieldname": "item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item",
+   "options": "Item"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_deliverd",
+   "fieldtype": "Check",
+   "label": "is Deliverd"
+  },
+  {
+   "fieldname": "section_break_asha",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_myag",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_ikei",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "packed_qty",
+   "fieldtype": "Float",
+   "label": "Packed Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "extra",
+   "fieldtype": "Float",
+   "label": "Extra"
+  },
+  {
+   "fieldname": "dividers",
+   "fieldtype": "Float",
+   "label": "Dividers"
+  },
+  {
+   "fieldname": "total",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Total",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_utrg",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "packages",
+   "fieldtype": "Table",
+   "options": "Packing Details"
+  },
+  {
+   "fieldname": "section_break_aoby",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "order_qty",
+   "fieldtype": "Float",
+   "label": "Order Qty"
+  },
+  {
+   "fieldname": "delivered_qty",
+   "fieldtype": "Float",
+   "label": "Delivered Qty "
+  },
+  {
+   "fieldname": "column_break_xayd",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "new_qty",
+   "fieldtype": "Float",
+   "label": "New Qty"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-07-21 17:19:44.989214",
+ "modified_by": "Administrator",
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "Packing",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

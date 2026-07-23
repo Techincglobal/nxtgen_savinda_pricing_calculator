@@ -57,10 +57,27 @@ frappe.ui.form.on("Cost Sheet", {
 			}
 		}
 
-		// ── NPD Ticket (available once the cost sheet exists) ──
+		// ── Create FG Items (before an NPD — the light NPD pulls FGs from here) ──
+		if (!frm.is_new() && (frm.doc.pricing_list || []).length) {
+			frm.add_custom_button(__("Create FG Items"), function () {
+				_cs_fg_create_popup(frm);
+			}, __("Actions"));
+		}
+
+		// ── NPD Request (available once the cost sheet exists) ──
 		if (!frm.is_new()) {
-			frm.add_custom_button(__("Create NPD Ticket"), function () {
-				_npd_create_checked("Cost Sheet", frm.doc.name);
+			frm.add_custom_button(__("Create NPD Request"), function () {
+				frappe.call({
+					method: "nxtgen_savinda_pricing_calculator.api.production_plan.create_npd_request_from_cost_sheet",
+					args: { cost_sheet: frm.doc.name },
+					freeze: true,
+					freeze_message: __("Creating NPD Request…"),
+					callback: function (r) {
+						if (r.message && r.message.npd_request) {
+							frappe.set_route("Form", "NPD Request", r.message.npd_request);
+						}
+					},
+				});
 			}, __("Actions"));
 		}
 
@@ -216,66 +233,79 @@ frappe.ui.form.on("Cost Sheet Items", {
 });
 
 
-// Create an NPD ticket, validating materials first. Unlinked materials open a mapping
-// table (sample material → pick actual Item) before creating.
-function _npd_create_checked(source_type, source_name) {
-	var M = "nxtgen_savinda_pricing_calculator.api.job_ticket.create_npd_checked";
+// ── Create FG Items from the cost items — review Product Library details, then create ──
+function _cs_fg_create_popup(frm) {
+	var PP = "nxtgen_savinda_pricing_calculator.api.production_plan.";
 	frappe.call({
-		method: M, args: { source_type: source_type, source_name: source_name, force: 0 },
-		freeze: true, freeze_message: __("Checking materials…"),
+		method: PP + "get_cost_sheet_fg_preview", args: { cost_sheet: frm.doc.name }, freeze: true,
 		callback: function (r) {
-			if (!r.message) return;
-			if (r.message.needs_confirm) {
-				_npd_material_map_dialog(M, source_type, source_name, r.message.unlinked || []);
-			} else if (r.message.job_ticket) {
-				frappe.set_route("Form", "Job Ticket", r.message.job_ticket);
+			var m = r.message || {};
+			var lines = m.lines || [];
+			if (!lines.length) {
+				frappe.msgprint({ title: __("FG Items"),
+					message: __("All cost items already have an FG Item.") + (m.existing && m.existing.length ? "<br>" + m.existing.join(", ") : ""),
+					indicator: "blue" });
+				return;
 			}
-		},
-	});
-}
-
-function _npd_material_map_dialog(method, source_type, source_name, unlinked) {
-	var controls = [];
-	var d = new frappe.ui.Dialog({
-		title: __("Link Materials to Items"),
-		size: "large",
-		fields: [
-			{ fieldtype: "HTML", fieldname: "info", options:
-				"<div style='margin-bottom:8px;color:#555;font-size:12px'>These materials are not linked to an Item. "
-				+ "Pick the actual Item for each (leave blank to skip — it won't be added to the sample BOM), then Proceed.</div>" },
-			{ fieldtype: "HTML", fieldname: "tbl" },
-		],
-		primary_action_label: __("Proceed & Create NPD"),
-		primary_action: function () {
-			var map = {};
-			controls.forEach(function (c) { var v = c.ctrl.get_value(); if (v) map[c.name] = v; });
-			d.hide();
-			frappe.call({
-				method: method,
-				args: { source_type: source_type, source_name: source_name, force: 1, material_map: JSON.stringify(map) },
-				freeze: true, freeze_message: __("Creating NPD…"),
-				callback: function (r2) {
-					if (r2.message && r2.message.job_ticket) frappe.set_route("Form", "Job Ticket", r2.message.job_ticket);
+			var fields = [{ fieldtype: "HTML", fieldname: "hdr", options:
+				"<div style='color:#555;font-size:12px;margin-bottom:6px'>"
+				+ __("Review the product details, change anything if needed, then create the FG item(s) + Product Library.") + "</div>" }];
+			var meta = [];
+			lines.forEach(function (ln, i) {
+				var p = "l" + i + "__";
+				meta.push({ idx: i, cost_item: ln.cost_item });
+				fields.push({ fieldtype: "Section Break", label: __("Product: ") + (ln.item_name || ln.cost_item) });
+				fields.push({ fieldtype: "Data", fieldname: p + "item_name", label: __("Item Name"), reqd: 1, default: ln.item_name });
+				fields.push({ fieldtype: "Link", options: "Item Group", fieldname: p + "item_group", label: __("Item Group"), default: ln.item_group });
+				fields.push({ fieldtype: "Link", options: "Department", fieldname: p + "department", label: __("Department"), default: ln.department });
+				fields.push({ fieldtype: "Link", options: "UOM", fieldname: p + "stock_uom", label: __("Stock UOM"), default: ln.stock_uom });
+				fields.push({ fieldtype: "Data", fieldname: p + "customer_ref", label: __("Customer Ref"), default: ln.customer_ref });
+				fields.push({ fieldtype: "Column Break" });
+				fields.push({ fieldtype: "Data", fieldname: p + "pl_customer_product_code", label: __("Customer Product Code"), default: ln.pl_customer_product_code });
+				fields.push({ fieldtype: "Int", fieldname: p + "pl_no_of_colors", label: __("No of Colors"), default: ln.pl_no_of_colors });
+				fields.push({ fieldtype: "Int", fieldname: p + "pl_no_of_ups", label: __("No of Ups"), default: ln.pl_no_of_ups });
+				if (ln.pl_department === "Flexo") {
+					fields.push({ fieldtype: "Float", fieldname: p + "pl_width_mm", label: __("Width (mm)"), default: ln.pl_width_mm });
+					fields.push({ fieldtype: "Float", fieldname: p + "pl_length_mm", label: __("Length (mm)"), default: ln.pl_length_mm });
+				} else {
+					fields.push({ fieldtype: "Data", fieldname: p + "pl_full_sheet_size", label: __("Full Sheet Size"), default: ln.pl_full_sheet_size });
+					fields.push({ fieldtype: "Data", fieldname: p + "pl_cut_sheet_size", label: __("Cut Sheet Size"), default: ln.pl_cut_sheet_size });
+				}
+				fields.push({ fieldtype: "Data", fieldname: p + "pl_artwork_no", label: __("Artwork No"), default: ln.pl_artwork_no });
+				fields.push({ fieldtype: "Data", fieldname: p + "pl_artwork_version", label: __("Artwork Version"), default: ln.pl_artwork_version });
+			});
+			var d = new frappe.ui.Dialog({
+				title: __("Create FG Items — Review Details"), size: "large", fields: fields,
+				primary_action_label: __("Create FG"),
+				primary_action: function (v) {
+					var details = meta.map(function (mt) {
+						var p = "l" + mt.idx + "__";
+						return {
+							cost_item: mt.cost_item,
+							item_name: v[p + "item_name"], item_group: v[p + "item_group"],
+							department: v[p + "department"], stock_uom: v[p + "stock_uom"], customer_ref: v[p + "customer_ref"],
+							pl_customer_product_code: v[p + "pl_customer_product_code"],
+							pl_no_of_colors: v[p + "pl_no_of_colors"], pl_no_of_ups: v[p + "pl_no_of_ups"],
+							pl_full_sheet_size: v[p + "pl_full_sheet_size"], pl_cut_sheet_size: v[p + "pl_cut_sheet_size"],
+							pl_width_mm: v[p + "pl_width_mm"], pl_length_mm: v[p + "pl_length_mm"],
+							pl_artwork_no: v[p + "pl_artwork_no"], pl_artwork_version: v[p + "pl_artwork_version"],
+						};
+					});
+					frappe.call({
+						method: PP + "create_fg_from_cost_sheet",
+						args: { cost_sheet: frm.doc.name, details: JSON.stringify(details) },
+						freeze: true, freeze_message: __("Creating FG Items…"),
+						callback: function (r2) {
+							d.hide();
+							var mm = r2.message || {};
+							frappe.show_alert({ message: __("FG created: ") + ((mm.created || []).join(", ") || "—"), indicator: "green" });
+						},
+					});
 				},
 			});
+			d.show();
 		},
 	});
-	var $w = d.fields_dict.tbl.$wrapper;
-	$w.html("<table class='table table-bordered' style='font-size:12px;margin:0'>"
-		+ "<thead><tr><th style='width:45%'>Sample Material</th><th>Actual Item</th></tr></thead><tbody></tbody></table>");
-	var $tb = $w.find("tbody");
-	(unlinked || []).forEach(function (name, i) {
-		var $tr = $("<tr>").appendTo($tb);
-		$("<td>").text(name).appendTo($tr);
-		var $td = $("<td>").appendTo($tr);
-		var ctrl = frappe.ui.form.make_control({
-			df: { fieldtype: "Link", options: "Item", fieldname: "item_" + i, placeholder: __("Select Item") },
-			parent: $td.get(0), render_input: true,
-		});
-		ctrl.set_value("");
-		controls.push({ name: name, ctrl: ctrl });
-	});
-	d.show();
 }
 
 // ── Download cost-breakdown CSV per cost item ─────────────────

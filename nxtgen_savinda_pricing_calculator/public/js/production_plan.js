@@ -9,8 +9,158 @@ frappe.ui.form.on("Production Plan", {
 				_show_wastage_dialog(frm);
 			}, __("Actions"));
 		}
+
+		// Fetch/refresh the Job Ticket header + line specs from the source (SO / NPD).
+		if (!frm.is_new() && (frm.doc.po_items || []).length) {
+			frm.add_custom_button(__("Fetch Job Ticket Details"), function () {
+				frappe.call({
+					method: "nxtgen_savinda_pricing_calculator.api.production_plan.fetch_ticket_details",
+					args: { production_plan: frm.doc.name },
+					freeze: true, freeze_message: __("Fetching…"),
+					callback: function () {
+						frappe.show_alert({ message: __("Job Ticket details fetched."), indicator: "green" });
+						frm.reload_doc();
+					},
+				});
+			}, __("Actions"));
+		}
+
+		// BOM team helpers — for ticket plans still awaiting BOMs (draft only).
+		if (!frm.is_new() && frm.doc.docstatus === 0 && frm.doc.custom_ticket_type) {
+			if (frm.doc.custom_needs_bom) {
+				frm.dashboard.set_headline(
+					'<span class="indicator orange">Some items have no BOM</span> — Open BOM Builder to create them, then Sync BOMs.'
+				);
+			}
+			frm.add_custom_button(__("Open BOM Builder"), function () {
+				frappe.call({
+					method: "nxtgen_savinda_pricing_calculator.api.production_plan.bom_builder_url",
+					args: { production_plan: frm.doc.name },
+					callback: function (r) {
+						if (r.message) { window.open(r.message); }
+						else { frappe.msgprint(__("No source (Sales Order / Cost Sheet) available to open the BOM Builder.")); }
+					},
+				});
+			}, __("Actions"));
+
+			frm.add_custom_button(__("Sync BOMs"), function () {
+				frappe.call({
+					method: "nxtgen_savinda_pricing_calculator.api.production_plan.sync_boms",
+					args: { production_plan: frm.doc.name },
+					freeze: true, freeze_message: __("Syncing BOMs…"),
+					callback: function (r) {
+						var m = r.message || {};
+						frappe.msgprint({
+							title: __("Sync BOMs"),
+							message: __("Resolved: {0}<br>Still without BOM: {1}",
+								[(m.resolved || []).join(", ") || "—", (m.still_missing || []).join(", ") || "—"]),
+							indicator: (m.still_missing || []).length ? "orange" : "green",
+						});
+						frm.reload_doc();
+					},
+				});
+			}, __("Actions"));
+		}
+
+		// Manufacturing planning — pull FGs into the planning table with print data.
+		if (!frm.is_new() && frm.doc.docstatus === 0 && frm.doc.custom_ticket_type) {
+			frm.add_custom_button(__("Get Finished Goods for Manufacture"), function () {
+				_get_manufacture_fg_dialog(frm);
+			}, __("Actions"));
+		}
+
+		// Procurement — create a Purchase Request (Material Request) from raw materials.
+		if (!frm.is_new() && frm.doc.docstatus === 0 && frm.doc.custom_ticket_type
+			&& (frm.doc.mr_items || []).length) {
+			frm.add_custom_button(__("Create Purchase Request"), function () {
+				frappe.call({
+					method: "nxtgen_savinda_pricing_calculator.api.production_plan.create_purchase_request",
+					args: { production_plan: frm.doc.name },
+					freeze: true, freeze_message: __("Creating Purchase Request…"),
+					callback: function (r) {
+						var m = r.message || {};
+						if (m.material_request) {
+							frappe.msgprint({
+								title: __("Purchase Request"),
+								message: __("Created: <a href='/app/material-request/{0}' target='_blank'>{0}</a>", [m.material_request]),
+								indicator: "green",
+							});
+							frm.reload_doc();
+						}
+					},
+				});
+			}, __("Actions"));
+		}
+
+		// Job Ticket PDF — pick the print format relevant to the type (Offset / Flexo).
+		if (!frm.is_new() && frm.doc.custom_ticket_type) {
+			frm.add_custom_button(__("Job Ticket PDF"), function () {
+				var fmt = (frm.doc.custom_pricing_type === "Flexo") ? "Flexo Job Ticket" : "Offset Job Ticket";
+				var url = "/api/method/frappe.utils.print_format.download_pdf?doctype=Production+Plan&name="
+					+ encodeURIComponent(frm.doc.name)
+					+ "&format=" + encodeURIComponent(fmt) + "&no_letterhead=1";
+				window.open(frappe.urllib.get_full_url(url));
+			}, __("Actions"));
+		}
 	},
 });
+
+// "Get Finished Goods for Manufacture" — list FGs with editable qty, then populate the
+// planning table (print data computed from each item's cost calculation).
+function _get_manufacture_fg_dialog(frm) {
+	frappe.call({
+		method: "nxtgen_savinda_pricing_calculator.api.production_plan.get_manufacture_fg_list",
+		args: { production_plan: frm.doc.name }, freeze: true,
+		callback: function (r) {
+			var items = r.message || [];
+			if (!items.length) { frappe.msgprint(__("No finished goods found on this plan.")); return; }
+			var is_offset = (frm.doc.custom_pricing_type || "Offset") !== "Flexo";
+			var rows = items.map(function (it, i) {
+				return "<tr>"
+					+ "<td style='text-align:center'><input type='checkbox' class='fg-sel' data-idx='" + i + "' checked></td>"
+					+ "<td>" + frappe.utils.escape_html(it.item_name || it.fg_item || "") + "</td>"
+					+ "<td><input type='number' class='fg-qty' data-idx='" + i + "' value='" + (it.qty || 0) + "' style='width:120px'></td>"
+					+ "</tr>";
+			}).join("");
+			var html = "<table class='table table-bordered' style='font-size:12px;margin-bottom:0'>"
+				+ "<thead><tr><th style='width:40px'></th><th>Item</th><th style='width:130px'>Qty</th></tr></thead>"
+				+ "<tbody>" + rows + "</tbody></table>";
+			var fields = [];
+			if (is_offset) {
+				fields.push({ fieldtype: "Check", fieldname: "consolidate", label: __("Consolidate Sales Order Items"),
+					description: __("Treat the selection as one combined print run — full/cut sheet qty & wastage on the first row only; other rows show only ups & cuts.") });
+			}
+			fields.push({ fieldtype: "HTML", fieldname: "tbl", options: html });
+			var d = new frappe.ui.Dialog({
+				title: __("Get Finished Goods for Manufacture"), size: "large", fields: fields,
+				primary_action_label: __("Add to Planning"),
+				primary_action: function (v) {
+					var $w = d.fields_dict.tbl.$wrapper;
+					var sel = [];
+					$w.find(".fg-sel:checked").each(function () {
+						var idx = parseInt($(this).attr("data-idx"), 10);
+						var qty = parseFloat($w.find(".fg-qty[data-idx='" + idx + "']").val()) || 0;
+						var it = items[idx];
+						sel.push({ fg_item: it.fg_item, item_name: it.item_name, cost_item: it.cost_item,
+							calculation_breakdown: it.calculation_breakdown, qty: qty });
+					});
+					if (!sel.length) { frappe.msgprint(__("Select at least one item.")); return; }
+					frappe.call({
+						method: "nxtgen_savinda_pricing_calculator.api.production_plan.add_planning_items",
+						args: { production_plan: frm.doc.name, selections: JSON.stringify(sel), consolidate: (v.consolidate ? 1 : 0) },
+						freeze: true, freeze_message: __("Calculating…"),
+						callback: function (r2) {
+							d.hide();
+							frappe.show_alert({ message: __("Added {0} item(s) to planning.", [(r2.message || {}).added || 0]), indicator: "green" });
+							frm.reload_doc();
+						},
+					});
+				},
+			});
+			d.show();
+		},
+	});
+}
 
 function _show_wastage_dialog(frm) {
 	var rows = (frm.doc.mr_items || []).filter(function (r) { return r.item_code; });

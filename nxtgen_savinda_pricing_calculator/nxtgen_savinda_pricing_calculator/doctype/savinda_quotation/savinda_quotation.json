@@ -12,6 +12,7 @@
   "section_break_customer",
   "customer",
   "customer_name",
+  "profit_margin",
   "column_break_2",
   "sales_person",
   "date",
@@ -36,6 +37,7 @@
   "terms",
   "section_break_status",
   "status",
+  "workflow_state",
   "lost_reasons",
   "order_lost_reason",
   "amended_from"
@@ -113,19 +115,19 @@
    "label": "Valid Till"
   },
   {
+   "description": "Currency shown to the customer. Costing stays in company base (LKR); prices are converted using the rate below.",
    "fieldname": "currency",
    "fieldtype": "Link",
    "label": "Quotation Currency",
-   "options": "Currency",
-   "description": "Currency shown to the customer. Costing stays in company base (LKR); prices are converted using the rate below."
+   "options": "Currency"
   },
   {
    "default": "1",
+   "description": "Company currency (LKR) per 1 unit of the quotation currency. Auto-fetched from Currency Exchange; editable.",
    "fieldname": "conversion_rate",
    "fieldtype": "Float",
    "label": "Exchange Rate (LKR per 1 unit)",
-   "precision": "9",
-   "description": "Company currency (LKR) per 1 unit of the quotation currency. Auto-fetched from Currency Exchange; editable."
+   "precision": "9"
   },
   {
    "fieldname": "section_break_items",
@@ -253,11 +255,27 @@
    "options": "Savinda Quotation",
    "print_hide": 1,
    "read_only": 1
+  },
+  {
+   "fieldname": "profit_margin",
+   "fieldtype": "Float",
+   "label": "Profit Margin",
+   "read_only": 1
+  },
+  {
+   "fieldname": "workflow_state",
+   "fieldtype": "Link",
+   "label": "Workflow State",
+   "options": "Workflow State",
+   "read_only": 1,
+   "allow_on_submit": 1,
+   "in_standard_filter": 1,
+   "no_copy": 1
   }
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-07-05 08:54:29.588987",
+ "modified": "2026-07-21 13:04:01.275881",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Savinda Quotation",

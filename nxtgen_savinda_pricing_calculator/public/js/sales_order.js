@@ -1,5 +1,5 @@
 // Copyright (c) 2026, Techincglobal.com
-// Adds BOM Builder button to ERPNext Sales Order form
+// Sales Order → BOM Builder + Create Production Plan (Job Ticket).
 
 frappe.ui.form.on("Sales Order", {
 	refresh: function (frm) {
@@ -8,29 +8,15 @@ frappe.ui.form.on("Sales Order", {
 				window.location.href = "/app/bom-builder?so=" + encodeURIComponent(frm.doc.name);
 			}, __("Manufacturing"));
 
-			frm.add_custom_button(__("Create Job Ticket"), function () {
+			frm.add_custom_button(__("Create Production Plan"), function () {
 				frappe.call({
-					method: "nxtgen_savinda_pricing_calculator.api.job_ticket.create_job_ticket_from_sales_order",
+					method: "nxtgen_savinda_pricing_calculator.api.production_plan.create_plan_from_sales_order",
 					args: { sales_order: frm.doc.name },
 					freeze: true,
-					freeze_message: __("Creating Job Ticket…"),
+					freeze_message: __("Creating Production Plan…"),
 					callback: function (r) {
-						if (r.message && r.message.job_ticket) {
-							frappe.set_route("Form", "Job Ticket", r.message.job_ticket);
-						}
-					},
-				});
-			}, __("Manufacturing"));
-
-			frm.add_custom_button(__("Create NPD Ticket"), function () {
-				frappe.call({
-					method: "nxtgen_savinda_pricing_calculator.api.job_ticket.create_npd_from_sales_order",
-					args: { sales_order: frm.doc.name },
-					freeze: true,
-					freeze_message: __("Creating NPD Ticket…"),
-					callback: function (r) {
-						if (r.message && r.message.job_ticket) {
-							frappe.set_route("Form", "Job Ticket", r.message.job_ticket);
+						if (r.message && r.message.production_plan) {
+							frappe.set_route("Form", "Production Plan", r.message.production_plan);
 						}
 					},
 				});
