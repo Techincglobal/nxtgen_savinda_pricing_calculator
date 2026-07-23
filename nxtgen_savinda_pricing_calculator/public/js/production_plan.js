@@ -92,12 +92,13 @@ frappe.ui.form.on("Production Plan", {
 			}, __("Actions"));
 		}
 
-		// Job Ticket PDF — only for plans created through the ticket flow.
+		// Job Ticket PDF — pick the print format relevant to the type (Offset / Flexo).
 		if (!frm.is_new() && frm.doc.custom_ticket_type) {
 			frm.add_custom_button(__("Job Ticket PDF"), function () {
+				var fmt = (frm.doc.custom_pricing_type === "Flexo") ? "Flexo Job Ticket" : "Offset Job Ticket";
 				var url = "/api/method/frappe.utils.print_format.download_pdf?doctype=Production+Plan&name="
 					+ encodeURIComponent(frm.doc.name)
-					+ "&format=Job+Ticket&no_letterhead=1";
+					+ "&format=" + encodeURIComponent(fmt) + "&no_letterhead=1";
 				window.open(frappe.urllib.get_full_url(url));
 			}, __("Actions"));
 		}

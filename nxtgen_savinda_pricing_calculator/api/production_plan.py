@@ -839,6 +839,32 @@ def add_planning_items(production_plan, selections, consolidate=0):
 	return {"added": len(selections), "field": field, "pricing_type": pricing}
 
 
+def _ensure_planning(pp):
+	"""If the planning table for the plan's pricing type is empty, auto-generate it from
+	custom_ticket_items (print figures via the cost calc) and save. Draft plans only.
+	Returns True if it generated rows."""
+	if pp.docstatus != 0:
+		return False
+	is_flexo = (pp.get("custom_pricing_type") or "Offset") == "Flexo"
+	field = "custom_flexo_planning" if is_flexo else "custom_offset_planning"
+	if pp.get(field):
+		return False
+	tickets = pp.get("custom_ticket_items") or []
+	if not tickets:
+		return False
+	selections = [{
+		"fg_item": t.get("fg_item"), "item_name": t.get("description"),
+		"cost_item": t.get("cost_item"), "calculation_breakdown": t.get("calculation_breakdown"),
+		"qty": flt(t.get("qty")) or 1,
+	} for t in tickets]
+	try:
+		add_planning_items(pp.name, selections, consolidate=0)
+		return True
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "auto _ensure_planning failed")
+		return False
+
+
 # ── Procurement: create a Purchase Request (Material Request) from raw materials ─
 @frappe.whitelist()
 def create_purchase_request(production_plan):

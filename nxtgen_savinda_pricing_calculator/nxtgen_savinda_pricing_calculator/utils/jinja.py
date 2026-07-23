@@ -168,37 +168,61 @@ def _user_name(user_id):
 	return frappe.db.get_value("User", user_id, "full_name") or user_id or ""
 
 
+def _num(v):
+	try:
+		return float(v or 0)
+	except Exception:
+		return 0.0
+
+
 def get_ticket_print_data(production_plan_name):
-	"""Data for the Job Ticket print (from a Production Plan)."""
+	"""Data for the Job Ticket print (from a Production Plan). Header falls back to the cost
+	sheet / Product Library / Calculation Breakdown; the line-table sheet figures come from
+	the planning table (auto-generated if empty)."""
 	doc = frappe.get_doc("Production Plan", production_plan_name)
 	is_flexo = (doc.get("custom_pricing_type") or "Offset") == "Flexo"
 
+	# Auto-generate the planning table if empty (draft) so sheet qty is available + stored.
+	try:
+		from nxtgen_savinda_pricing_calculator.api.production_plan import _ensure_planning
+		if _ensure_planning(doc):
+			doc.reload()
+	except Exception:
+		pass
+
+	plan_field = "custom_flexo_planning" if is_flexo else "custom_offset_planning"
+	plan_by_fg = {}
+	for p in (doc.get(plan_field) or []):
+		if p.get("fg_item"):
+			plan_by_fg.setdefault(p.fg_item, p)
+
 	lines = []
-	# Prefer the full ticket item list (includes items still awaiting a BOM); fall back to
-	# po_items for older plans created before custom_ticket_items existed.
 	ticket_rows = doc.get("custom_ticket_items") or []
 	if ticket_rows:
 		for r in ticket_rows:
 			item_name = r.get("description") or (frappe.db.get_value("Item", r.fg_item, "item_name") if r.get("fg_item") else "") or r.get("fg_item") or ""
+			pl = plan_by_fg.get(r.get("fg_item"))
 			lines.append({
 				"item_code": r.get("fg_item") or "", "item_name": item_name,
 				"description": r.get("description") or item_name,
-				"qty": float(r.get("qty") or 0),
+				"qty": _num(r.get("qty")),
 				"has_bom": 1 if r.get("has_bom") else 0,
 				"product_code": r.get("product_code") or "",
 				"size": r.get("size") or "",
 				"batch_no": r.get("batch_no") or "",
 				"pack_date": r.get("pack_date"),
 				"exp_date": r.get("exp_date"),
-				"full_sheets": r.get("full_sheets") or 0,
-				"cut_sheets": r.get("cut_sheets") or 0,
+				# Planning table overrides the CB geometry for the sheet figures when present.
+				"full_sheets": _num(pl.full_sheet_qty if pl else r.get("full_sheets")),
+				"cut_sheets": _num(pl.cut_sheet_qty if pl else r.get("cut_sheets")),
+				"wastage": _num(pl.wastage if pl else 0),
+				"cuts": int(pl.cuts if pl else (r.get("cuts") or 0)),
+				"ups": int(pl.ups if pl else (r.get("ups") or 0)),
 				"full_sheet_size": r.get("full_sheet_size") or "",
 				"cut_sheet_size": r.get("cut_sheet_size") or "",
-				"cuts": r.get("cuts") or 0,
-				"ups": r.get("ups") or 0,
-				"reel_length": r.get("reel_length") or 0,
-				"reel_width": r.get("reel_width") or 0,
-				"reel_area": r.get("reel_area") or 0,
+				"reel_length": _num(r.get("reel_length")),
+				"reel_width": _num(r.get("reel_width")),
+				"reel_area": _num(pl.reel_area if pl else r.get("reel_area")),
 				"slit_width": r.get("slit_width") or "",
 			})
 	else:
@@ -207,23 +231,16 @@ def get_ticket_print_data(production_plan_name):
 			lines.append({
 				"item_code": r.item_code, "item_name": item_name,
 				"description": r.get("description") or item_name,
-				"qty": float(r.planned_qty or 0),
-				"has_bom": 1,
-				"product_code": r.get("custom_product_code") or "",
-				"size": r.get("custom_size") or "",
+				"qty": _num(r.planned_qty), "has_bom": 1,
+				"product_code": r.get("custom_product_code") or "", "size": r.get("custom_size") or "",
 				"batch_no": r.get("custom_batch_no") or "",
-				"pack_date": r.get("custom_pack_date"),
-				"exp_date": r.get("custom_exp_date"),
-				"full_sheets": r.get("custom_full_sheets") or 0,
-				"cut_sheets": r.get("custom_cut_sheets") or 0,
-				"full_sheet_size": r.get("custom_full_sheet_size") or "",
-				"cut_sheet_size": r.get("custom_cut_sheet_size") or "",
-				"cuts": r.get("custom_cuts") or 0,
-				"ups": r.get("custom_ups") or 0,
-				"reel_length": r.get("custom_reel_length") or 0,
-				"reel_width": r.get("custom_reel_width") or 0,
-				"reel_area": r.get("custom_reel_area") or 0,
-				"slit_width": r.get("custom_slit_width") or "",
+				"pack_date": r.get("custom_pack_date"), "exp_date": r.get("custom_exp_date"),
+				"full_sheets": _num(r.get("custom_full_sheets")), "cut_sheets": _num(r.get("custom_cut_sheets")),
+				"wastage": 0,
+				"full_sheet_size": r.get("custom_full_sheet_size") or "", "cut_sheet_size": r.get("custom_cut_sheet_size") or "",
+				"cuts": r.get("custom_cuts") or 0, "ups": r.get("custom_ups") or 0,
+				"reel_length": _num(r.get("custom_reel_length")), "reel_width": _num(r.get("custom_reel_width")),
+				"reel_area": _num(r.get("custom_reel_area")), "slit_width": r.get("custom_slit_width") or "",
 			})
 
 	materials = []
@@ -232,9 +249,66 @@ def get_ticket_print_data(production_plan_name):
 			"item_code": m.item_code,
 			"item_name": m.get("item_name") or frappe.db.get_value("Item", m.item_code, "item_name") or m.item_code,
 			"uom": m.get("uom") or m.get("stock_uom") or "",
-			"quantity": float(m.get("quantity") or 0),
-			"wastage_qty": float(m.get("custom_wastage_qty") or 0),
+			"quantity": _num(m.get("quantity")),
+			"wastage_qty": _num(m.get("custom_wastage_qty")),
 		})
+
+	# ── Header context — resolve the first item's Product Library / CB, and the SO ──
+	so_no = doc.get("custom_sales_order") or ""
+	first = ticket_rows[0] if ticket_rows else None
+	fg = first.get("fg_item") if first else ""
+	cb_name = first.get("calculation_breakdown") if first else ""
+	pl = {}
+	if fg:
+		pl_name = (frappe.db.get_value("Item", fg, "custom_product_library")
+		           or frappe.db.get_value("Product Library", {"fg_item": fg}, "name"))
+		if pl_name:
+			pl = frappe.db.get_value(
+				"Product Library", pl_name,
+				["flexo_type", "pcs_per_roll", "core_size", "winding_direction", "no_of_ups",
+				 "no_of_colors", "product_size", "artwork_no", "artwork_version",
+				 "printing_machine"], as_dict=True) or {}
+	cb = {}
+	if cb_name and frappe.db.exists("Calculation Breakdown", cb_name):
+		cb = frappe.db.get_value(
+			"Calculation Breakdown", cb_name,
+			["carton_size", "no_of_colors", "no_of_ups"], as_dict=True) or {}
+	sales_person = ""
+	req_date = doc.get("custom_req_date")
+	if so_no and frappe.db.exists("Sales Order", so_no):
+		so = frappe.get_doc("Sales Order", so_no)
+		if so.get("sales_team"):
+			sales_person = so.sales_team[0].sales_person
+		req_date = req_date or so.get("delivery_date")
+	quantity = sum(l["qty"] for l in lines)
+
+	header = {
+		"customer": doc.get("custom_customer_name") or doc.get("custom_customer") or "",
+		"job_title": doc.get("custom_job_title") or (lines[0]["item_name"] if lines else ""),
+		"job_board": doc.get("custom_job_board") or doc.get("custom_material") or "",
+		"material": doc.get("custom_material") or "",
+		"colors": doc.get("custom_colors") or pl.get("no_of_colors") or cb.get("no_of_colors") or 0,
+		"art_no": doc.get("custom_art_no") or pl.get("artwork_no") or "",
+		"art_version": doc.get("custom_art_version") or pl.get("artwork_version") or "",
+		"color_ref": doc.get("custom_color_ref") or "",
+		"po_no": doc.get("custom_po_no") or "",
+		"req_date": req_date,
+		"quote_no": doc.get("custom_quote_no") or "",
+		"printing_machine": doc.get("custom_printing_machine") or pl.get("printing_machine") or "",
+		"finishings": doc.get("custom_finishings") or "",
+		"remarks": doc.get("custom_remarks") or "",
+		"npd_request": doc.get("custom_npd_request") or "",
+		"job_date": doc.get("posting_date") or format_date(doc.creation),
+		"so_no": so_no,
+		"sales_person": sales_person,
+		"quantity": quantity,
+		"ctn_size": cb.get("carton_size") or pl.get("product_size") or "",
+		"reel_or_sheet": pl.get("flexo_type") or ("Reel" if is_flexo else "Sheet"),
+		"pcs_per_roll": pl.get("pcs_per_roll") or 0,
+		"ups": pl.get("no_of_ups") or cb.get("no_of_ups") or (lines[0]["ups"] if lines else 0),
+		"core_size": pl.get("core_size") or "",
+		"winding_direction": pl.get("winding_direction") or "",
+	}
 
 	return {
 		"doc": doc,
@@ -243,24 +317,7 @@ def get_ticket_print_data(production_plan_name):
 		"logo": _company_logo(),
 		"lines": lines,
 		"materials": materials,
-		"header": {
-			"customer": doc.get("custom_customer_name") or doc.get("custom_customer") or "",
-			"job_title": doc.get("custom_job_title") or "",
-			"job_board": doc.get("custom_job_board") or "",
-			"material": doc.get("custom_material") or "",
-			"colors": doc.get("custom_colors") or 0,
-			"art_no": doc.get("custom_art_no") or "",
-			"art_version": doc.get("custom_art_version") or "",
-			"color_ref": doc.get("custom_color_ref") or "",
-			"po_no": doc.get("custom_po_no") or "",
-			"req_date": doc.get("custom_req_date"),
-			"quote_no": doc.get("custom_quote_no") or "",
-			"printing_machine": doc.get("custom_printing_machine") or "",
-			"finishings": doc.get("custom_finishings") or "",
-			"remarks": doc.get("custom_remarks") or "",
-			"npd_request": doc.get("custom_npd_request") or "",
-			"job_date": doc.get("posting_date"),
-		},
+		"header": header,
 		"approvals": [
 			{"label": "Created by",              "by": doc.get("custom_created_by") or "", "on": doc.get("custom_created_on")},
 			{"label": "Artwork approved by",     "by": doc.get("custom_artwork_by") or "", "on": doc.get("custom_artwork_on")},
@@ -322,4 +379,98 @@ def get_npd_print_data(npd_name):
 		"created_on": doc.get("created_on"),
 		"approved_by": doc.get("approved_by_name") or "",
 		"approved_on": doc.get("approved_on"),
+	}
+
+
+def get_aod_data(delivery_note):
+	"""Data for the AOD (Advice of Delivery) print on a Delivery Note.
+
+	Lists the Packing records behind the Delivery Note (each DN line links its Packing via
+	`custom_packing`), and pulls the related quotation + artwork approvals from the
+	Production Plan behind the Sales Order."""
+	from nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.doctype.packing.packing import (
+		_packing_breakdown,
+	)
+	dn = frappe.get_doc("Delivery Note", delivery_note)
+
+	sales_order = ""
+	packings = []
+	seen = set()
+	for it in (dn.get("items") or []):
+		if it.get("against_sales_order") and not sales_order:
+			sales_order = it.against_sales_order
+		pk = it.get("custom_packing")
+		if not pk or pk in seen or not frappe.db.exists("Packing", pk):
+			continue
+		seen.add(pk)
+		p = frappe.db.get_value(
+			"Packing", pk,
+			["item", "packed_qty", "extra", "dividers", "total", "type", "job__npd_number"],
+			as_dict=True,
+		) or {}
+		details = frappe.get_all(
+			"Packing Details", filters={"parent": pk},
+			fields=["no_of_boxes", "pcs_per_box", "weight_of_one_box", "total"], order_by="idx",
+		)
+		packings.append({
+			"packing": pk,
+			"item": p.get("item"),
+			"item_name": frappe.db.get_value("Item", p.get("item"), "item_name") or p.get("item") or "",
+			"packed_qty": float(p.get("packed_qty") or 0),
+			"extra": float(p.get("extra") or 0),
+			"dividers": float(p.get("dividers") or 0),
+			"total": float(p.get("total") or 0),
+			"type": p.get("type") or "",
+			"production_plan": p.get("job__npd_number") or "",
+			"breakdown": _packing_breakdown(pk),
+			"details": details,
+		})
+
+	# Production Plan behind the SO → quotation + artwork approval details.
+	pp = {}
+	if sales_order:
+		pp = frappe.db.get_value(
+			"Production Plan", {"custom_sales_order": sales_order},
+			["name", "custom_job_title", "custom_customer_name", "custom_po_no", "custom_quote_no",
+			 "custom_artwork_status", "custom_artwork_by", "custom_artwork_on",
+			 "custom_art_no", "custom_art_version", "custom_colors"],
+			as_dict=True, order_by="creation desc",
+		) or {}
+
+	quotation = {}
+	q_no = (pp or {}).get("custom_quote_no")
+	if q_no and frappe.db.exists("Savinda Quotation", q_no):
+		quotation = frappe.db.get_value(
+			"Savinda Quotation", q_no,
+			["name", "customer_name", "date", "valid_till", "profit_margin", "payment_terms"],
+			as_dict=True,
+		) or {}
+
+	# Shipping address lines for the header block.
+	address_lines = []
+	addr_name = dn.get("shipping_address_name") or dn.get("customer_address")
+	if addr_name and frappe.db.exists("Address", addr_name):
+		a = frappe.get_doc("Address", addr_name)
+		for f in ("address_line1", "address_line2", "city", "state", "pincode", "country"):
+			v = a.get(f)
+			if v:
+				address_lines.append(v)
+
+	total_qty = sum(p["packed_qty"] for p in packings)
+
+	return {
+		"doc": dn,
+		"logo": _company_logo(),
+		"sales_order": sales_order,
+		"packings": packings,
+		"pp": pp or {},
+		"quotation": quotation,
+		# ── Header fields for the AOD layout ──
+		"aod_no": dn.name,
+		"date": format_date(dn.get("posting_date")),
+		"po_no": (pp or {}).get("custom_po_no") or dn.get("po_no") or dn.get("customer_po_details") or "",
+		"job_no": (pp or {}).get("name") or "",
+		"customer": dn.get("customer_name") or dn.get("customer") or "",
+		"address_lines": address_lines,
+		"total_qty": total_qty,
 	}

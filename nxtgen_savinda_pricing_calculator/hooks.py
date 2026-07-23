@@ -57,6 +57,7 @@ jinja = {
 		"nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.utils.jinja.get_cb_print_data",
 		"nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.utils.jinja.get_ticket_print_data",
 		"nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.utils.jinja.get_npd_print_data",
+		"nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.utils.jinja.get_aod_data",
 	],
 	"filters": [],
 }
