@@ -19,7 +19,14 @@ frappe.ui.form.on("Savinda Quotation", {
 				}
 			});
 		}
-
+		frm.set_query("sales_person", function () {
+			return {
+				filters: {
+					department: "Marketing - SGSPL",
+					status: "Active"
+				}
+			};
+		});
 		// Fill from Cost Sheet button (draft only — locked after submit)
 		if (frm.doc.cost_sheet && frm.doc.docstatus === 0) {
 			frm.add_custom_button(__("Reload from Cost Sheet"), function () {
@@ -175,6 +182,10 @@ frappe.ui.form.on("Savinda Quotation", {
 	currency: function (frm) {
 		_fetch_exchange_rate(frm);
 	},
+	// Manual exchange-rate edit → re-derive every line's shown rate from its base.
+	conversion_rate: function (frm) {
+		_reprice_items(frm);
+	},
 	date: function (frm) {
 		if (frm.doc.currency && frm.doc.currency !== _base_currency()) _fetch_exchange_rate(frm);
 	},
@@ -209,7 +220,11 @@ frappe.ui.form.on("Savinda Quotation", {
 // ── Child table events ────────────────────────────────────────
 frappe.ui.form.on("Savinda Quotation Item", {
 	selling_price: function (frm, cdt, cdn) {
+		var row = frappe.get_doc(cdt, cdn);
+		var crate = flt_v(frm.doc.conversion_rate) || 1;
 		frappe.model.set_value(cdt, cdn, "is_manually_set", 1);
+		// User typed a rate in the quotation currency → back-fill the company-base anchor.
+		frappe.model.set_value(cdt, cdn, "base_selling_price", flt_v(row.selling_price) * crate);
 	},
 });
 
@@ -261,6 +276,7 @@ function _fetch_exchange_rate(frm) {
 	var base = _base_currency();
 	if (!frm.doc.currency || frm.doc.currency === base) {
 		frm.set_value("conversion_rate", 1);
+		_reprice_items(frm);
 		return;
 	}
 	frappe.call({
@@ -274,8 +290,31 @@ function _fetch_exchange_rate(frm) {
 			if (r && r.message) {
 				frm.set_value("conversion_rate", flt_v(r.message));
 			}
+			_reprice_items(frm);
 		},
 	});
+}
+
+// Set a row's price fields from a company-base (LKR) rate produced by costing.
+function _init_row_price(row, base_lkr, conversion_rate, currency) {
+	var crate = flt_v(conversion_rate) || 1;
+	row.base_selling_price = flt_v(base_lkr);
+	row.selling_price = flt_v(base_lkr) / crate;
+	row.currency = currency;
+	row.is_manually_set = 0;
+}
+
+// Re-derive every line's shown (transaction-currency) rate from its fixed company-base
+// rate — used when the quotation currency or conversion rate changes. The base is kept.
+function _reprice_items(frm) {
+	var crate = flt_v(frm.doc.conversion_rate) || 1;
+	(frm.doc.items || []).forEach(function (row) {
+		row.currency = frm.doc.currency;
+		var base = flt_v(row.base_selling_price) || flt_v(row.selling_price);
+		row.base_selling_price = base;
+		row.selling_price = base / crate;
+	});
+	frm.refresh_field("items");
 }
 
 // Carry the Cost Item's (final, saved) packing info onto a quotation row.
@@ -305,6 +344,9 @@ function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
 				frm.set_value("inquiry", cs.inquiry);
 			if (!frm.doc.customer_name && cs.customer_name)
 				frm.set_value("customer_name", cs.customer_name);
+			if (!frm.doc.sales_person && cs.sales_person)
+				frm.set_value("sales_person", cs.sales_person);
+
 			console.log(cs);
 			var cs_rows = cs.pricing_list || [];
 			if (!cs_rows.length) {
@@ -334,10 +376,10 @@ function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
 				qrow.finishing_variant = variant || 1;
 				qrow.qty = qty_override !== undefined ? qty_override : flt_v(cs_row.qty);
 				qrow.unit_cost = flt_v(cs_row.unit_price);
-				qrow.selling_price = flt_v(cs_row.selling_unit_price) > 0
+				var base_lkr = flt_v(cs_row.selling_unit_price) > 0
 					? flt_v(cs_row.selling_unit_price)
 					: flt_v(cs_row.unit_price);
-				qrow.is_manually_set = 0;
+				_init_row_price(qrow, base_lkr, frm.doc.conversion_rate, frm.doc.currency);
 				// Header profit_margin (lowest across items) is set server-side in validate().
 				_apply_packing_q(qrow, ci);
 				loaded++;
@@ -409,11 +451,11 @@ function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
 
 									if (r3.message && !r3.message.error) {
 										qrow.unit_cost = flt_v(r3.message.unit_cost);
-										qrow.selling_price = flt_v(r3.message.sell_unit);
+										_init_row_price(qrow, flt_v(r3.message.sell_unit), frm.doc.conversion_rate, frm.doc.currency);
 									} else {
 										// Fallback if CB has no ui_state yet
 										qrow.unit_cost = flt_v(cs_row.unit_price);
-										qrow.selling_price = flt_v(cs_row.selling_unit_price) || flt_v(cs_row.unit_price);
+										_init_row_price(qrow, flt_v(cs_row.selling_unit_price) || flt_v(cs_row.unit_price), frm.doc.conversion_rate, frm.doc.currency);
 									}
 
 									loaded++;
@@ -431,8 +473,7 @@ function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
 									qrow.finishing_variant = 1;
 									qrow.qty = qb.qty;
 									qrow.unit_cost = flt_v(cs_row.unit_price);
-									qrow.selling_price = flt_v(cs_row.selling_unit_price) || flt_v(cs_row.unit_price);
-									qrow.is_manually_set = 0;
+									_init_row_price(qrow, flt_v(cs_row.selling_unit_price) || flt_v(cs_row.unit_price), frm.doc.conversion_rate, frm.doc.currency);
 									_apply_packing_q(qrow, ci);
 									loaded++;
 									add_break_row(qb_idx + 1);
@@ -448,7 +489,7 @@ function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
 						qrow.cost_item = cs_row.item;
 						qrow.qty = flt_v(cs_row.qty);
 						qrow.unit_cost = flt_v(cs_row.unit_price);
-						qrow.selling_price = flt_v(cs_row.selling_unit_price) || flt_v(cs_row.unit_price);
+						_init_row_price(qrow, flt_v(cs_row.selling_unit_price) || flt_v(cs_row.unit_price), frm.doc.conversion_rate, frm.doc.currency);
 						qrow.finishing_variant = 1;
 						loaded++;
 						process_item(cs_row_idx + 1);
@@ -574,8 +615,7 @@ function show_add_qty_break_dialog(frm) {
 					qrow.finishing_variant = variant;
 					qrow.qty = qty;
 					qrow.unit_cost = flt_v(res.unit_cost);
-					qrow.selling_price = flt_v(res.sell_unit);
-					qrow.is_manually_set = 0;
+					_init_row_price(qrow, flt_v(res.sell_unit), frm.doc.conversion_rate, frm.doc.currency);
 
 					frm.refresh_field("items");
 					frappe.show_alert({
@@ -622,8 +662,9 @@ function calculate_all_qty_breaks(frm) {
 			},
 			callback: function (r) {
 				if (r.message && !r.message.error) {
-					frappe.model.set_value(row.doctype, row.name, "unit_cost", flt_v(r.message.unit_cost));
-					frappe.model.set_value(row.doctype, row.name, "selling_price", flt_v(r.message.sell_unit));
+					// Direct assignment (not set_value) so the manual-edit handler doesn't fire.
+					row.unit_cost = flt_v(r.message.unit_cost);
+					_init_row_price(row, flt_v(r.message.sell_unit), frm.doc.conversion_rate, frm.doc.currency);
 					updated++;
 				}
 				calc_next(idx + 1);
@@ -688,77 +729,99 @@ function _create_fg_for_item(frm, pending_rows, idx, ig_default) {
 	}
 
 	var row = pending_rows[idx];
+	// Fetch the Product Library review defaults for this cost item, then open the dialog.
+	frappe.call({
+		method: "nxtgen_savinda_pricing_calculator.api.production_plan.get_cost_item_fg_defaults",
+		args: { cost_item: row.cost_item || "", quotation: frm.doc.name },
+		callback: function (r) {
+			_build_fg_dialog(frm, pending_rows, idx, ig_default, row, r.message || {});
+		},
+	});
+}
+
+function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd) {
 	var suggested_name = (row.item_name || "FG").substring(0, 60);
 	var suggested_desc = [row.size, row.material, row.finishing].filter(Boolean).join(" | ");
+	var pl_fields = pd.pl_fields || [];
+	var pl_defaults = pd.defaults || {};
+
+	var fields = [
+		{
+			fieldtype: "HTML",
+			options: "<div style='padding:6px 10px;background:#f0f4ff;border-radius:4px;font-size:12px;color:#1a3a5c;margin-bottom:6px'>"
+				+ "Creating Finished Good item for: <b>" + row.item_name + "</b><br>"
+				+ "You can also link an existing item using the field below.</div>",
+		},
+		{
+			fieldtype: "Link", fieldname: "existing_item",
+			label: "Link Existing Item (optional)", options: "Item",
+			description: "Leave blank to create a new item",
+		},
+		{ fieldtype: "Section Break", label: "New Item Details" },
+		{
+			fieldtype: "Data", fieldname: "item_name_field",
+			label: "Item Name", reqd: 1,
+			default: suggested_name,
+			description: "Item code is auto-generated by the system",
+		},
+		{
+			fieldtype: "Small Text", fieldname: "description",
+			label: "Description",
+			default: suggested_desc,
+		},
+		{ fieldtype: "Column Break" },
+		{
+			fieldtype: "Link", fieldname: "item_group",
+			label: "Item Group", options: "Item Group",
+			reqd: 1, default: ig_default,
+			description: "Fetched from the linked Inquiry — change if needed.",
+		},
+		{
+			fieldtype: "Link", fieldname: "department",
+			label: "Department", options: "Department",
+			reqd: 1, default: pl_defaults.department,
+			description: "Required — abbreviation is auto-resolved",
+		},
+		{
+			fieldtype: "Link", fieldname: "stock_uom",
+			label: "UOM", options: "UOM",
+			reqd: 1, default: "Nos",
+		},
+	];
+
+	// Product Library details — reviewed here, saved into the Product Library record.
+	if (pl_fields.length) {
+		fields.push({ fieldtype: "Section Break", label: "Product Library Details", collapsible: 1 });
+		nxtgen_pl.fields(pl_fields, pd.is_flexo, "", pl_defaults).forEach(function (f) { fields.push(f); });
+	}
+
+	fields.push({ fieldtype: "Section Break", label: "Variants (optional)" });
+	fields.push({
+		fieldtype: "Check", fieldname: "has_variant",
+		label: "Has Variant (create S / M / L … as variant items)",
+		description: "Tick to make this a template and create ERPNext variants. Each variant is its own FG item; all share this Cost Item.",
+	});
+	fields.push({
+		fieldtype: "Data", fieldname: "variant_attribute",
+		label: "Variant Attribute", default: "Size",
+		depends_on: "has_variant",
+		description: "e.g. Size. The values below are added to this Item Attribute.",
+	});
+	fields.push({
+		fieldtype: "Table", fieldname: "variants",
+		label: "Variations", depends_on: "has_variant",
+		cannot_add_rows: false, in_place_edit: false, data: [],
+		fields: [
+			{ fieldtype: "Data", fieldname: "value", label: "Variant (e.g. S)", in_list_view: 1, reqd: 1, columns: 2 },
+			{ fieldtype: "Data", fieldname: "item_name", label: "Item Name (blank = auto)", in_list_view: 1, columns: 5 },
+			{ fieldtype: "Data", fieldname: "customer_ref", label: "Customer Ref", in_list_view: 1, columns: 3 },
+		],
+	});
 
 	var d = new frappe.ui.Dialog({
 		title: "Create FG — " + (idx + 1) + " of " + pending_rows.length + ": " + row.item_name,
 		size: "large",
-		fields: [
-			{
-				fieldtype: "HTML",
-				options: "<div style='padding:6px 10px;background:#f0f4ff;border-radius:4px;font-size:12px;color:#1a3a5c;margin-bottom:6px'>"
-					+ "Creating Finished Good item for: <b>" + row.item_name + "</b><br>"
-					+ "You can also link an existing item using the field below.</div>",
-			},
-			{
-				fieldtype: "Link", fieldname: "existing_item",
-				label: "Link Existing Item (optional)", options: "Item",
-				description: "Leave blank to create a new item",
-			},
-			{ fieldtype: "Section Break", label: "New Item Details" },
-			{
-				fieldtype: "Data", fieldname: "item_name_field",
-				label: "Item Name", reqd: 1,
-				default: suggested_name,
-				description: "Item code is auto-generated by the system",
-			},
-			{
-				fieldtype: "Small Text", fieldname: "description",
-				label: "Description",
-				default: suggested_desc,
-			},
-			{ fieldtype: "Column Break" },
-			{
-				fieldtype: "Link", fieldname: "item_group",
-				label: "Item Group", options: "Item Group",
-				reqd: 1, default: ig_default,
-				description: "Fetched from the linked Inquiry — change if needed.",
-			},
-			{
-				fieldtype: "Link", fieldname: "department",
-				label: "Department", options: "Department",
-				reqd: 1,
-				description: "Required — abbreviation is auto-resolved",
-			},
-			{
-				fieldtype: "Link", fieldname: "stock_uom",
-				label: "UOM", options: "UOM",
-				reqd: 1, default: "Nos",
-			},
-			{ fieldtype: "Section Break", label: "Variants (optional)" },
-			{
-				fieldtype: "Check", fieldname: "has_variant",
-				label: "Has Variant (create S / M / L … as variant items)",
-				description: "Tick to make this a template and create ERPNext variants. Each variant is its own FG item; all share this Cost Item.",
-			},
-			{
-				fieldtype: "Data", fieldname: "variant_attribute",
-				label: "Variant Attribute", default: "Size",
-				depends_on: "has_variant",
-				description: "e.g. Size. The values below are added to this Item Attribute.",
-			},
-			{
-				fieldtype: "Table", fieldname: "variants",
-				label: "Variations", depends_on: "has_variant",
-				cannot_add_rows: false, in_place_edit: false, data: [],
-				fields: [
-					{ fieldtype: "Data", fieldname: "value", label: "Variant (e.g. S)", in_list_view: 1, reqd: 1, columns: 2 },
-					{ fieldtype: "Data", fieldname: "item_name", label: "Item Name (blank = auto)", in_list_view: 1, columns: 5 },
-					{ fieldtype: "Data", fieldname: "customer_ref", label: "Customer Ref", in_list_view: 1, columns: 3 },
-				],
-			},
-		],
+		fields: fields,
 		primary_action_label: "Create & Next",
 		secondary_action_label: "Skip",
 		secondary_action: function () {
@@ -774,6 +837,9 @@ function _create_fg_for_item(frm, pending_rows, idx, ig_default) {
 				_create_fg_for_item(frm, pending_rows, idx + 1, ig_default);
 				return;
 			}
+
+			// Reviewed Product Library values (shared across variants).
+			var pl_overrides = nxtgen_pl.overrides(pl_fields, vals, "");
 
 			// ── Variant path: create a template + native ERPNext variants ──
 			if (vals.has_variant) {
@@ -796,6 +862,7 @@ function _create_fg_for_item(frm, pending_rows, idx, ig_default) {
 						attribute: vals.variant_attribute || "Size",
 						variants: JSON.stringify(variants),
 						cost_item: row.cost_item || "",
+						pl_overrides: JSON.stringify(pl_overrides),
 					},
 					freeze: true,
 					freeze_message: "Creating template + variant items...",
@@ -827,6 +894,7 @@ function _create_fg_for_item(frm, pending_rows, idx, ig_default) {
 					department: vals.department,
 					stock_uom: vals.stock_uom || "Nos",
 					cost_item: row.cost_item || "",
+					pl_overrides: JSON.stringify(pl_overrides),
 				},
 				freeze: true,
 				freeze_message: "Creating FG item...",

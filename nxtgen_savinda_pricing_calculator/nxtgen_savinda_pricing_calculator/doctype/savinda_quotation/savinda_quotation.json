@@ -13,6 +13,7 @@
   "customer",
   "customer_name",
   "profit_margin",
+  "uom",
   "column_break_2",
   "sales_person",
   "date",
@@ -98,7 +99,7 @@
    "fieldname": "sales_person",
    "fieldtype": "Link",
    "label": "Sales Person",
-   "options": "User"
+   "options": "Employee"
   },
   {
    "default": "Today",
@@ -263,19 +264,25 @@
    "read_only": 1
   },
   {
+   "allow_on_submit": 1,
    "fieldname": "workflow_state",
    "fieldtype": "Link",
-   "label": "Workflow State",
-   "options": "Workflow State",
-   "read_only": 1,
-   "allow_on_submit": 1,
    "in_standard_filter": 1,
-   "no_copy": 1
+   "label": "Workflow State",
+   "no_copy": 1,
+   "options": "Workflow State",
+   "read_only": 1
+  },
+  {
+   "fieldname": "uom",
+   "fieldtype": "Link",
+   "label": "UOM",
+   "options": "UOM"
   }
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-07-21 13:04:01.275881",
+ "modified": "2026-07-25 17:00:02.343433",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Savinda Quotation",

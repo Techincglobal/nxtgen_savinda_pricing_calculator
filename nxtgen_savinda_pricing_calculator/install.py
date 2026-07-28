@@ -91,6 +91,7 @@ def _ensure_roles():
 					title=f"pricing_calculator: create role failed ({role})",
 					message=frappe.get_traceback(),
 				)
+		
 	frappe.db.commit()
 
 
@@ -112,6 +113,24 @@ def _ensure_property_setters():
 	except Exception:
 		frappe.log_error(
 			title="pricing_calculator: ensure property setters failed",
+			message=frappe.get_traceback(),
+		)
+	try:
+		make_property_setter(
+            "Opportunity",          # DocType
+            "opportunity_owner",    # Fieldname
+            "options",              # Property
+            "Employee",             # Value
+            "Data",                 # Property type
+            validate_fields_for_doctype=False
+        )
+		frappe.db.commit()
+
+		frappe.clear_cache(doctype="Opportunity")
+
+	except Exception:
+		frappe.log_error(
+			title="pricing_calculator: update Opportunity Owner field failed",
 			message=frappe.get_traceback(),
 		)
 
@@ -295,6 +314,28 @@ def _ensure_custom_fields():
 					"options":      "Product Library",
 					"insert_after": "custom_cost_item",
 					"description":  "Product-library record holding this FG's technical + reference data.",
+				},
+				{
+					"fieldname":    "custom_variant_type",
+					"label":        "Variant Type",
+					"fieldtype":    "Data",
+					"insert_after": "over_billing_allowance",
+				},
+				{
+					"fieldname":    "custom_variant_value",
+					"label":        "Variant Value",
+					"fieldtype":    "Data",
+					"insert_after": "custom_variant_type",
+					
+				},
+				{
+					"fieldname": "custom_inquery_item",
+					"label": "Inquery Item",
+					"fieldtype": "Link",
+					"options": "Boards and Papers",
+					"insert_after": "Boards and Papers",
+					"description":  "Generic material name shown to the customer on the quotation instead of the real material.",
+					"depends_on": "eval:doc.item_group=='Boards & Papers'",
 				},
 			],
 			"Delivery Note Item": [

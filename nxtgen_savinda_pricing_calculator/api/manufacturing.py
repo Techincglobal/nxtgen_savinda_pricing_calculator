@@ -189,7 +189,8 @@ def _ensure_item_attribute(attribute, values):
 
 @frappe.whitelist()
 def create_fg_variants(template_name, description, item_group, department,
-                       stock_uom="Nos", attribute="Size", variants=None, cost_item=None):
+                       stock_uom="Nos", attribute="Size", variants=None, cost_item=None,
+                       pl_overrides=None):
 	"""
 	Create each variation as its OWN independent Finished Good Item (no ERPNext
 	template/variant relationship). All variants share one Cost Item.
@@ -198,10 +199,17 @@ def create_fg_variants(template_name, description, item_group, department,
 	  • value        — short label used to auto-name the item (e.g. "S"); optional
 	  • item_name    — item name (auto = base + " - " + value if blank); editable
 	  • customer_ref — per-item customer reference code
+
+	pl_overrides = reviewed Product Library values (shared across variants). Each variant's
+	Product Library Customer Product Code is set from its own customer_ref; each variant Item
+	is stamped with custom_variant_type = attribute and custom_variant_value = its value.
 	"""
 	if isinstance(variants, str):
 		variants = json.loads(variants or "[]")
 	variants = variants or []
+	if isinstance(pl_overrides, str):
+		pl_overrides = json.loads(pl_overrides or "{}")
+	pl_overrides = pl_overrides or {}
 	rows = [v for v in variants if (v.get("value") or v.get("item_name") or "").strip()]
 	if not rows:
 		frappe.throw("Add at least one variation (a value like S/M/L or an item name).")
@@ -213,6 +221,8 @@ def create_fg_variants(template_name, description, item_group, department,
 	ig_abbr   = frappe.db.get_value("Item Group", item_group, "custom_abbr") or ""
 	dept_abbr = frappe.db.get_value("Department", department, "custom_abbr") or ""
 	has_cust_ref = frappe.db.has_column("Item", "customer_ref")
+	has_var_type = frappe.db.has_column("Item", "custom_variant_type")
+	has_var_val  = frappe.db.has_column("Item", "custom_variant_value")
 
 	created = []
 	for r in rows:
@@ -233,11 +243,20 @@ def create_fg_variants(template_name, description, item_group, department,
 		})
 		if has_cust_ref:
 			doc.customer_ref = (r.get("customer_ref") or "").strip()
+		# Stamp the variant identity onto the Item (e.g. Size / S)
+		if has_var_type:
+			doc.custom_variant_type = attribute
+		if has_var_val:
+			doc.custom_variant_value = val
 		# All variants link to the one shared Cost Item (→ its calculation breakdown)
 		if cost_item and frappe.db.has_column("Item", "custom_cost_item"):
 			doc.custom_cost_item = cost_item
 		doc.insert(ignore_permissions=True)
-		_upsert_product_library(doc.name, cost_item, r.get("customer_ref"))
+		# Shared reviewed PL values, but each variant keeps its own customer product code.
+		row_over = dict(pl_overrides)
+		if r.get("customer_ref"):
+			row_over["customer_product_code"] = r.get("customer_ref")
+		_upsert_product_library(doc.name, cost_item, r.get("customer_ref"), overrides=row_over)
 		created.append({"item_code": doc.name, "item_name": doc.item_name,
 		                "value": val, "customer_ref": r.get("customer_ref") or ""})
 
@@ -338,7 +357,8 @@ def get_quotation_fg_items(quotation):
 		if row.cost_item and row.cost_item not in ci_info:
 			ci_info[row.cost_item] = {
 				"qty":  flt(row.qty),
-				"rate": flt(row.selling_price),
+				# Company-base (LKR) rate — the Sales Order divides it by conversion_rate.
+				"rate": flt(row.base_selling_price) or flt(row.selling_price),
 				"cb":   row.calculation_breakdown or "",
 			}
 		if row.finish_good and row.finish_good not in fgs:
@@ -346,7 +366,7 @@ def get_quotation_fg_items(quotation):
 				"item_code":             row.finish_good,
 				"item_name":             row.item_name or row.finish_good,
 				"qty":                   flt(row.qty),
-				"rate":                  flt(row.selling_price),
+				"rate":                  flt(row.base_selling_price) or flt(row.selling_price),
 				"cost_item":             row.cost_item or "",
 				"calculation_breakdown": row.calculation_breakdown or "",
 			}

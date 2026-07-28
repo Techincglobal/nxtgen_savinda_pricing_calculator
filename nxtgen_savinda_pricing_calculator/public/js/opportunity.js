@@ -10,7 +10,14 @@ frappe.ui.form.on("Opportunity", {
 		// ERPNext's own opportunity.js adds. This runs after core JS, so the buttons exist.
 		_remove_standard_sales_buttons(frm);
 		setTimeout(function () { _remove_standard_sales_buttons(frm); }, 300);
-
+		frm.set_query("opportunity_owner", function () {
+			return {
+				filters: {
+					department: "Marketing - SGSPL",
+					status: "Active"
+				}
+			};
+		});
 		frm.add_custom_button(__("Create NPD Request"), function () {
 			frappe.call({
 				method: "nxtgen_savinda_pricing_calculator.api.production_plan.create_npd_request_from_inquiry",
@@ -80,14 +87,14 @@ function create_cost_sheet(frm) {
 		method: "frappe.client.insert",
 		args: {
 			doc: {
-				doctype:       "Cost Sheet",
-				inquiry:       frm.doc.name,
-				subject:       frm.doc.custom_subject    || frm.doc.name,
-				customer_name: frm.doc.customer_name     || "",
-				colour:        frm.doc.custom_colour     || 0,
-				item_group:    frm.doc.custom_item_group || "",
-				tiep:          frm.doc.custom_tiep       || "",
-				compliance:    compliance_rows,
+				doctype: "Cost Sheet",
+				inquiry: frm.doc.name,
+				subject: frm.doc.custom_subject || frm.doc.name,
+				customer_name: frm.doc.customer_name || "",
+				colour: frm.doc.custom_colour || 0,
+				item_group: frm.doc.custom_item_group || "",
+				tiep: frm.doc.custom_tiep || "",
+				compliance: compliance_rows,
 			},
 		},
 		freeze: true,

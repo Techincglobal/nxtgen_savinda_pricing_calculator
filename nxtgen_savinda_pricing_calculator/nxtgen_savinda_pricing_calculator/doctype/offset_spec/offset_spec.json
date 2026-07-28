@@ -33,6 +33,7 @@
   "allowed_inks",
   "section_break_mfg",
   "bom_include",
+  "bom_sequence",
   "column_break_mfg",
   "bom_operation",
   "bom_qi_template"
@@ -220,6 +221,13 @@
    "label": "Include in BOM Chain",
    "default": "1",
    "description": "Uncheck to exclude this spec from BOM chain by default (e.g. Proof Board, samples)."
+  },
+  {
+   "fieldname": "bom_sequence",
+   "fieldtype": "Int",
+   "label": "BOM Operation Order",
+   "default": "0",
+   "description": "Default order of this operation in the BOM Builder chain (lower runs first). Users can still drag to reorder and save."
   },
   {
    "fieldname": "column_break_mfg",

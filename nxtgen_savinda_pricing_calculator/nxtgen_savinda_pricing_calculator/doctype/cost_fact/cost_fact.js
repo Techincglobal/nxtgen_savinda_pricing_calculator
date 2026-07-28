@@ -31,7 +31,8 @@ function render_formula_reference(frm) {
 	// ── Sheet & Order variables ────────────────────────────────
 	var SHEET_VARS = [
 		{ name: "full_sheet_qty", desc: "Full sheets required for the job" },
-		{ name: "cut_sheet_qty", desc: "Cut sheets required (after wastage is added)" },
+		{ name: "cut_sheet_qty", desc: "Cut sheets required " },
+		{ name: "req_cut_sheets ", desc: "Cut sheets required (after wastage is added)" },
 		{ name: "cut_sheet_area", desc: "Area of one cut sheet  (cut_sheet_l × cut_sheet_w  sq.in)" },
 		{ name: "cut_sheet_ups", desc: "Ups per cut sheet  =  no_of_ups ÷ no_of_cuts" },
 		{ name: "no_of_colors", desc: "Number of print colors (from order form)" },

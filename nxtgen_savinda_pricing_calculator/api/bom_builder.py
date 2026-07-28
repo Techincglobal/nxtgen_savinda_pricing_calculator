@@ -172,17 +172,60 @@ def search_cb_for_fg(fg_item_code, search_term=""):
 #  BOM DATA — operations + raw materials with SFG chain
 # ─────────────────────────────────────────────────────────────
 
+def _to_stock_uom(item_code, qty, from_uom):
+	"""Convert a material qty from its calculation UOM (e.g. Square Inch) into the item's
+	STOCK UOM, using ERPNext conversion factors — the Item's own UOM table (UOM Conversion
+	Detail) first, then the global UOM Conversion Factor master.
+
+	Returns (qty_in_stock_uom, stock_uom, converted). When the units differ and no factor is
+	found, the qty is returned unchanged with converted=False so the caller can flag it.
+	"""
+	qty       = flt(qty)
+	stock_uom = (frappe.db.get_value("Item", item_code, "stock_uom") if item_code else "") or from_uom or "Nos"
+	from_uom  = (from_uom or "").strip()
+	if not from_uom or from_uom == stock_uom:
+		return qty, stock_uom, True
+
+	# 1. Item-specific conversion (Item → UOMs table). conversion_factor = stock-uom per 1 from_uom.
+	factor = 0.0
+	if item_code:
+		factor = flt(frappe.db.get_value(
+			"UOM Conversion Detail", {"parent": item_code, "uom": from_uom}, "conversion_factor"))
+	# 2. Global UOM Conversion Factor master (category-based, e.g. Area / Length).
+	if not factor:
+		try:
+			from erpnext.stock.doctype.item.item import get_uom_conv_factor
+			factor = flt(get_uom_conv_factor(from_uom, stock_uom))
+		except Exception:
+			factor = 0.0
+
+	if factor:
+		return qty * factor, stock_uom, True
+	return qty, stock_uom, False
+
+
 @frappe.whitelist()
-def get_bom_data(calculation_breakdown, mfg_qty, fg_item=""):
+def get_bom_data(calculation_breakdown, mfg_qty, fg_item="", overrides=None):
 	"""
 	Recalculate at mfg_qty and return:
-	  • operations   — ALL selected specs with SFG chain pre-populated
+	  • operations   — ALL selected specs with SFG chain pre-populated, ordered by the
+	                   spec's BOM Operation Order (bom_sequence)
 	  • raw_materials — base material + other material rows at mfg_qty
 	  • base_material — item code/name/qty for first operation input
+
+	`overrides` (dict / JSON) — editable BOM drivers (no_of_cuts, no_of_ups, cut_sheet_ups)
+	that replace the stored calculation inputs; the whole sheet math + material consumption
+	is recomputed through the calculator so quantities stay accurate.
+
+	Quantities carry WASTAGE (full_sheet_qty / req_cut_sheets / total reel_area) so the BOM
+	itself accounts for it — Work Order → Material Request does not add wastage.
 	"""
 	from nxtgen_savinda_pricing_calculator.api.offset_calculator import calculate
 
 	mfg_qty = flt(mfg_qty) or 1
+	if isinstance(overrides, str):
+		overrides = frappe.parse_json(overrides) or {}
+	overrides = overrides or {}
 	cb      = frappe.get_doc("Calculation Breakdown", calculation_breakdown)
 
 	state = {}
@@ -193,6 +236,17 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item=""):
 
 	form           = state.get("form", {}) or {}
 	selected_specs = state.get("selected_specs", []) or []
+
+	# Editable calculation drivers + variant inputs override the stored calculation. Applied
+	# to the base form (so base-material resolution below sees them) BEFORE the deepcopy, so
+	# calculate() recomputes the whole sheet math + material consumption via the real formulas.
+	# Any calculator form field may be adjusted (except item_qty, which is driven by mfg_qty).
+	for _k, _v in overrides.items():
+		if _k in ("item_qty", "breakdown_qtys"):
+			continue
+		if _v not in (None, ""):
+			form[_k] = _v
+
 	pricing_type   = (form.get("pricing_type") or cb.pricing_type or "Offset").strip()
 
 	# ── Recalculate at mfg_qty ────────────────────────────────
@@ -221,22 +275,26 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item=""):
 		base_mat_name = frappe.db.get_value("Item", base_mat, "item_name") or base_mat if base_mat else ""
 		base_mat_uom  = frappe.db.get_value("Item", base_mat, "stock_uom") or "Nos" if base_mat else "Nos"
 
-	# BOM uses NET quantities only (no wastage). Wastage is added later at the
-	# production-planning stage — so we use Cut Sheet Qty, NOT Req Cut Sheets.
-	no_cuts       = max(cint(form.get("no_of_cuts")) or 1, 1)
-	cut_sheet_qty = flt(sheet.get("cut_sheet_qty") or 0)
+	# BOM carries WASTAGE so Work Order → Material Request pulls the wasted qty (that path
+	# does not add wastage). Use Req Cut Sheets / Full Sheet Qty (net + wastage), NOT the
+	# net Cut Sheet Qty.
+	no_cuts        = max(cint(form.get("no_of_cuts")) or 1, 1)
+	cut_sheet_qty  = flt(sheet.get("cut_sheet_qty") or 0)
+	req_cut_sheets = flt(sheet.get("req_cut_sheets") or cut_sheet_qty)
+	full_sheet_qty = flt(sheet.get("full_sheet_qty") or 0)
 
 	if pricing_type == "Flexo":
-		base_input_qty  = flt(sheet.get("reel_area_net") or sheet.get("reel_area") or 0)
+		# Total reel area (net + wastage), not reel_area_net.
+		base_input_qty  = flt(sheet.get("reel_area") or sheet.get("reel_area_net") or 0)
 		base_input_uom  = "M2"
 		after_print_qty = flt(sheet.get("stickers_per_reel") or mfg_qty)
 		after_print_uom = "Nos"
 	else:
-		# NET full sheets (no wastage) = net cut sheets ÷ cuts-per-sheet
-		base_input_qty  = (cut_sheet_qty / no_cuts) if no_cuts else cut_sheet_qty
+		# Full sheets WITH wastage = ceil(req_cut_sheets / cuts-per-sheet)
+		base_input_qty  = full_sheet_qty or ((req_cut_sheets / no_cuts) if no_cuts else req_cut_sheets)
 		base_input_uom  = base_mat_uom
-		# SFG flow qty = NET cut sheet qty (not req_cut_sheets, which includes wastage)
-		after_print_qty = cut_sheet_qty or mfg_qty
+		# SFG flow qty = req cut sheets (includes wastage)
+		after_print_qty = req_cut_sheets or mfg_qty
 		after_print_uom = base_mat_uom
 
 	# ── Sanitize for SFG naming ───────────────────────────────
@@ -261,12 +319,14 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item=""):
 		spec_bom_include  = 1
 		spec_bom_operation = ""
 		spec_bom_qi       = ""
+		spec_bom_sequence = 0
 		if spec_name:
 			try:
 				sd = frappe.get_cached_doc("Offset Spec", spec_name)
 				spec_bom_include   = cint(getattr(sd, "bom_include", 1))
 				spec_bom_operation = (getattr(sd, "bom_operation", "") or "").strip()
 				spec_bom_qi        = (getattr(sd, "bom_qi_template", "") or "").strip()
+				spec_bom_sequence  = cint(getattr(sd, "bom_sequence", 0))
 			except Exception:
 				pass
 
@@ -278,21 +338,17 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item=""):
 		if spec_bom_operation and not workstation:
 			workstation = frappe.db.get_value("Operation", spec_bom_operation, "workstation") or ""
 
-		# Time estimate + machine hourly rate from the costing breakdown rows
+		# Time estimate comes from the costing rows; the operation COST (hour rate) comes from
+		# the Workstation, never the calculation — if the workstation has no rate the operation
+		# carries no cost. This mirrors what create_bom_chain writes onto the BOM.
 		time_mins = 60.0
-		hour_rate = 0.0
 		for row in cost_rows:
 			if row.get("spec_name") != spec_name:
 				continue
 			av = row.get("attribute_values") or {}
 			if av.get("total_hrs") and time_mins == 60.0:
 				time_mins = round(flt(av["total_hrs"]) * 60, 2)
-			# machine rate = the per-hour rate used for this machine in the CB
-			if not hour_rate and flt(row.get("rate")) and (row.get("selected_item") == machine or av.get("machine")):
-				hour_rate = flt(row.get("rate"))
-		# fall back to the machine master; else 0
-		if not hour_rate and machine:
-			hour_rate = flt(frappe.db.get_value("Offset Machine", machine, "machine_cost_per_hour")) or 0.0
+		hour_rate = flt(frappe.db.get_value("Workstation", workstation, "hour_rate") or 0) if workstation else 0.0
 
 		# Input qty — first "printing" spec gets base material; others get flow qty
 		is_print = "print" in spec_name.lower()
@@ -352,14 +408,15 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item=""):
 						consumption = flt(frappe.db.get_value("Offset Ink", ink_name, "consumption_per_sqm") or 0)
 						if consumption:
 							ink_qty = flt(sheet.get("reel_area", 0)) * consumption * (ink_pct / 100)
+					_iq, _iu, _iok = _to_stock_uom(ink_erp_item, ink_qty, "KG")
 					op_materials.append({
 						"item_code": ink_erp_item,
 						"item_name": ink_name,
-						"qty":       round(ink_qty, 8),
-						"uom":       "KG",
+						"qty":       round(_iq, 8),
+						"uom":       _iu,
 						"cost_fact": f"Ink - {ink_name}",
 						"include":   True,
-						"label":     f"🎨 Color {ci+1}: {ink_name} ({ink_pct}%)",
+						"label":     f"🎨 Color {ci+1}: {ink_name} ({ink_pct}%)" + ("" if _iok else f"  ⚠ UOM not converted (KG→{_iu})"),
 					})
 			elif no_of_colors > 0:
 				# No inks assigned → generate N empty color slots
@@ -394,14 +451,15 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item=""):
 						cf_uom = cr.get("uom") or "Nos"
 						break
 				if sel_item:
+					_q, _u, _ok = _to_stock_uom(sel_item, cf_qty, cf_uom)
 					op_materials.append({
 						"item_code": sel_item,
 						"item_name": frappe.db.get_value("Item", sel_item, "item_name") or sel_item,
-						"qty":       round(cf_qty, 6),
-						"uom":       frappe.db.get_value("Item", sel_item, "stock_uom") or cf_uom,
+						"qty":       round(_q, 6),
+						"uom":       _u,
 						"cost_fact": cf_name,
 						"include":   True,
-						"label":     cf_name,
+						"label":     cf_name + ("" if _ok else f"  ⚠ UOM not converted ({cf_uom}→{_u})"),
 					})
 				else:
 					# No item selected; show available items from cost fact as options
@@ -409,14 +467,15 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item=""):
 						filters={"parent": cf_name}, fields=["item", "rate"])
 					for cfi in cf_items:
 						if not cfi.item: continue
+						_q, _u, _ok = _to_stock_uom(cfi.item, cf_qty, cf_uom)
 						op_materials.append({
 							"item_code": cfi.item,
 							"item_name": frappe.db.get_value("Item", cfi.item, "item_name") or cfi.item,
-							"qty":       round(cf_qty, 6),
-							"uom":       frappe.db.get_value("Item", cfi.item, "stock_uom") or cf_uom,
+							"qty":       round(_q, 6),
+							"uom":       _u,
 							"cost_fact": cf_name,
 							"include":   False,  # not auto-selected; user picks
-							"label":     cf_name,
+							"label":     cf_name + ("" if _ok else f"  ⚠ UOM not converted ({cf_uom}→{_u})"),
 						})
 
 			# Non-print ops: also include inks from Production Assignment (e.g. UV/WB Varnish)
@@ -447,14 +506,15 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item=""):
 						consumption = flt(frappe.db.get_value("Offset Ink", ink_name, "consumption_per_sqm") or 0)
 						if consumption:
 							ink_qty = flt(sheet.get("reel_area", 0)) * consumption * (ink_pct / 100)
+					_iq, _iu, _iok = _to_stock_uom(ink_erp_item, ink_qty, "KG")
 					op_materials.append({
 						"item_code": ink_erp_item,
 						"item_name": ink_name,
-						"qty":       round(ink_qty, 8),
-						"uom":       "KG",
+						"qty":       round(_iq, 8),
+						"uom":       _iu,
 						"cost_fact": f"Ink - {ink_name}",
 						"include":   True,
-						"label":     f"🎨 {ink_name} ({ink_pct}%)",
+						"label":     f"🎨 {ink_name} ({ink_pct}%)" + ("" if _iok else f"  ⚠ UOM not converted (KG→{_iu})"),
 					})
 
 		sfg_code = _sfg_code(fg_item, spec_name)
@@ -485,7 +545,14 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item=""):
 			"erp_operation":               spec_bom_operation,
 			"has_quality_inspection":      bool(spec_bom_qi),
 			"quality_inspection_template": spec_bom_qi,
+			"bom_sequence":                spec_bom_sequence,
 		})
+
+	# Default order = the spec's BOM Operation Order. Specs WITH a value sort to the top
+	# (ascending); specs with no order (0/unset) sink to the BOTTOM. Stable sort → ties and
+	# the unordered group keep their original selection order.
+	operations.sort(key=lambda o: (1, 0) if cint(o.get("bom_sequence", 0)) <= 0
+	                else (0, cint(o.get("bom_sequence", 0))))
 
 	# ── Input chain is built by JS syncChain() AFTER sorting ─────
 	# We only set base_material on the PRINT op here (it's the correct full_sheet_qty).
@@ -508,6 +575,29 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item=""):
 		"base_material_qty":  round(base_input_qty, 4),
 		"base_material_uom":  base_input_uom,
 		"pricing_type":       pricing_type,
+		# Effective calculation drivers — seed the builder's editable inputs (all inputs the
+		# calculation depends on, offset + flexo; the UI shows the set for this pricing type).
+		"drivers": {
+			# common
+			"no_of_colors":      cint(form.get("no_of_colors") or 0),
+			"material_rate":     flt(form.get("material_rate") or 0),
+			"base_material":     form.get("base_material") or "",
+			# offset
+			"no_of_cuts":        cint(form.get("no_of_cuts") or 0),
+			"no_of_ups":         cint(form.get("no_of_ups") or 0),
+			"cut_sheet_ups":     flt(sheet.get("cut_sheet_ups") or 0),
+			"full_sheet_l":      flt(form.get("full_sheet_l") or 0),
+			"full_sheet_w":      flt(form.get("full_sheet_w") or 0),
+			"cut_sheet_l":       flt(form.get("cut_sheet_l") or 0),
+			"cut_sheet_w":       flt(form.get("cut_sheet_w") or 0),
+			# flexo
+			"reel_width_mm":     flt(form.get("reel_width_mm") or 0),
+			"reel_length_m":     flt(form.get("reel_length_m") or 0),
+			"product_width_mm":  flt(form.get("product_width_mm") or 0),
+			"product_length_mm": flt(form.get("product_length_mm") or 0),
+			"product_margin_mm": flt(form.get("product_margin_mm") or 0),
+			"product_gap_mm":    flt(form.get("product_gap_mm") or 0),
+		},
 	}
 
 
@@ -516,13 +606,17 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item=""):
 # ─────────────────────────────────────────────────────────────
 
 @frappe.whitelist()
-def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0):
+def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0, variant_suffix=""):
 	"""
 	Create the full SFG chain + FG BOM:
 	1. Create ERPNext Items for each SFG (if not existing)
 	2. Create sub-assembly BOM for each SFG
 	3. Create FG BOM (raw material = last SFG, + FG-level ops)
 	Returns list of all created/existing BOMs.
+
+	variant_suffix — when set (variant BOM), it is appended to every SFG code so the variant
+	gets its OWN independent sub-assembly chain (its base material / consumption never share a
+	sub-BOM with the default). Variants are created with is_default=0 alongside the default.
 	"""
 	if isinstance(operations, str):     operations     = json.loads(operations)
 	if isinstance(extra_materials, str): extra_materials = json.loads(extra_materials)
@@ -533,6 +627,16 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 
 	if not operations:
 		frappe.throw("No operations defined. Please add at least one operation.")
+
+	# Variant → give every SFG code a unique suffix so its chain is fully independent.
+	variant_suffix = re.sub(r"[^A-Za-z0-9]+", "", (variant_suffix or "")).upper()[:8]
+	if variant_suffix:
+		for op in operations:
+			if op.get("sfg_code"):
+				op["sfg_code"] = f"{op['sfg_code']}-{variant_suffix}"
+			# Re-link inputs that pointed at another op's (now suffixed) SFG
+			if op.get("input_item_code") and op["input_item_code"].endswith("-SFG"):
+				op["input_item_code"] = f"{op['input_item_code']}-{variant_suffix}"
 
 	_validate_materials(operations)
 
@@ -579,13 +683,17 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 	if fg_idx is not None:
 		active_ops = active_ops[:fg_idx + 1]
 
-	# Guard: refuse if an active FG BOM already exists (deactivate it first)
-	existing_fg = frappe.db.get_value("BOM", {"item": fg_item, "docstatus": 1, "is_active": 1}, "name")
-	if existing_fg:
-		frappe.throw(
-			f"Active BOM <b>{existing_fg}</b> already exists for {fg_item}. Deactivate it first.",
-			frappe.ValidationError,
-		)
+	# Guard: only ONE default BOM per FG. A variant (is_default=0) may be added alongside the
+	# default as an additional active BOM — ERPNext allows many BOMs per item, one default.
+	if is_default:
+		existing_default = frappe.db.get_value(
+			"BOM", {"item": fg_item, "docstatus": 1, "is_active": 1, "is_default": 1}, "name")
+		if existing_default:
+			frappe.throw(
+				f"A default BOM <b>{existing_default}</b> already exists for {fg_item}. "
+				"Deactivate it first, or create this as a variant (uncheck Default).",
+				frappe.ValidationError,
+			)
 
 	# ── Step 1: ensure SFG items exist (skip the FG-producer op — it makes the FG) ─
 	for idx, op in enumerate(active_ops):
@@ -689,13 +797,15 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 			})
 
 		# Operation — ERPNext requires a workstation; auto-create one from the machine
-		# (or the operation name) when the machine has none.
+		# (or the operation name) when the machine has none. Operation COST comes from the
+		# Workstation, never the costing: if the workstation has an hour rate we use it,
+		# otherwise the operation carries no cost (the calculation's rate is not copied).
 		op_name_key = (op.get("erp_operation") or "").strip() or (op.get("spec_name") or "").strip()
 		if op_name_key:
 			op_name = _get_or_create_operation(op_name_key)
-			_hr = flt(op.get("hour_rate") or 0)
 			ws  = (op.get("workstation") or "").strip() or _get_or_create_workstation(
-				(op.get("machine") or "").strip() or op_name_key, _hr)
+				(op.get("machine") or "").strip() or op_name_key)
+			ws_rate = flt(frappe.db.get_value("Workstation", ws, "hour_rate") or 0) if ws else 0
 			# Per-unit time: whole-run minutes ÷ output qty (BOM is qty 1)
 			_per_time = (flt(op.get("time_in_mins") or 0) / out_qty) if out_qty else flt(op.get("time_in_mins") or 0)
 			if ws:
@@ -703,8 +813,8 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 					"operation":      op_name,
 					"workstation":    ws,
 					"time_in_mins":   _per_time,
-					"hour_rate":      _hr,
-					"base_hour_rate": _hr,
+					"hour_rate":      ws_rate,
+					"base_hour_rate": ws_rate,
 					"description":    f"{op.get('machine','')} — {op.get('spec_name','')}".strip(" —"),
 				})
 
@@ -898,13 +1008,21 @@ def load_bom_config(fg_item):
 
 @frappe.whitelist()
 def check_existing_bom(fg_item):
-	"""Return the active BOM for this FG if one exists."""
+	"""Return the active BOM for this FG if one exists. Prefer the DEFAULT BOM when several
+	active BOMs exist (default + variants), so downstream flows use the default."""
 	bom = frappe.db.get_value(
 		"BOM",
-		{"item": fg_item, "docstatus": 1, "is_active": 1},
+		{"item": fg_item, "docstatus": 1, "is_active": 1, "is_default": 1},
 		["name", "item", "quantity"],
 		as_dict=True,
 	)
+	if not bom:
+		bom = frappe.db.get_value(
+			"BOM",
+			{"item": fg_item, "docstatus": 1, "is_active": 1},
+			["name", "item", "quantity"],
+			as_dict=True,
+		)
 	return bom or None
 
 
@@ -1014,9 +1132,10 @@ def _mk_qty1_bom(item_code, input_code, input_name, per_input_qty, materials, op
 	_op_key = (op.get("erp_operation") or "").strip() or (op.get("spec_name") or "").strip()
 	if _op_key:
 		opn = _get_or_create_operation(_op_key)
-		_hr = flt(op.get("hour_rate") or 0)
+		_hr = 0  # operation cost is taken from the Workstation below, not the calculation
 		_ws = (op.get("workstation") or "").strip() or _get_or_create_workstation(
-			(op.get("machine") or "").strip() or _op_key, _hr)
+			(op.get("machine") or "").strip() or _op_key)
+		_hr = flt(frappe.db.get_value("Workstation", _ws, "hour_rate") or 0) if _ws else 0
 		_ot = flt(op.get("output_qty")) or 1
 		_per_time = (flt(op.get("time_in_mins") or 0) / _ot) if _ot else flt(op.get("time_in_mins") or 0)
 		if _ws:
