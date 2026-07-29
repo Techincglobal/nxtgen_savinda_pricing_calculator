@@ -22,5 +22,23 @@ frappe.ui.form.on("Sales Order", {
 				});
 			}, __("Manufacturing"));
 		}
+
+
+		frm.set_query("custom_sales_person", function () {
+			return {
+				filters: {
+					department: "Marketing - SGSPL",
+					status: "Active"
+				}
+			};
+		});
+		frm.set_query("custom_cs_person", function () {
+			return {
+				filters: {
+					department: "CS - SGSPL",
+					status: "Active"
+				}
+			};
+		});
 	},
 });

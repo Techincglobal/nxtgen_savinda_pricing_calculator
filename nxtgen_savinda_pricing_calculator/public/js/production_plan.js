@@ -94,11 +94,22 @@ frappe.ui.form.on("Production Plan", {
 
 		// Job Ticket PDF — pick the print format relevant to the type (Offset / Flexo).
 		if (!frm.is_new() && frm.doc.custom_ticket_type) {
+			var _fmt = function () {
+				return (frm.doc.custom_pricing_type === "Flexo") ? "Flexo Job Ticket" : "Offset Job Ticket";
+			};
+			// Open the rendered ticket in a NEW browser tab for viewing — no print dialog.
+			frm.add_custom_button(__("View Job Ticket"), function () {
+				var url = "/printview?doctype=" + encodeURIComponent("Production Plan")
+					+ "&name=" + encodeURIComponent(frm.doc.name)
+					+ "&format=" + encodeURIComponent(_fmt())
+					+ "&no_letterhead=1&trigger_print=0";
+				window.open(frappe.urllib.get_full_url(url));
+			}, __("Actions"));
+			// Download the PDF file.
 			frm.add_custom_button(__("Job Ticket PDF"), function () {
-				var fmt = (frm.doc.custom_pricing_type === "Flexo") ? "Flexo Job Ticket" : "Offset Job Ticket";
 				var url = "/api/method/frappe.utils.print_format.download_pdf?doctype=Production+Plan&name="
 					+ encodeURIComponent(frm.doc.name)
-					+ "&format=" + encodeURIComponent(fmt) + "&no_letterhead=1";
+					+ "&format=" + encodeURIComponent(_fmt()) + "&no_letterhead=1";
 				window.open(frappe.urllib.get_full_url(url));
 			}, __("Actions"));
 		}

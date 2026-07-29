@@ -7,3 +7,4 @@
 #nxtgen_savinda_pricing_calculator.patches.v1_0.hide_material_in_quotation_print
 #nxtgen_savinda_pricing_calculator.patches.v1_0.quotation_currency_print
 #nxtgen_savinda_pricing_calculator.patches.v1_0.quotation_currency_base
+nxtgen_savinda_pricing_calculator.patches.v1_0.offset_job_ticket_bind
