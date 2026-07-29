@@ -4,6 +4,13 @@
 
 frappe.ui.form.on("Production Plan", {
 	refresh: function (frm) {
+		// Show only the Sales Orders relevant to the ticket type when picking into the
+		// sales_orders table: a Job plan → regular Sales Orders; an NPD plan → NPD-type.
+		frm.set_query("sales_order", "sales_orders", function () {
+			var t = (frm.doc.custom_ticket_type === "NPD") ? "NPD" : "Sales Order";
+			return { filters: { custom_order_type: t } };
+		});
+
 		if (frm.doc.docstatus === 0 && (frm.doc.mr_items || []).length) {
 			frm.add_custom_button(__("Add Wastage"), function () {
 				_show_wastage_dialog(frm);

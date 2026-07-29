@@ -61,6 +61,7 @@ def after_install():
 	_ensure_roles()
 	_ensure_workflow()
 	_ensure_quotation_workflow()
+	_ensure_sales_order_npd_workflow()
 	_seed_install_only_fixtures()
 
 
@@ -76,11 +77,12 @@ def after_migrate():
 	_ensure_roles()
 	_ensure_workflow()
 	_ensure_quotation_workflow()
+	_ensure_sales_order_npd_workflow()
 
 
 def _ensure_roles():
 	"""Create app roles if missing (idempotent, non-destructive)."""
-	for role in ("Artwork Approver", "CS Team", "BOM Team", "Supply Chain", "Quotation Approver"):
+	for role in ("Artwork Approver", "CS Team", "BOM Team", "Supply Chain", "Quotation Approver", "NPD Approver"):
 		if not frappe.db.exists("Role", role):
 			try:
 				frappe.get_doc({
@@ -229,6 +231,7 @@ def _ensure_workflow():
 
 
 QUOTATION_WORKFLOW_NAME = "Savinda Quotation Approval"
+SO_NPD_WORKFLOW_NAME = "Sales Order NPD Approval"
 
 
 def _ensure_quotation_workflow():
@@ -299,6 +302,78 @@ def _ensure_quotation_workflow():
 	except Exception:
 		frappe.log_error(
 			title="pricing_calculator: ensure quotation workflow failed",
+			message=frappe.get_traceback(),
+		)
+
+
+def _ensure_sales_order_npd_workflow():
+	"""Seed the Sales Order NPD approval Workflow (idempotent, non-destructive).
+
+	An NPD-type Sales Order (custom_order_type == "NPD") must be approved by an NPD Approver
+	before it is submitted / used for production. A regular Sales Order keeps its one-click
+	Submit (a conditional transition). An existing Workflow of this name is left untouched."""
+	if not frappe.db.table_exists("Workflow"):
+		return
+	try:
+		# (state, doc_status, owning role, style)
+		states = [
+			("Draft",            "0", "Sales User",   ""),
+			("Pending Approval", "0", "NPD Approver", "Warning"),
+			("Approved",         "1", "Sales User",   "Success"),
+			("Rejected",         "0", "Sales User",   "Danger"),
+		]
+		for state, _ds, _role, style in states:
+			if not frappe.db.exists("Workflow State", state):
+				frappe.get_doc({
+					"doctype": "Workflow State", "workflow_state_name": state, "style": style,
+				}).insert(ignore_permissions=True)
+
+		actions = ["Submit", "Send for NPD Approval", "Approve NPD", "Reject NPD", "Reopen"]
+		for action in actions:
+			if not frappe.db.exists("Workflow Action Master", action):
+				frappe.get_doc({
+					"doctype": "Workflow Action Master", "workflow_action_name": action,
+				}).insert(ignore_permissions=True)
+
+		if frappe.db.exists("Workflow", SO_NPD_WORKFLOW_NAME):
+			return
+
+		REG = 'doc.custom_order_type != "NPD"'
+		NPD = 'doc.custom_order_type == "NPD"'
+		# (from_state, action, next_state, allowed role, condition)
+		transitions = [
+			# Regular Sales Order — submit directly (unchanged one-click flow).
+			("Draft",            "Submit",                 "Approved",         "Sales User",   REG),
+			# NPD — needs approval before it can be submitted / used for production.
+			("Draft",            "Send for NPD Approval",  "Pending Approval", "Sales User",   NPD),
+			("Pending Approval", "Approve NPD",            "Approved",         "NPD Approver", ""),
+			("Pending Approval", "Reject NPD",             "Rejected",         "NPD Approver", ""),
+			("Rejected",         "Reopen",                 "Draft",            "Sales User",   ""),
+		]
+		wf = frappe.new_doc("Workflow")
+		wf.workflow_name = SO_NPD_WORKFLOW_NAME
+		wf.document_type = "Sales Order"
+		wf.workflow_state_field = "workflow_state"
+		wf.is_active = 1
+		wf.send_email_alert = 0
+		wf.override_status = 0
+		for state, ds, role, _style in states:
+			wf.append("states", {"state": state, "doc_status": ds, "allow_edit": role})
+		for frm_state, action, to_state, role, cond in transitions:
+			wf.append("transitions", {
+				"state": frm_state, "action": action, "next_state": to_state,
+				"allowed": role, "condition": cond, "allow_self_approval": 1,
+			})
+			# System Manager can drive any transition (admin / recovery).
+			wf.append("transitions", {
+				"state": frm_state, "action": action, "next_state": to_state,
+				"allowed": "System Manager", "condition": cond, "allow_self_approval": 1,
+			})
+		wf.insert(ignore_permissions=True)
+		frappe.db.commit()
+	except Exception:
+		frappe.log_error(
+			title="pricing_calculator: ensure sales order NPD workflow failed",
 			message=frappe.get_traceback(),
 		)
 
@@ -378,6 +453,26 @@ def _ensure_custom_fields():
 			],
 			# Packing details carried from the Cost Sheet flow; editable on the SO per PO.
 			"Sales Order": [
+				{
+			"fieldname": "custom_order_type",
+			"label": "Order Type",
+			"fieldtype": "Select",
+			"options": "Sales Order\nNPD",
+			"default": "Sales Order",
+			"insert_after": "customer",
+			"in_standard_filter": 1,
+			"description": "NPD orders require approval (Sales Order NPD Approval workflow) before production.",
+			},
+				{
+			"fieldname": "workflow_state",
+			"label": "Workflow State",
+			"fieldtype": "Link",
+			"options": "Workflow State",
+			"insert_after": "custom_order_type",
+			"read_only": 1,
+			"no_copy": 1,
+			"in_standard_filter": 1,
+			},
 				{
 			"fieldname": "custom_sales_person",
 			"fieldtype": "Link",

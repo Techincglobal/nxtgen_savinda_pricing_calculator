@@ -124,7 +124,7 @@ _PL_REVIEW = [
 	("core_size", "Flexo"), ("pcs_per_roll", "Flexo"),
 	("winding_direction", "Flexo"), ("tolerance", "Flexo"), ("remark", ""),
 	("cold_foil", ""), ("hot_foil", ""), ("embossing", ""),
-	("lamination", ""), ("die_cut_code", ""),
+	("lamination", ""),("die_cut_code", "")
 ]
 _PL_KEYS = [fn for fn, _ in _PL_REVIEW]
 
@@ -483,9 +483,25 @@ def create_production_plan_from_source(source_type, source_name):
 	if not lines:
 		frappe.throw("No items found on the selected " + str(source_type) + ".")
 
+	# An NPD-type Sales Order is a Job Ticket of type NPD and must be Approved first.
+	if source_type == "Sales Order":
+		so_meta = frappe.db.get_value(
+			"Sales Order", source_name, ["custom_order_type", "workflow_state"], as_dict=True) or {}
+		if so_meta.get("custom_order_type") == "NPD":
+			ticket_type = "NPD"
+			if so_meta.get("workflow_state") != "Approved":
+				frappe.throw(
+					"NPD Sales Order <b>{0}</b> must be Approved (NPD approval) before a "
+					"Production Plan can be created.".format(source_name))
+
 	for tl in lines:
 		pp.append("custom_ticket_items", tl)
-	_build_po_items(pp)
+	# po_items: native ERPNext pull from the Sales Order so the standard Production Plan →
+	# Work Order flow runs; the bespoke builder is only used for the dormant NPD Request source.
+	if source_type == "Sales Order":
+		_populate_po_items_from_so(pp, source_name)
+	else:
+		_build_po_items(pp)
 
 	pp.custom_ticket_type = ticket_type
 	pp.custom_pricing_type = "Flexo" if pricing_type == "Flexo" else "Offset"
@@ -657,6 +673,28 @@ def _build_po_items(pp, fg_wh=None):
 		}
 		po.update(_po_row_from_geom({f: tl.get(f) for f in _TICKET_GEOM_FIELDS}))
 		pp.append("po_items", po)
+
+
+def _populate_po_items_from_so(pp, so_name):
+	"""Populate po_items natively from a Sales Order (ERPNext ProductionPlan.get_items), so
+	the standard Production Plan → Work Order pipeline runs. Sets get_items_from + the
+	sales_orders reference, then falls back to the manual builder if the native pull yields
+	nothing (e.g. FGs without a default BOM)."""
+	so = frappe.get_doc("Sales Order", so_name)
+	pp.get_items_from = "Sales Order"
+	if not any((r.get("sales_order") == so_name) for r in (pp.get("sales_orders") or [])):
+		pp.append("sales_orders", {
+			"sales_order": so.name,
+			"sales_order_date": so.transaction_date,
+			"customer": so.customer,
+			"grand_total": flt(so.get("base_grand_total") or so.get("grand_total")),
+		})
+	try:
+		pp.get_items()
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "PP native get_items from SO failed")
+	if not (pp.get("po_items") or []):
+		_build_po_items(pp)
 
 
 def _resolve_source(pp):
