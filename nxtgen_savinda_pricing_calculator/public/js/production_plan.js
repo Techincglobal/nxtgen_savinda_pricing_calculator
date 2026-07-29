@@ -4,13 +4,6 @@
 
 frappe.ui.form.on("Production Plan", {
 	refresh: function (frm) {
-		// Show only the Sales Orders relevant to the ticket type when picking into the
-		// sales_orders table: a Job plan → regular Sales Orders; an NPD plan → NPD-type.
-		frm.set_query("sales_order", "sales_orders", function () {
-			var t = (frm.doc.custom_ticket_type === "NPD") ? "NPD" : "Sales Order";
-			return { filters: { custom_order_type: t } };
-		});
-
 		if (frm.doc.docstatus === 0 && (frm.doc.mr_items || []).length) {
 			frm.add_custom_button(__("Add Wastage"), function () {
 				_show_wastage_dialog(frm);
@@ -101,24 +94,13 @@ frappe.ui.form.on("Production Plan", {
 
 		// Job Ticket PDF — pick the print format relevant to the type (Offset / Flexo).
 		if (!frm.is_new() && frm.doc.custom_ticket_type) {
-			var _fmt = function () {
-				return (frm.doc.custom_pricing_type === "Flexo") ? "Flexo Job Ticket" : "Offset Job Ticket";
-			};
-			// Open the rendered ticket in a NEW browser tab for viewing — no print dialog.
-			frm.add_custom_button(__("View Job Ticket"), function () {
-				var url = "/printview?doctype=" + encodeURIComponent("Production Plan")
-					+ "&name=" + encodeURIComponent(frm.doc.name)
-					+ "&format=" + encodeURIComponent(_fmt())
-					+ "&no_letterhead=1&trigger_print=0";
-				window.open(frappe.urllib.get_full_url(url));
-			}, __("Actions"));
-			// Download the PDF file.
-			frm.add_custom_button(__("Job Ticket PDF"), function () {
+			frm.add_custom_button(__("View/Download Job Ticket"), function () {
+				var fmt = (frm.doc.custom_pricing_type === "Flexo") ? "Flexo Job Ticket" : "Offset Job Ticket";
 				var url = "/api/method/frappe.utils.print_format.download_pdf?doctype=Production+Plan&name="
 					+ encodeURIComponent(frm.doc.name)
-					+ "&format=" + encodeURIComponent(_fmt()) + "&no_letterhead=1";
+					+ "&format=" + encodeURIComponent(fmt) + "&no_letterhead=1";
 				window.open(frappe.urllib.get_full_url(url));
-			}, __("Actions"));
+			});
 		}
 	},
 });
@@ -145,8 +127,10 @@ function _get_manufacture_fg_dialog(frm) {
 				+ "<tbody>" + rows + "</tbody></table>";
 			var fields = [];
 			if (is_offset) {
-				fields.push({ fieldtype: "Check", fieldname: "consolidate", label: __("Consolidate Sales Order Items"),
-					description: __("Treat the selection as one combined print run — full/cut sheet qty & wastage on the first row only; other rows show only ups & cuts.") });
+				fields.push({
+					fieldtype: "Check", fieldname: "consolidate", label: __("Consolidate Sales Order Items"),
+					description: __("Treat the selection as one combined print run — full/cut sheet qty & wastage on the first row only; other rows show only ups & cuts.")
+				});
 			}
 			fields.push({ fieldtype: "HTML", fieldname: "tbl", options: html });
 			var d = new frappe.ui.Dialog({
@@ -159,8 +143,10 @@ function _get_manufacture_fg_dialog(frm) {
 						var idx = parseInt($(this).attr("data-idx"), 10);
 						var qty = parseFloat($w.find(".fg-qty[data-idx='" + idx + "']").val()) || 0;
 						var it = items[idx];
-						sel.push({ fg_item: it.fg_item, item_name: it.item_name, cost_item: it.cost_item,
-							calculation_breakdown: it.calculation_breakdown, qty: qty });
+						sel.push({
+							fg_item: it.fg_item, item_name: it.item_name, cost_item: it.cost_item,
+							calculation_breakdown: it.calculation_breakdown, qty: qty
+						});
 					});
 					if (!sel.length) { frappe.msgprint(__("Select at least one item.")); return; }
 					frappe.call({
@@ -208,7 +194,7 @@ function _show_wastage_dialog(frm) {
 				var applied = 0;
 				$w.find("input.waste-inp").each(function () {
 					var idx = parseInt($(this).attr("data-idx"), 10);
-					var w   = parseFloat($(this).val()) || 0;
+					var w = parseFloat($(this).val()) || 0;
 					var row = frm.doc.mr_items[idx];
 					if (!row) return;
 					// Idempotent: net = current qty minus any wastage already applied
@@ -233,7 +219,7 @@ function _show_wastage_dialog(frm) {
 				var idx = frm.doc.mr_items.indexOf(r);
 				// Net = current qty minus wastage already applied (so it's stable on re-open)
 				var net = (parseFloat(r.quantity) || 0) - (parseFloat(r.custom_wastage_qty) || 0);
-				var w   = Math.round(net * (pct / 100) * 10000) / 10000;
+				var w = Math.round(net * (pct / 100) * 10000) / 10000;
 				html += '<tr>'
 					+ '<td>' + frappe.utils.escape_html(r.item_name || r.item_code) + '</td>'
 					+ '<td class="text-right">' + net + '</td>'

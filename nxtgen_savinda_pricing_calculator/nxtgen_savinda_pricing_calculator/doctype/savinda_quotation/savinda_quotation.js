@@ -28,41 +28,41 @@ frappe.ui.form.on("Savinda Quotation", {
 			};
 		});
 		// Fill from Cost Sheet button (draft only — locked after submit)
-		if (frm.doc.cost_sheet && frm.doc.docstatus === 0) {
-			frm.add_custom_button(__("Reload from Cost Sheet"), function () {
-				frappe.confirm(
-					"This will replace all current items with items from the linked Cost Sheet. Continue?",
-					function () {
-						frm.clear_table("items");
-						_do_load_from_cost_sheet(frm, frm.doc.cost_sheet, function (loaded) {
-							frm.refresh_field("items");
-							if (loaded) frappe.show_alert({ message: loaded + " item(s) loaded.", indicator: "green" });
-						});
-					}
-				);
-			}, __("Fill"));
-		} else if (frm.is_new()) {
-			frm.add_custom_button(__("From Cost Sheet"), function () {
-				_show_load_dialog(frm);
-			}, __("Fill"));
-		}
+		// if (frm.doc.cost_sheet && frm.doc.docstatus === 0) {
+		// 	frm.add_custom_button(__("Reload from Cost Sheet"), function () {
+		// 		frappe.confirm(
+		// 			"This will replace all current items with items from the linked Cost Sheet. Continue?",
+		// 			function () {
+		// 				frm.clear_table("items");
+		// 				_do_load_from_cost_sheet(frm, frm.doc.cost_sheet, function (loaded) {
+		// 					frm.refresh_field("items");
+		// 					if (loaded) frappe.show_alert({ message: loaded + " item(s) loaded.", indicator: "green" });
+		// 				});
+		// 			}
+		// 		);
+		// 	}, __("Fill"));
+		// } else if (frm.is_new()) {
+		// 	frm.add_custom_button(__("From Cost Sheet"), function () {
+		// 		_show_load_dialog(frm);
+		// 	}, __("Fill"));
+		// }
 
 		// Qty Break buttons — draft only (hidden after submit)
-		if (frm.doc.docstatus === 0) {
-			frm.add_custom_button(__("Calculate Qty Breaks"), function () {
-				calculate_all_qty_breaks(frm);
-			});
-			frm.add_custom_button(__("Add Qty Break"), function () {
-				show_add_qty_break_dialog(frm);
-			});
-		}
+		// if (frm.doc.docstatus === 0) {
+		// 	frm.add_custom_button(__("Calculate Qty Breaks"), function () {
+		// 		calculate_all_qty_breaks(frm);
+		// 	});
+		// 	frm.add_custom_button(__("Add Qty Break"), function () {
+		// 		show_add_qty_break_dialog(frm);
+		// 	});
+		// }
 
 		// Print Quotation button
-		if (!frm.is_new()) {
-			frm.add_custom_button(__("Print Quotation"), function () {
-				frappe.set_route("print", "Savinda Quotation", frm.doc.name, "Savinda Quotation");
-			}, __("Actions"));
-		}
+		// if (!frm.is_new()) {
+		// 	frm.add_custom_button(__("Print Quotation"), function () {
+		// 		frappe.set_route("print", "Savinda Quotation", frm.doc.name, "Savinda Quotation");
+		// 	}, __("Actions"));
+		// }
 
 		// ── Status colour indicator ───────────────────────────
 		var status_colour = {

@@ -63,6 +63,7 @@ def after_install():
 	_ensure_quotation_workflow()
 	_ensure_sales_order_npd_workflow()
 	_seed_install_only_fixtures()
+	_sync_code_print_formats()
 
 
 def after_migrate():
@@ -78,11 +79,56 @@ def after_migrate():
 	_ensure_workflow()
 	_ensure_quotation_workflow()
 	_ensure_sales_order_npd_workflow()
+	_sync_code_print_formats()
+
+
+# Print formats that are CODE-MANAGED: their HTML lives in the app's print_format/*.json and the
+# code is the single source of truth. Unlike the install-only seed fixtures (which NEVER overwrite
+# live edits), these are re-imported from file on every install/migrate — so a DEPLOY REPLACES the
+# live copy. Edit them in the file, not the Print Builder. (Requested: ship via code, not patches.)
+CODE_PRINT_FORMATS = ("offset_job_ticket", "savinda_quotation")
+
+
+def _sync_code_print_formats():
+	"""Force the file (code) version of CODE_PRINT_FORMATS onto the live site (get_doc + save,
+	which persists reliably during migrate). Idempotent; never raises."""
+	import json
+	for slug in CODE_PRINT_FORMATS:
+		path = frappe.get_app_path(
+			"nxtgen_savinda_pricing_calculator", "nxtgen_savinda_pricing_calculator",
+			"print_format", slug, slug + ".json",
+		)
+		if not os.path.exists(path):
+			continue
+		try:
+			with open(path, encoding="utf-8") as f:
+				data = json.load(f)
+			name = data.get("name")
+			if not name:
+				continue
+			# Skip control/audit keys — we only push the presentation payload.
+			skip = {"creation", "modified", "modified_by", "owner", "docstatus", "idx", "doctype", "name"}
+			payload = {k: v for k, v in data.items() if k not in skip}
+			payload["standard"] = "Yes"
+			if frappe.db.exists("Print Format", name):
+				pf = frappe.get_doc("Print Format", name)
+				pf.update(payload)
+			else:
+				pf = frappe.new_doc("Print Format")
+				pf.update(payload)
+				pf.name = name  # Print Format autoname = Prompt
+			pf.save(ignore_permissions=True)
+			frappe.db.commit()
+		except Exception:
+			frappe.log_error(
+				title="pricing_calculator: sync code print format failed (%s)" % slug,
+				message=frappe.get_traceback(),
+			)
 
 
 def _ensure_roles():
 	"""Create app roles if missing (idempotent, non-destructive)."""
-	for role in ("Artwork Approver", "CS Team", "BOM Team", "Supply Chain", "Quotation Approver", "NPD Approver"):
+	for role in ("Artwork Approver", "CS Team", "BOM Team", "Pre-Print Team", "Supply Chain", "Quotation Approver", "NPD Approver"):
 		if not frappe.db.exists("Role", role):
 			try:
 				frappe.get_doc({
@@ -171,6 +217,7 @@ def _ensure_workflow():
 		states = [
 			("Draft",                   "0", "CS Team",            ""),
 			("BOM Validation",          "0", "BOM Team",           "Warning"),
+			("Pre-Print Validation",    "0", "Pre-Print Team",     "Warning"),
 			("Supply Chain Validation", "0", "Supply Chain",       "Warning"),
 			("Approved",                "0", "Supply Chain",       "Success"),
 			("Submitted",               "1", "Manufacturing User", "Success"),
@@ -183,6 +230,7 @@ def _ensure_workflow():
 				}).insert(ignore_permissions=True)
 
 		actions = ["Send for BOM", "Confirm BOM", "Reject BOM",
+		           "Validate Pre-Print", "Reject Pre-Print",
 		           "Validate Stock", "Submit Plan", "Reopen"]
 		for action in actions:
 			if not frappe.db.exists("Workflow Action Master", action):
@@ -192,12 +240,14 @@ def _ensure_workflow():
 
 		# (from_state, action, next_state, allowed role)
 		transitions = [
-			("Draft",                   "Send for BOM",   "BOM Validation",          "CS Team"),
-			("BOM Validation",          "Confirm BOM",    "Supply Chain Validation", "BOM Team"),
-			("BOM Validation",          "Reject BOM",     "Rejected",                "BOM Team"),
-			("Supply Chain Validation", "Validate Stock", "Approved",                "Supply Chain"),
-			("Approved",                "Submit Plan",    "Submitted",               "Manufacturing User"),
-			("Rejected",                "Reopen",         "Draft",                   "CS Team"),
+			("Draft",                   "Send for BOM",      "BOM Validation",          "CS Team"),
+			("BOM Validation",          "Confirm BOM",       "Pre-Print Validation",    "BOM Team"),
+			("BOM Validation",          "Reject BOM",        "Rejected",                "BOM Team"),
+			("Pre-Print Validation",    "Validate Pre-Print","Supply Chain Validation", "Pre-Print Team"),
+			("Pre-Print Validation",    "Reject Pre-Print",  "Rejected",                "Pre-Print Team"),
+			("Supply Chain Validation", "Validate Stock",    "Approved",                "Supply Chain"),
+			("Approved",                "Submit Plan",       "Submitted",               "Manufacturing User"),
+			("Rejected",                "Reopen",            "Draft",                   "CS Team"),
 		]
 		wf = (frappe.get_doc("Workflow", WORKFLOW_NAME)
 		      if frappe.db.exists("Workflow", WORKFLOW_NAME) else frappe.new_doc("Workflow"))
@@ -660,6 +710,9 @@ def _ensure_custom_fields():
 				{"fieldname": "custom_appr_section", "label": "Ticket Approvals", "fieldtype": "Section Break", "insert_after": "custom_remarks", "collapsible": 1},
 				{"fieldname": "custom_artwork_status", "label": "Artwork Status", "fieldtype": "Select", "options": "Pending\nApproved\nRejected", "default": "Pending", "insert_after": "custom_appr_section", "read_only": 1, "allow_on_submit": 1},
 				{"fieldname": "custom_artwork_remarks", "label": "Artwork Remarks", "fieldtype": "Small Text", "insert_after": "custom_artwork_status", "allow_on_submit": 1},
+				# Carrier for the workflow-reject popup remark (client -> server). Never shown on the
+				# form; the reject handler posts it to the timeline as a Comment, then clears it.
+				{"fieldname": "custom_reject_remark", "label": "Reject Remark", "fieldtype": "Small Text", "insert_after": "custom_artwork_remarks", "hidden": 1, "no_copy": 1, "allow_on_submit": 1},
 				{"fieldname": "custom_created_by", "label": "Created By", "fieldtype": "Data", "insert_after": "custom_artwork_remarks", "read_only": 1, "allow_on_submit": 1},
 				{"fieldname": "custom_created_on", "label": "Created On", "fieldtype": "Datetime", "insert_after": "custom_created_by", "read_only": 1, "allow_on_submit": 1},
 				{"fieldname": "custom_artwork_by", "label": "Artwork Approved By", "fieldtype": "Data", "insert_after": "custom_created_on", "read_only": 1, "allow_on_submit": 1},
@@ -671,6 +724,8 @@ def _ensure_custom_fields():
 				{"fieldname": "custom_quoted_on", "label": "Quoted On", "fieldtype": "Datetime", "insert_after": "custom_quoted_by", "allow_on_submit": 1},
 				{"fieldname": "custom_bom_by", "label": "BOM By", "fieldtype": "Data", "insert_after": "custom_quoted_on", "read_only": 1, "allow_on_submit": 1},
 				{"fieldname": "custom_bom_on", "label": "BOM On", "fieldtype": "Datetime", "insert_after": "custom_bom_by", "read_only": 1, "allow_on_submit": 1},
+				{"fieldname": "custom_preprint_by", "label": "Pre-Print Validated By", "fieldtype": "Data", "insert_after": "custom_bom_on", "read_only": 1, "allow_on_submit": 1},
+				{"fieldname": "custom_preprint_on", "label": "Pre-Print Validated On", "fieldtype": "Datetime", "insert_after": "custom_preprint_by", "read_only": 1, "allow_on_submit": 1},
 			],
 			# Per-line geometry for the Job Ticket print (mirrors Job Ticket Item).
 			"Production Plan Item": [

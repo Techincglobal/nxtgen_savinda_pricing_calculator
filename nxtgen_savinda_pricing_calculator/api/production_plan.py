@@ -1090,16 +1090,31 @@ def on_production_plan_update(doc, method=None):
 		notify_role("Supply Chain", "Production Plan created: " + name, _msg(doc, "was created — stock validation follows BOM validation."), doc)
 	elif new_state == "BOM Validation":
 		notify_role("BOM Team", "BOM validation needed: " + name, _msg(doc, "needs BOM validation — create/confirm BOMs (Open BOM Builder / Sync BOMs), then Confirm BOM."), doc)
-	elif new_state == "Supply Chain Validation":
-		# BOM confirmed by the BOM team → stamp and hand off to Supply Chain.
+	elif new_state == "Pre-Print Validation":
+		# BOM confirmed by the BOM team → stamp and hand off to the Pre-Print team.
 		_stamp(name, {"custom_bom_confirmed": 1, "custom_bom_by": _fullname(), "custom_bom_on": now()})
-		notify_role("Supply Chain", "Stock validation needed: " + name, _msg(doc, "BOM confirmed — please validate stock."), doc)
+		notify_role("Pre-Print Team", "Pre-print validation needed: " + name, _msg(doc, "BOM confirmed — please complete pre-print validation, then Validate Pre-Print."), doc)
+	elif new_state == "Supply Chain Validation":
+		# Pre-print validated → stamp and hand off to Supply Chain for stock validation.
+		_stamp(name, {"custom_preprint_by": _fullname(), "custom_preprint_on": now()})
+		notify_role("Supply Chain", "Stock validation needed: " + name, _msg(doc, "pre-print validated — please validate stock."), doc)
 	elif new_state == "Approved":
 		_run_stock_stub(doc)
 		_stamp(name, {"custom_stock_validated": 1, "custom_checked_by": _fullname(), "custom_checked_on": now()})
 		notify_role("Manufacturing User", "Ready to submit: " + name, _msg(doc, "is approved — ready to submit."), doc)
 	elif new_state == "Rejected":
-		notify_role("CS Team", "Production Plan rejected: " + name, _msg(doc, "was rejected."), doc)
+		# The reject popup (production_plan.js before_workflow_action) carries a mandatory
+		# reason on custom_reject_remark. Post it to the timeline, fold it into the email,
+		# then clear the carrier so a later save can't re-post it.
+		remark = (doc.get("custom_reject_remark") or "").strip()
+		if remark:
+			try:
+				doc.add_comment("Comment", "Rejected: " + remark)
+			except Exception:
+				frappe.log_error(frappe.get_traceback(), "production_plan: reject remark comment failed")
+			_stamp(name, {"custom_reject_remark": ""})
+		body = _msg(doc, "was rejected.") + ((" Reason: " + remark) if remark else "")
+		notify_role("CS Team", "Production Plan rejected: " + name, body, doc)
 	elif new_state == "Submitted":
 		notify_role("CS Team", "Production Plan submitted: " + name, _msg(doc, "was submitted — production documents can now be created."), doc)
 
