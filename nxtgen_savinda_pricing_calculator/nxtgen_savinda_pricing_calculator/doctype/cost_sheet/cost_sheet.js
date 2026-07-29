@@ -71,22 +71,8 @@ frappe.ui.form.on("Cost Sheet", {
 			}, __("Actions"));
 		}
 
-		// ── NPD Request (available once the cost sheet exists) ──
-		if (!frm.is_new()) {
-			frm.add_custom_button(__("Create NPD Request"), function () {
-				frappe.call({
-					method: "nxtgen_savinda_pricing_calculator.api.production_plan.create_npd_request_from_cost_sheet",
-					args: { cost_sheet: frm.doc.name },
-					freeze: true,
-					freeze_message: __("Creating NPD Request…"),
-					callback: function (r) {
-						if (r.message && r.message.npd_request) {
-							frappe.set_route("Form", "NPD Request", r.message.npd_request);
-						}
-					},
-				});
-			}, __("Actions"));
-		}
+		// NPD is now created from the Savinda Quotation (as an NPD-type Sales Order),
+		// so the Cost Sheet no longer offers "Create NPD Request".
 
 		// ── Download cost breakdown CSV (per cost item) ──
 		if (!frm.is_new() && (frm.doc.pricing_list || []).length) {

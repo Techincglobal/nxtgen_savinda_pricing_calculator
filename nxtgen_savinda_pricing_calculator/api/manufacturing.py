@@ -78,6 +78,18 @@ def _upsert_product_library(fg_item_code, cost_item=None, customer_ref=None, ove
 			"width_mm":              w,
 			"length_mm":             l,
 		}
+		# Copy the cost-spec linked finishings (Finishing-group specs on the CB) so the
+		# Product Library lists the same finishings quoted for the item.
+		try:
+			from nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.utils.jinja import (
+				get_cb_finishings,
+			)
+			fins = get_cb_finishings(cb.get("name"))
+			if fins:
+				pl_data["finishings"] = [{"process_name": f} for f in fins]
+		except Exception:
+			frappe.log_error(title="pricing_calculator: copy finishings to Product Library failed",
+			                 message=frappe.get_traceback())
 		# User-reviewed overrides (from the FG-creation popup) win over defaults.
 		if overrides and isinstance(overrides, dict):
 			meta = frappe.get_meta("Product Library")

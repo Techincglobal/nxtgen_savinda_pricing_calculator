@@ -28,41 +28,41 @@ frappe.ui.form.on("Savinda Quotation", {
 			};
 		});
 		// Fill from Cost Sheet button (draft only — locked after submit)
-		if (frm.doc.cost_sheet && frm.doc.docstatus === 0) {
-			frm.add_custom_button(__("Reload from Cost Sheet"), function () {
-				frappe.confirm(
-					"This will replace all current items with items from the linked Cost Sheet. Continue?",
-					function () {
-						frm.clear_table("items");
-						_do_load_from_cost_sheet(frm, frm.doc.cost_sheet, function (loaded) {
-							frm.refresh_field("items");
-							if (loaded) frappe.show_alert({ message: loaded + " item(s) loaded.", indicator: "green" });
-						});
-					}
-				);
-			}, __("Fill"));
-		} else if (frm.is_new()) {
-			frm.add_custom_button(__("From Cost Sheet"), function () {
-				_show_load_dialog(frm);
-			}, __("Fill"));
-		}
+		// if (frm.doc.cost_sheet && frm.doc.docstatus === 0) {
+		// 	frm.add_custom_button(__("Reload from Cost Sheet"), function () {
+		// 		frappe.confirm(
+		// 			"This will replace all current items with items from the linked Cost Sheet. Continue?",
+		// 			function () {
+		// 				frm.clear_table("items");
+		// 				_do_load_from_cost_sheet(frm, frm.doc.cost_sheet, function (loaded) {
+		// 					frm.refresh_field("items");
+		// 					if (loaded) frappe.show_alert({ message: loaded + " item(s) loaded.", indicator: "green" });
+		// 				});
+		// 			}
+		// 		);
+		// 	}, __("Fill"));
+		// } else if (frm.is_new()) {
+		// 	frm.add_custom_button(__("From Cost Sheet"), function () {
+		// 		_show_load_dialog(frm);
+		// 	}, __("Fill"));
+		// }
 
 		// Qty Break buttons — draft only (hidden after submit)
-		if (frm.doc.docstatus === 0) {
-			frm.add_custom_button(__("Calculate Qty Breaks"), function () {
-				calculate_all_qty_breaks(frm);
-			});
-			frm.add_custom_button(__("Add Qty Break"), function () {
-				show_add_qty_break_dialog(frm);
-			});
-		}
+		// if (frm.doc.docstatus === 0) {
+		// 	frm.add_custom_button(__("Calculate Qty Breaks"), function () {
+		// 		calculate_all_qty_breaks(frm);
+		// 	});
+		// 	frm.add_custom_button(__("Add Qty Break"), function () {
+		// 		show_add_qty_break_dialog(frm);
+		// 	});
+		// }
 
 		// Print Quotation button
-		if (!frm.is_new()) {
-			frm.add_custom_button(__("Print Quotation"), function () {
-				frappe.set_route("print", "Savinda Quotation", frm.doc.name, "Savinda Quotation");
-			}, __("Actions"));
-		}
+		// if (!frm.is_new()) {
+		// 	frm.add_custom_button(__("Print Quotation"), function () {
+		// 		frappe.set_route("print", "Savinda Quotation", frm.doc.name, "Savinda Quotation");
+		// 	}, __("Actions"));
+		// }
 
 		// ── Status colour indicator ───────────────────────────
 		var status_colour = {
@@ -146,7 +146,12 @@ frappe.ui.form.on("Savinda Quotation", {
 			}, __("Manufacturing"));
 
 			frm.add_custom_button(__("Create Sales Order"), function () {
-				_show_create_so_dialog(frm);
+				_show_create_so_dialog(frm, "Sales Order");
+			}, __("Manufacturing"));
+
+			// NPD is created here (only) as an NPD-type Sales Order → NPD approval workflow.
+			frm.add_custom_button(__("Create NPD"), function () {
+				_show_create_so_dialog(frm, "NPD");
 			}, __("Manufacturing"));
 
 			frm.add_custom_button(__("BOM Builder"), function () {
@@ -744,7 +749,7 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd) {
 	var suggested_desc = [row.size, row.material, row.finishing].filter(Boolean).join(" | ");
 	var pl_fields = pd.pl_fields || [];
 	var pl_defaults = pd.defaults || {};
-
+	console.log(pl_fields);
 	var fields = [
 		{
 			fieldtype: "HTML",
@@ -820,7 +825,7 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd) {
 
 	var d = new frappe.ui.Dialog({
 		title: "Create FG — " + (idx + 1) + " of " + pending_rows.length + ": " + row.item_name,
-		size: "large",
+		size: "extra-large",
 		fields: fields,
 		primary_action_label: "Create & Next",
 		secondary_action_label: "Skip",
@@ -945,7 +950,8 @@ function _create_customer(frm) {
 	);
 }
 
-function _show_create_so_dialog(frm) {
+function _show_create_so_dialog(frm, order_type) {
+	order_type = order_type || "Sales Order";
 	// Fetch ALL FG items tied to this quotation's cost items (variants included)
 	frappe.call({
 		method: "nxtgen_savinda_pricing_calculator.api.manufacturing.get_quotation_fg_items",
@@ -957,12 +963,15 @@ function _show_create_so_dialog(frm) {
 				frappe.msgprint({ title: "No FG Items", message: "No FG items are linked yet. Use Manufacturing → Create / Link FG Items first.", indicator: "orange" });
 				return;
 			}
-			_render_so_dialog(frm, fg_list);
+			_render_so_dialog(frm, fg_list, order_type);
 		},
 	});
 }
 
-function _render_so_dialog(frm, fg_list) {
+function _render_so_dialog(frm, fg_list, order_type) {
+	order_type = order_type || "Sales Order";
+	var is_npd = order_type === "NPD";
+	var action_label = is_npd ? "Create NPD" : "Create Sales Order";
 	// Pre-fill the grid (all rows ticked by default)
 	var grid_data = fg_list.map(function (it) {
 		return {
@@ -978,7 +987,7 @@ function _render_so_dialog(frm, fg_list) {
 	fg_list.forEach(function (it) { pk_map[it.item_code] = it; });
 
 	var d = new frappe.ui.Dialog({
-		title: "Create Sales Order — " + frm.doc.name,
+		title: action_label + " — " + frm.doc.name,
 		size: "large",
 		fields: [
 			{
@@ -991,7 +1000,7 @@ function _render_so_dialog(frm, fg_list) {
 				fieldtype: "Date", fieldname: "delivery_date",
 				label: "Required Delivery Date", reqd: 1,
 			},
-			{ fieldtype: "Section Break", label: "Finished Goods — tick the ones to book in the Sales Order" },
+			{ fieldtype: "Section Break", label: "Finished Goods — tick the ones to book" + (is_npd ? " in the NPD order" : " in the Sales Order") },
 			{
 				fieldtype: "Table", fieldname: "fg_items",
 				cannot_add_rows: true, in_place_edit: false, data: grid_data,
@@ -1004,7 +1013,7 @@ function _render_so_dialog(frm, fg_list) {
 				],
 			},
 		],
-		primary_action_label: "Create Sales Order",
+		primary_action_label: action_label,
 		primary_action: function (vals) {
 			var rows = (d.get_value("fg_items") || []).filter(function (x) { return x.include && x.item_code; });
 			if (!rows.length) {
@@ -1039,6 +1048,7 @@ function _render_so_dialog(frm, fg_list) {
 					doc: {
 						doctype: "Sales Order",
 						customer: vals.customer,
+						custom_order_type: order_type,
 						transaction_date: frappe.datetime.get_today(),
 						delivery_date: vals.delivery_date,
 						currency: cur,
@@ -1049,10 +1059,14 @@ function _render_so_dialog(frm, fg_list) {
 					},
 				},
 				freeze: true,
-				freeze_message: "Creating Sales Order...",
+				freeze_message: action_label + "...",
 				callback: function (r) {
 					if (!r.message) return;
-					frappe.show_alert({ message: "Sales Order created: " + r.message.name, indicator: "green" });
+					frappe.show_alert({
+						message: (is_npd ? "NPD order created: " : "Sales Order created: ") + r.message.name
+							+ (is_npd ? " — send for NPD approval" : ""),
+						indicator: "green",
+					});
 					frappe.set_route("Form", "Sales Order", r.message.name);
 				},
 			});

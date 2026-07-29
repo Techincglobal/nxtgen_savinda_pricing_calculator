@@ -7,6 +7,26 @@ import frappe
 from frappe.utils import flt, format_date, getdate
 
 
+def get_cb_finishings(calculation_breakdown):
+	"""Finishing processes linked to a Calculation Breakdown = the selected specs whose Offset
+	Spec `group` is 'Finishing', in selection order. Used on the quotation print (show linked
+	finishings only) and copied to the Product Library on FG creation."""
+	if not calculation_breakdown or not frappe.db.exists("Calculation Breakdown", calculation_breakdown):
+		return []
+	try:
+		specs = (json.loads(
+			frappe.db.get_value("Calculation Breakdown", calculation_breakdown, "ui_state") or "{}"
+		) or {}).get("selected_specs") or []
+	except Exception:
+		specs = []
+	out = []
+	for sp in specs:
+		name = (sp.get("spec_name") or "").strip()
+		if name and name not in out and frappe.db.get_value("Offset Spec", name, "group") == "Finishing":
+			out.append(name)
+	return out
+
+
 def get_cb_print_data(doc_name):
 	"""
 	Prepare all data needed for the 'Product Costing Summary' print format.
@@ -209,6 +229,8 @@ def get_ticket_print_data(production_plan_name):
 				"has_bom": 1 if r.get("has_bom") else 0,
 				"product_code": r.get("product_code") or "",
 				"size": r.get("size") or "",
+				# Item variant value (e.g. the per-variant size/spec) — shown in the Size column.
+				"variant_value": (frappe.db.get_value("Item", r.get("fg_item"), "custom_variant_value") if r.get("fg_item") else "") or "",
 				"batch_no": r.get("batch_no") or "",
 				"pack_date": r.get("pack_date"),
 				"exp_date": r.get("exp_date"),
@@ -233,6 +255,7 @@ def get_ticket_print_data(production_plan_name):
 				"description": r.get("description") or item_name,
 				"qty": _num(r.planned_qty), "has_bom": 1,
 				"product_code": r.get("custom_product_code") or "", "size": r.get("custom_size") or "",
+				"variant_value": frappe.db.get_value("Item", r.item_code, "custom_variant_value") or "",
 				"batch_no": r.get("custom_batch_no") or "",
 				"pack_date": r.get("custom_pack_date"), "exp_date": r.get("custom_exp_date"),
 				"full_sheets": _num(r.get("custom_full_sheets")), "cut_sheets": _num(r.get("custom_cut_sheets")),
