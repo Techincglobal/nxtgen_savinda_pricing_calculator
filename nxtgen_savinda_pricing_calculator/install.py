@@ -91,6 +91,7 @@ def _ensure_roles():
 					title=f"pricing_calculator: create role failed ({role})",
 					message=frappe.get_traceback(),
 				)
+		
 	frappe.db.commit()
 
 
@@ -112,6 +113,41 @@ def _ensure_property_setters():
 	except Exception:
 		frappe.log_error(
 			title="pricing_calculator: ensure property setters failed",
+			message=frappe.get_traceback(),
+		)
+	try:
+		make_property_setter(
+            "Sales Order",          # DocType
+            "po_no",    # Fieldname
+            "reqd",              # Property
+            "1",             # Value
+            "Check",                 # Property type
+            validate_fields_for_doctype=False
+        )
+		frappe.db.commit()
+
+		frappe.clear_cache(doctype="Sales Order")
+	except Exception:
+		frappe.log_error(
+			title="pricing_calculator: ensure property setters failed",
+			message=frappe.get_traceback(),
+		)
+	try:
+		make_property_setter(
+            "Opportunity",          # DocType
+            "opportunity_owner",    # Fieldname
+            "options",              # Property
+            "Employee",             # Value
+            "Data",                 # Property type
+            validate_fields_for_doctype=False
+        )
+		frappe.db.commit()
+
+		frappe.clear_cache(doctype="Opportunity")
+
+	except Exception:
+		frappe.log_error(
+			title="pricing_calculator: update Opportunity Owner field failed",
 			message=frappe.get_traceback(),
 		)
 
@@ -296,6 +332,28 @@ def _ensure_custom_fields():
 					"insert_after": "custom_cost_item",
 					"description":  "Product-library record holding this FG's technical + reference data.",
 				},
+				{
+					"fieldname":    "custom_variant_type",
+					"label":        "Variant Type",
+					"fieldtype":    "Data",
+					"insert_after": "over_billing_allowance",
+				},
+				{
+					"fieldname":    "custom_variant_value",
+					"label":        "Variant Value",
+					"fieldtype":    "Data",
+					"insert_after": "custom_variant_type",
+					
+				},
+				{
+					"fieldname": "custom_inquery_item",
+					"label": "Inquery Item",
+					"fieldtype": "Link",
+					"options": "Boards and Papers",
+					"insert_after": "Boards and Papers",
+					"description":  "Generic material name shown to the customer on the quotation instead of the real material.",
+					"depends_on": "eval:doc.item_group=='Boards & Papers'",
+				},
 			],
 			"Delivery Note Item": [
 				{
@@ -319,6 +377,22 @@ def _ensure_custom_fields():
 				},
 			],
 			# Packing details carried from the Cost Sheet flow; editable on the SO per PO.
+			"Sales Order": [
+				{
+			"fieldname": "custom_sales_person",
+			"fieldtype": "Link",
+			"insert_after": "delivery_date",
+			"label": "Sales Person",
+			"options": "Employee",
+			},
+			{
+			"fieldname": "custom_cs_person",
+			"fieldtype": "Link",
+			"insert_after": "po_date",
+			"label": "CS Person",
+			"options": "Employee",
+			},
+			],
 			"Sales Order Item": [
 				{
 					"fieldname":    "custom_packing_type",
@@ -353,7 +427,91 @@ def _ensure_custom_fields():
 					"fieldtype":    "Int",
 					"insert_after": "custom_pcs_per_role",
 				},
-			],
+				{
+				"fieldname": "custom_section_break_otbvs",
+				"fieldtype": "Section Break",
+				"insert_after": "item_name",
+				"label": "",
+				"options": None,
+				},
+				{
+				"fieldname": "custom_order_no",
+				"fieldtype": "Data",
+				"insert_after": "custom_section_break_otbvs",
+				"label": "Order No.",
+				"options": None,
+				},
+				{
+				"fieldname": "custom_packing_date",
+				"fieldtype": "Date",
+				"insert_after": "custom_order_no",
+				"label": "Packing Date",
+				"options": None,
+			},
+			{
+			"fieldname": "custom_column_break_qntrh",
+			"fieldtype": "Column Break",
+			"insert_after": "custom_packing_date",
+			"label": "",
+			"options": None,
+			},
+			{
+			"fieldname": "custom_product_code",
+			"fieldtype": "Data",
+			"insert_after": "custom_column_break_qntrh",
+			"label": "Product Code",
+			"options": None,
+			},
+			{
+			"fieldname": "custom_expiry_date",
+			"fieldtype": "Date",
+			"insert_after": "custom_product_code",
+			"label": "Expiry Date",
+			"options": None,
+			},
+			{
+			"fieldname": "custom_column_break_qglm6",
+			"fieldtype": "Column Break",
+			"insert_after": "custom_expiry_date",
+			"label": "",
+			"options": None,
+			},
+			{
+			"fieldname": "custom_batch_no",
+			"fieldtype": "Data",
+			"insert_after": "custom_column_break_qglm6",
+			"label": "Batch No.",
+			"options": None,
+			},
+			{
+			"fieldname": "custom_packing_info",
+			"fieldtype": "Section Break",
+			"insert_after": "custom_packing_type",
+			"label": "Packing Info",
+			"options": None,
+			},
+			{
+			"fieldname": "custom_column_break_olqxn",
+			"fieldtype": "Column Break",
+			"insert_after": "custom_pcs_per_role",
+			"label": "",
+			"options": None,
+			},
+			{
+			"fieldname": "custom_column_break_vtojh",
+			"fieldtype": "Column Break",
+			"insert_after": "custom_winding_direction",
+			"label": "",
+			"options": None,
+			},
+			{
+			"fieldname": "custom_column_break_eqzwg",
+			"fieldtype": "Column Break",
+			"insert_after": "custom_up",
+			"label": "",
+			"options": None,
+			},
+					],
 			# Customer-facing common/marketing name for the material (hides the real item).
 			"Boards and Papers": [
 				{

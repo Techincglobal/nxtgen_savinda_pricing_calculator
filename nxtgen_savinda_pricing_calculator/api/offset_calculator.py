@@ -504,6 +504,29 @@ def calculate(payload):
     # the rows in that group — exactly what the user sees — and base the extra
     # on that. The grand total is unchanged (a cost only moves between groups,
     # it is never double counted): sum(all rows) == old net_total.
+    cfg = _get_config()
+    # Use the DISPLAYED (rounded) required qty in the ACTUAL costing: round each row's
+    # req_qty to the configured decimals, then recompute simple qty×rate amounts from the
+    # rounded qty so the shown qty and amount agree and feed the group totals. Composite /
+    # min-floored rows (whose amount is not simply qty×rate) keep their amount — only their
+    # displayed qty is rounded.
+    qd = cfg.get("req_qty_decimals", 2)
+    for r in cost_rows:
+        if "req_qty" not in r:
+            continue
+        _precise = flt(r["req_qty"])
+        _rate    = flt(r.get("rate", 0))
+        _orig    = flt(r.get("amount", 0))
+        r["req_qty"] = round(_precise, qd)
+        # Recompute amount from the ROUNDED qty for SIMPLE qty×rate rows. A row is "simple"
+        # when its amount matches qty×rate at the row's stored precision (within a small
+        # relative tolerance that absorbs 4-6 decimal storage rounding). Min-floored / composite
+        # rows (e.g. foils clamped to a minimum charge) have amount ≠ qty×rate → keep as-is.
+        if _rate and "amount" in r:
+            _simple = round(_precise * _rate, 2)
+            if abs(_orig - _simple) <= max(0.5, 0.005 * abs(_orig)):
+                r["amount"] = round(flt(r["req_qty"]) * _rate, 2)
+
     def _group_sum(g):
         return round(
             sum(flt(r.get("amount", 0)) for r in cost_rows
@@ -523,15 +546,7 @@ def calculate(payload):
     grand = round(net_total + extra_prod_amt, 2)
     pm    = flt(form.get("profit_margin", 0)) / 100
     uc    = grand / item_qty if item_qty else 0
-    cfg   = _get_config()
 
-    # Round the displayed Required Qty to the configured number of decimals
-    # (Costing Configuration → Required Qty Decimals, default 2). Amounts stay
-    # computed from the precise qty; only the shown req_qty is rounded.
-    qd = cfg.get("req_qty_decimals", 2)
-    for r in cost_rows:
-        if "req_qty" in r:
-            r["req_qty"] = round(flt(r["req_qty"]), qd)
     sscl  = uc * cfg["sscl_rate"] if form.get("tax_sscl") else 0
     if pricing_type == "Flexo":
         # Flexo: profit margin is a % of the SELLING price → sell = cost / (1 - margin).
@@ -1925,4 +1940,45 @@ def copy_calculation(source_cb, target_cost_item, new_qty=None, description=None
         "new_cb":    new_cb,
         "unit_cost": unit_cost,
         "item_qty":  flt(form.get("item_qty")),
+    }
+
+
+@frappe.whitelist()
+def duplicate_cost_item(source_cost_item, new_name=None):
+    """Duplicate a cost Item into a NEW one that carries its OWN cloned Calculation
+    Breakdown(s). The caller adds the returned item as a new Cost Sheet row.
+
+    Lets sales quote a with/without-spec variant of a product: the copy starts identical,
+    then the user edits specs on the copy in the calculator without touching the original.
+    Reuses copy_calculation() to clone each breakdown so the copy's costs are independent.
+    """
+    if not source_cost_item:
+        return {"error": "source_cost_item is required"}
+    if not frappe.db.exists("cost Item", source_cost_item):
+        return {"error": f"Cost Item {source_cost_item} not found"}
+
+    src = frappe.get_doc("cost Item", source_cost_item)
+
+    # New cost Item: copy every field, then drop the linked calculations (we clone fresh
+    # breakdowns below so editing the copy never affects the original).
+    new_ci = frappe.copy_doc(src)
+    new_ci.cost_item_name = (new_name or f"{src.cost_item_name} (Copy)").strip()
+    new_ci.set("calculations", [])
+    new_ci.insert(ignore_permissions=True)
+
+    new_cbs = []
+    for calc in src.calculations:
+        if not calc.calculation_breakdown:
+            continue
+        res = copy_calculation(calc.calculation_breakdown, new_ci.name, description=calc.description)
+        if isinstance(res, dict) and res.get("new_cb"):
+            new_cbs.append(res["new_cb"])
+
+    new_ci.reload()
+    frappe.db.commit()
+    return {
+        "new_cost_item":      new_ci.name,
+        "new_cost_item_name": new_ci.cost_item_name,
+        "unit_cost":          flt(new_ci.unit_cost),
+        "new_cbs":            new_cbs,
     }

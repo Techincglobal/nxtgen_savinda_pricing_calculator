@@ -109,12 +109,41 @@ def create_npd_request_from_cost_sheet(cost_sheet):
 
 
 # ── NPD Request actions: Create FG, Confirm BOM ──────────────────────────────
-# Product Library fieldnames the FG-creation popup exposes for review/edit.
-_PL_KEYS = [
-	"department", "flexo_type", "customer_product_code", "no_of_colors", "no_of_ups",
-	"full_sheet_size", "cut_sheet_size", "product_size", "width_mm", "length_mm",
-	"artwork_no", "artwork_version", "core_size", "pcs_per_roll", "printing_machine",
+# Product Library fields exposed in the FG-creation popup for review/edit, in display
+# order. `only` restricts a field to a pricing type: "" = both, else "Offset" / "Flexo".
+# Labels / fieldtypes / options come from the Product Library meta (see _pl_field_schema),
+# so this stays a single source of truth for both popups.
+_PL_REVIEW = [
+	("customer_product_code", ""), ("category", ""), ("department", ""),
+	("artwork_no", ""), ("artwork_version", ""),
+	("full_sheet_size", "Offset"), ("cut_sheet_size", "Offset"),
+	("product_size", ""), ("pasting_type", "Offset"),
+	("no_of_colors", ""), ("no_of_ups", ""),
+	("proof_standard", "Offset"), ("printing_machine", "Offset"),
+	("flexo_type", "Flexo"), ("width_mm", "Flexo"), ("length_mm", "Flexo"),
+	("core_size", "Flexo"), ("pcs_per_roll", "Flexo"),
+	("winding_direction", "Flexo"), ("tolerance", "Flexo"), ("remark", ""),
+	("cold_foil", ""), ("hot_foil", ""), ("embossing", ""),
+	("lamination", ""), ("die_cut_code", ""),
 ]
+_PL_KEYS = [fn for fn, _ in _PL_REVIEW]
+
+
+def _pl_field_schema():
+	"""Render metadata for the reviewable Product Library fields, driven off the doctype
+	meta so the two FG-creation popups render identical field sets without duplicating
+	labels/options in JS."""
+	meta = frappe.get_meta("Product Library")
+	out = []
+	for fn, only in _PL_REVIEW:
+		df = meta.get_field(fn)
+		if not df:
+			continue
+		out.append({
+			"fieldname": fn, "label": df.label or fn,
+			"fieldtype": df.fieldtype, "options": df.options or "", "only": only,
+		})
+	return out
 
 
 def _fg_detail_defaults(row, npd, ig, dept):
@@ -163,7 +192,11 @@ def get_fg_preview(npd_request):
 		if not (row.fg_item and frappe.db.exists("Item", row.fg_item))
 	]
 	existing = [row.fg_item for row in doc.items if row.fg_item and frappe.db.exists("Item", row.fg_item)]
-	return {"lines": lines, "existing": existing, "is_flexo": (doc.pricing_type or "Offset") == "Flexo"}
+	return {
+		"lines": lines, "existing": existing,
+		"is_flexo": (doc.pricing_type or "Offset") == "Flexo",
+		"pl_fields": _pl_field_schema(),
+	}
 
 
 @frappe.whitelist()
@@ -279,7 +312,7 @@ def get_cost_sheet_fg_preview(cost_sheet):
 		if d.get("pl_department") == "Flexo":
 			is_flexo = True
 		lines.append(d)
-	return {"lines": lines, "existing": existing, "is_flexo": is_flexo}
+	return {"lines": lines, "existing": existing, "is_flexo": is_flexo, "pl_fields": _pl_field_schema()}
 
 
 @frappe.whitelist()
@@ -319,6 +352,47 @@ def create_fg_from_cost_sheet(cost_sheet, details=None):
 		created.append(res["item_code"])
 	frappe.db.commit()
 	return {"created": created, "existing": existing}
+
+
+# ── Create FG on the Savinda Quotation (per cost item) ────────────────────────
+def _pl_defaults_from_cost_item(ci):
+	"""pl_* defaults derived from a cost Item and its Calculation Breakdown, for the
+	quotation FG popup. Fields we can't derive are left blank for the user to fill."""
+	ci_doc = frappe.db.get_value(
+		"cost Item", ci, ["cost_item_name", "colour"], as_dict=True) or {}
+	cb = frappe.db.get_value(
+		"Cost Item Calculation", {"parent": ci}, "calculation_breakdown", order_by="idx asc")
+	cbd = jt_api._cb_fields(cb) if cb else {}
+	pricing = (cbd.get("pricing_type") or "Offset")
+	is_flexo = pricing == "Flexo"
+	return {
+		"item_name": ci_doc.get("cost_item_name") or ci,
+		"pricing": pricing, "is_flexo": is_flexo,
+		"department": _dept_for_pricing(pricing),
+		"pl_department": pricing,
+		"pl_flexo_type": "Reel" if is_flexo else "",
+		"pl_no_of_colors": cint(cbd.get("no_of_colors") or ci_doc.get("colour") or 0),
+		"pl_no_of_ups": cint(cbd.get("no_of_ups") or 0),
+		"pl_full_sheet_size": jt_api._size_str(cbd.get("full_sheet_l"), cbd.get("full_sheet_w")),
+		"pl_cut_sheet_size": jt_api._size_str(cbd.get("cut_sheet_l"), cbd.get("cut_sheetw")),
+		"pl_width_mm": flt(cbd.get("_reel_width")),
+		"pl_length_mm": flt(cbd.get("_reel_length")),
+	}
+
+
+@frappe.whitelist()
+def get_cost_item_fg_defaults(cost_item, quotation=None):
+	"""Proposed FG + Product Library review values for one cost Item (quotation FG popup).
+	`quotation` (optional) supplies artwork defaults from its Cost Sheet, when linked."""
+	if not cost_item or not frappe.db.exists("cost Item", cost_item):
+		return {"defaults": {}, "pl_fields": _pl_field_schema(), "is_flexo": False}
+	d = _pl_defaults_from_cost_item(cost_item)
+	if quotation:
+		cs = frappe.db.get_value("Savinda Quotation", quotation, "cost_sheet")
+		if cs:
+			d["pl_artwork_no"] = frappe.db.get_value("Cost Sheet", cs, "artwork_no") or ""
+			d["pl_artwork_version"] = frappe.db.get_value("Cost Sheet", cs, "artwork_version") or ""
+	return {"defaults": d, "pl_fields": _pl_field_schema(), "is_flexo": d.get("is_flexo", False)}
 
 
 def _linked_raw_materials(doc):

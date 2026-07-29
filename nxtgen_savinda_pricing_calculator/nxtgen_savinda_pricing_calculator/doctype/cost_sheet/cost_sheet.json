@@ -171,10 +171,11 @@
   },
   {
    "fetch_from": "inquiry.opportunity_owner",
+   "fetch_if_empty": 1,
    "fieldname": "sales_person",
    "fieldtype": "Link",
    "label": "Sales Person",
-   "options": "User"
+   "options": "Employee"
   },
   {
    "fieldname": "column_break_oudl",
@@ -255,7 +256,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-07-20 07:22:10.658976",
+ "modified": "2026-07-25 12:24:39.656206",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Cost Sheet",

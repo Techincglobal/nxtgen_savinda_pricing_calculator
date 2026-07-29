@@ -43,6 +43,7 @@ fixtures = []
 app_include_js = [
 	"https://unpkg.com/vue@3/dist/vue.global.prod.js",
     "/assets/nxtgen_savinda_pricing_calculator/js/offset_calculator.js",
+    "/assets/nxtgen_savinda_pricing_calculator/js/fg_pl_dialog.js",
 	]
 
 doctype_js = {

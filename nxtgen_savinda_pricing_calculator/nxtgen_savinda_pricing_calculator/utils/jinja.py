@@ -4,7 +4,7 @@ Available in all Frappe Jinja contexts (print formats, email templates, etc.)
 """
 import json
 import frappe
-from frappe.utils import format_date, getdate
+from frappe.utils import flt, format_date, getdate
 
 
 def get_cb_print_data(doc_name):
@@ -243,15 +243,63 @@ def get_ticket_print_data(production_plan_name):
 				"reel_area": _num(r.get("custom_reel_area")), "slit_width": r.get("custom_slit_width") or "",
 			})
 
-	materials = []
+	# Base material(s) = the board/paper, which is NOT listed among "other materials" (it is
+	# shown via the Board/Paper section + the line's Full/Cut Sheets). Collect them from each
+	# line's Calculation Breakdown so they can be excluded.
+	base_items = set()
+	for r in ticket_rows:
+		cbn = r.get("calculation_breakdown")
+		if cbn:
+			bm = frappe.db.get_value("Calculation Breakdown", cbn, "base_material")
+			if bm:
+				base_items.add(bm)
+
+	# Materials list = full quantity REQUIRED FOR PRODUCTION (gross, per BOM) — not the
+	# (net-of-stock) Material Request qty. Aggregate mr_items by item; use required_bom_qty
+	# (the gross BOM requirement) and drop the base material.
+	agg = {}
 	for m in (doc.get("mr_items") or []):
-		materials.append({
-			"item_code": m.item_code,
-			"item_name": m.get("item_name") or frappe.db.get_value("Item", m.item_code, "item_name") or m.item_code,
-			"uom": m.get("uom") or m.get("stock_uom") or "",
-			"quantity": _num(m.get("quantity")),
-			"wastage_qty": _num(m.get("custom_wastage_qty")),
-		})
+		if m.item_code in base_items:
+			continue
+		a = agg.get(m.item_code)
+		if not a:
+			a = {"item_code": m.item_code,
+			     "item_name": m.get("item_name") or frappe.db.get_value("Item", m.item_code, "item_name") or m.item_code,
+			     "uom": m.get("uom") or m.get("stock_uom") or "",
+			     "gross": 0.0, "net": 0.0, "wastage_qty": 0.0}
+			agg[m.item_code] = a
+		a["net"] += flt(m.get("quantity"))
+		a["gross"] = max(a["gross"], flt(m.get("required_bom_qty")))
+		a["wastage_qty"] += flt(m.get("custom_wastage_qty"))
+	materials = [{
+		"item_code": a["item_code"], "item_name": a["item_name"], "uom": a["uom"],
+		"quantity": _num(a["gross"] or a["net"]),  # full production requirement
+		"wastage_qty": _num(a["wastage_qty"]),
+	} for a in agg.values()]
+
+	# Fallback for draft plans (no Material Request yet): explode each FG's BOM for the full
+	# production requirement, still excluding the base material.
+	if not materials:
+		for r in (doc.get("po_items") or []):
+			bom_no = r.get("bom_no")
+			if not bom_no or not frappe.db.exists("BOM", bom_no):
+				continue
+			try:
+				bom = frappe.get_doc("BOM", bom_no)
+			except Exception:
+				continue
+			bom_qty = flt(bom.quantity) or 1
+			scale = (flt(r.get("planned_qty")) / bom_qty) if bom_qty else flt(r.get("planned_qty"))
+			for bi in (bom.get("exploded_items") or bom.get("items") or []):
+				if bi.item_code in base_items:
+					continue
+				materials.append({
+					"item_code": bi.item_code,
+					"item_name": bi.get("item_name") or frappe.db.get_value("Item", bi.item_code, "item_name") or bi.item_code,
+					"uom": bi.get("stock_uom") or bi.get("uom") or "",
+					"quantity": _num(flt(bi.get("stock_qty") or bi.get("qty")) * scale),
+					"wastage_qty": 0,
+				})
 
 	# ── Header context — resolve the first item's Product Library / CB, and the SO ──
 	so_no = doc.get("custom_sales_order") or ""
@@ -274,12 +322,30 @@ def get_ticket_print_data(production_plan_name):
 			"Calculation Breakdown", cb_name,
 			["carton_size", "no_of_colors", "no_of_ups"], as_dict=True) or {}
 	sales_person = ""
+	cs_person = ""
 	req_date = doc.get("custom_req_date")
 	if so_no and frappe.db.exists("Sales Order", so_no):
 		so = frappe.get_doc("Sales Order", so_no)
-		if so.get("sales_team"):
+		# Sales / CS person from the SO custom fields (Employee → name), else the sales team.
+		if so.get("custom_sales_person"):
+			sales_person = frappe.db.get_value("Employee", so.custom_sales_person, "employee_name") or so.custom_sales_person
+		elif so.get("sales_team"):
 			sales_person = so.sales_team[0].sales_person
+		if so.get("custom_cs_person"):
+			cs_person = frappe.db.get_value("Employee", so.custom_cs_person, "employee_name") or so.custom_cs_person
 		req_date = req_date or so.get("delivery_date")
+		# Per-line packing / expiry / batch / product code from the matching SO line item.
+		so_item_by_fg = {}
+		for si in so.items:
+			so_item_by_fg.setdefault(si.item_code, si)
+		for l in lines:
+			si = so_item_by_fg.get(l["item_code"])
+			if not si:
+				continue
+			l["pack_date"] = l["pack_date"] or si.get("custom_packing_date")
+			l["exp_date"] = l["exp_date"] or si.get("custom_expiry_date")
+			l["batch_no"] = l["batch_no"] or si.get("custom_batch_no")
+			l["product_code"] = l["product_code"] or si.get("custom_product_code")
 	quantity = sum(l["qty"] for l in lines)
 
 	header = {
@@ -301,6 +367,7 @@ def get_ticket_print_data(production_plan_name):
 		"job_date": doc.get("posting_date") or format_date(doc.creation),
 		"so_no": so_no,
 		"sales_person": sales_person,
+		"cs_person": cs_person,
 		"quantity": quantity,
 		"ctn_size": cb.get("carton_size") or pl.get("product_size") or "",
 		"reel_or_sheet": pl.get("flexo_type") or ("Reel" if is_flexo else "Sheet"),

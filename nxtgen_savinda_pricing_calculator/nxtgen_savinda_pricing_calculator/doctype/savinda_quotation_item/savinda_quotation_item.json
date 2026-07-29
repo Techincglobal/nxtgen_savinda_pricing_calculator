@@ -20,6 +20,8 @@
   "unit_cost",
   "column_break_3",
   "selling_price",
+  "base_selling_price",
+  "currency",
   "is_manually_set",
   "section_break_packing",
   "packing_type",
@@ -136,10 +138,29 @@
   {
    "bold": 1,
    "columns": 2,
+   "description": "Rate in the quotation currency (converted from the company-base rate below).",
    "fieldname": "selling_price",
    "fieldtype": "Currency",
    "in_list_view": 1,
-   "label": "Selling Price (LKR)"
+   "label": "Selling Price",
+   "options": "currency"
+  },
+  {
+   "description": "Company-base rate (LKR) from costing — the anchor. Transaction rate = this / conversion rate.",
+   "fieldname": "base_selling_price",
+   "fieldtype": "Currency",
+   "label": "Selling Price (Company Currency)",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "parent.currency",
+   "fieldname": "currency",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Currency",
+   "options": "Currency",
+   "print_hide": 1,
+   "read_only": 1
   },
   {
    "default": "0",

@@ -57,6 +57,17 @@ function bb_mount_app(el) {
 				sheetData: {},    // sheet calculation results for display
 				sheetExpanded: true,
 				dragIdx: null,
+				// All calculation-dependency inputs — editable, recompute via calculator.
+				pricingType: 'Offset',
+				drivers: {
+					no_of_colors: 0, material_rate: 0, base_material: '',
+					no_of_cuts: 0, no_of_ups: 0, cut_sheet_ups: 0,
+					full_sheet_l: 0, full_sheet_w: 0, cut_sheet_l: 0, cut_sheet_w: 0,
+					reel_width_mm: 0, reel_length_m: 0, product_width_mm: 0,
+					product_length_mm: 0, product_margin_mm: 0, product_gap_mm: 0,
+				},
+				driversDirty: false,
+				variantName: '',
 			};
 		},
 		computed: {
@@ -190,6 +201,64 @@ function bb_mount_app(el) {
 				});
 			},
 
+			// ── Editable drivers → recompute consumption via the calculator ──
+			onDriverChange() { this.driversDirty = true; },
+
+			changeBaseMaterial() {
+				var self = this;
+				frappe.prompt(
+					[{ fieldtype: 'Link', fieldname: 'item', label: 'Base Material (Item)', options: 'Item', default: self.drivers.base_material,
+					   description: 'Use a different board/paper (e.g. a different full-sheet size) for a variant.' }],
+					function (v) { self.drivers.base_material = v.item || ''; self.driversDirty = true; },
+					'Change Base Material', 'Set'
+				);
+			},
+
+			recomputeDrivers() {
+				// Re-run the calculator with the edited drivers/base material; keep the arranged order.
+				this.driversDirty = false;
+				this.loadBomData(true, true);
+			},
+
+			// ── Create a VARIANT BOM from the current (recomputed) chain ──
+			// First BOM stays the default; this is an additional non-default active BOM with its
+			// own independent SFG codes (variant tag suffix).
+			createVariant() {
+				var self = this;
+				if (!self.selectedFG || !self.operations.length) { frappe.msgprint('Load a BOM first.'); return; }
+				frappe.prompt(
+					[{ fieldtype: 'Data', fieldname: 'suffix', label: 'Variant Tag (e.g. SMALL, A3)', reqd: 1,
+					   description: 'Appended to the variant sub-assembly (SFG) codes so the variant stays independent of the default BOM.' }],
+					function (v) {
+						var suffix = (v.suffix || '').trim();
+						if (!suffix) { frappe.msgprint('Enter a variant tag.'); return; }
+						self.saving = true;
+						frappe.call({
+							method: API.createBomChain,
+							args: {
+								fg_item:         self.selectedFG,
+								mfg_qty:         self.mfgQty,
+								operations:      JSON.stringify(self.operations),
+								extra_materials: JSON.stringify(self.extraMaterials),
+								is_default:      0,
+								variant_suffix:  suffix,
+							},
+							freeze: true, freeze_message: 'Creating variant BOM…',
+							callback: function (r) {
+								self.saving = false;
+								if (!r.message) return;
+								var result = r.message;
+								frappe.msgprint({ title: 'Variant BOM Created',
+									message: 'Variant FG BOM: <a href="/app/bom/' + result.fg_bom + '" target="_blank"><b>' + result.fg_bom + '</b></a> (non-default). The default BOM is unchanged.',
+									indicator: 'green' });
+							},
+							error: function () { self.saving = false; },
+						});
+					},
+					'Create Variant BOM', 'Create Variant'
+				);
+			},
+
 			applyGlobalCB() {
 				// Stamp globalCB on all fg items that don't have their own CB
 				var self = this;
@@ -251,18 +320,24 @@ function bb_mount_app(el) {
 				});
 			},
 
-			loadBomData(preserveOrder) {
+			loadBomData(preserveOrder, useDrivers) {
 				var self = this;
 				if (!self.calcBreakdown || !self.mfgQty) return;
 				self.loading = true;
 				self.qtyChanged = false;
+				var args = { calculation_breakdown: self.calcBreakdown, mfg_qty: self.mfgQty, fg_item: self.selectedFG };
+				// Only send driver overrides once the user has edited them (else the CB's own values are used).
+				if (useDrivers) args.overrides = JSON.stringify(self.drivers);
 				frappe.call({
 					method: API.getBomData,
-					args: { calculation_breakdown: self.calcBreakdown, mfg_qty: self.mfgQty, fg_item: self.selectedFG },
+					args: args,
 					callback: function (r) {
 						self.loading = false;
 						if (!r.message) return;
 						var d = r.message;
+						// Seed the editable drivers from the effective calculation.
+						if (d.pricing_type) self.pricingType = d.pricing_type;
+						if (d.drivers && !useDrivers) { self.drivers = Object.assign({}, self.drivers, d.drivers); self.driversDirty = false; }
 								var ops = d.operations || [];
 						ops.forEach(function (op) {
 							if (!Array.isArray(op.materials))          op.materials = [];
@@ -299,8 +374,14 @@ function bb_mount_app(el) {
 							return;
 						}
 
-						// Sort: Print first (only on a fresh load)
-						ops.sort(function (a, b) { return (a.is_print ? 0 : 1) - (b.is_print ? 0 : 1); });
+						// Fresh load: specs WITH an order value first (ascending); unset (0) sink to the bottom.
+						ops.sort(function (a, b) {
+							var sa = a.bom_sequence || 0, sb = b.bom_sequence || 0;
+							if (sa <= 0 && sb <= 0) return 0;   // both unset — keep selection order
+							if (sa <= 0) return 1;               // a unset → below b
+							if (sb <= 0) return -1;              // b unset → below a
+							return sa - sb;                       // both set → ascending
+						});
 						self.operations  = ops;
 						self.extraMaterials = d.raw_materials || [];
 						self.syncChain();
@@ -330,8 +411,16 @@ function bb_mount_app(el) {
 									if ('has_quality_inspection' in saved)      op.has_quality_inspection      = saved.has_quality_inspection;
 									if ('quality_inspection_template' in saved) op.quality_inspection_template = saved.quality_inspection_template;
 								});
+								// Restore the user's SAVED operation order (match by spec_name).
+								var savedOrder = {};
+								savedOps.forEach(function (s, i) { savedOrder[s.spec_name] = i; });
+								self.operations.sort(function (a, b) {
+									var ai = (a.spec_name in savedOrder) ? savedOrder[a.spec_name] : 9999;
+									var bi = (b.spec_name in savedOrder) ? savedOrder[b.spec_name] : 9999;
+									return ai - bi;
+								});
 								self.syncChain();
-								frappe.show_alert({ message: '✓ Customisations restored from saved config', indicator: 'blue' }, 3);
+								frappe.show_alert({ message: '✓ Saved order + customisations restored', indicator: 'blue' }, 3);
 							},
 						});
 					},
@@ -780,6 +869,56 @@ function bb_mount_app(el) {
           &nbsp;→&nbsp;
           🔀 split to <b>{{ fmtN(itemQty) }} items</b> at split point
         </div>
+
+        <!-- Editable drivers + variant inputs (recompute consumption via calculator) -->
+        <div class="bb-drivers" style="margin-top:12px;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+          <div style="font-size:11px;font-weight:700;color:#1a3a5c;margin-bottom:8px">
+            Adjust Drivers / Variant Inputs
+            <span class="bb-hint" style="font-weight:400">— edit &amp; Recompute to change material consumption</span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+            <!-- Common -->
+            <div><div class="bb-sheet-lbl">Base Material</div>
+              <button class="bb-btn bb-btn-sm" @click="changeBaseMaterial" :title="drivers.base_material" style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ drivers.base_material || 'Pick' }} ✎</button></div>
+            <div><div class="bb-sheet-lbl">Material Rate</div>
+              <input type="number" min="0" step="0.01" class="bb-inp" style="width:100px" v-model.number="drivers.material_rate" @input="onDriverChange" /></div>
+            <div><div class="bb-sheet-lbl">No. of Colors</div>
+              <input type="number" min="0" class="bb-inp" style="width:80px" v-model.number="drivers.no_of_colors" @input="onDriverChange" /></div>
+            <!-- Offset -->
+            <template v-if="pricingType !== 'Flexo'">
+              <div><div class="bb-sheet-lbl">No. of Cuts</div>
+                <input type="number" min="1" class="bb-inp" style="width:80px" v-model.number="drivers.no_of_cuts" @input="onDriverChange" /></div>
+              <div><div class="bb-sheet-lbl">No. of Ups</div>
+                <input type="number" min="1" class="bb-inp" style="width:80px" v-model.number="drivers.no_of_ups" @input="onDriverChange" /></div>
+              <div><div class="bb-sheet-lbl">Cut-Sheet Ups</div>
+                <input type="number" min="0" class="bb-inp" style="width:90px" v-model.number="drivers.cut_sheet_ups" @input="onDriverChange" /></div>
+              <div><div class="bb-sheet-lbl">Full Sheet L</div>
+                <input type="number" min="0" step="0.01" class="bb-inp" style="width:90px" v-model.number="drivers.full_sheet_l" @input="onDriverChange" /></div>
+              <div><div class="bb-sheet-lbl">Full Sheet W</div>
+                <input type="number" min="0" step="0.01" class="bb-inp" style="width:90px" v-model.number="drivers.full_sheet_w" @input="onDriverChange" /></div>
+              <div><div class="bb-sheet-lbl">Cut Sheet L</div>
+                <input type="number" min="0" step="0.01" class="bb-inp" style="width:90px" v-model.number="drivers.cut_sheet_l" @input="onDriverChange" /></div>
+              <div><div class="bb-sheet-lbl">Cut Sheet W</div>
+                <input type="number" min="0" step="0.01" class="bb-inp" style="width:90px" v-model.number="drivers.cut_sheet_w" @input="onDriverChange" /></div>
+            </template>
+            <!-- Flexo -->
+            <template v-if="pricingType === 'Flexo'">
+              <div><div class="bb-sheet-lbl">Reel Width (mm)</div>
+                <input type="number" min="0" step="0.01" class="bb-inp" style="width:100px" v-model.number="drivers.reel_width_mm" @input="onDriverChange" /></div>
+              <div><div class="bb-sheet-lbl">Reel Length (m)</div>
+                <input type="number" min="0" step="0.01" class="bb-inp" style="width:100px" v-model.number="drivers.reel_length_m" @input="onDriverChange" /></div>
+              <div><div class="bb-sheet-lbl">Product W (mm)</div>
+                <input type="number" min="0" step="0.01" class="bb-inp" style="width:100px" v-model.number="drivers.product_width_mm" @input="onDriverChange" /></div>
+              <div><div class="bb-sheet-lbl">Product L (mm)</div>
+                <input type="number" min="0" step="0.01" class="bb-inp" style="width:100px" v-model.number="drivers.product_length_mm" @input="onDriverChange" /></div>
+              <div><div class="bb-sheet-lbl">Margin (mm)</div>
+                <input type="number" min="0" step="0.01" class="bb-inp" style="width:90px" v-model.number="drivers.product_margin_mm" @input="onDriverChange" /></div>
+              <div><div class="bb-sheet-lbl">Gap (mm)</div>
+                <input type="number" min="0" step="0.01" class="bb-inp" style="width:90px" v-model.number="drivers.product_gap_mm" @input="onDriverChange" /></div>
+            </template>
+            <button :class="['bb-btn', driversDirty ? 'bb-btn-recalc-alert' : 'bb-btn-blue']" @click="recomputeDrivers" :disabled="loading">↻ Recompute</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -972,6 +1111,11 @@ function bb_mount_app(el) {
         <button class="bb-btn" style="background:#1e40af;color:#fff;padding:10px 16px;border:none;border-radius:5px;cursor:pointer;font-size:13px"
           @click="saveConfig" :disabled="!operations.length" title="Save this chain so it reloads next time">
           💾 Save Config
+        </button>
+        <button class="bb-btn" style="background:#7c3aed;color:#fff;padding:10px 16px;border:none;border-radius:5px;cursor:pointer;font-size:13px"
+          v-if="selectedFGs.length <= 1" @click="createVariant" :disabled="!canCreate||saving"
+          title="Create an additional non-default (variant) BOM from the current chain — the default stays unchanged">
+          ⎘ Create Variant
         </button>
       </div>
     </div>

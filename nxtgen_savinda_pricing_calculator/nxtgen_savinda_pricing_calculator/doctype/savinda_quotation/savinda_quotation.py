@@ -34,6 +34,23 @@ class SavindaQuotation(Document):
 				self.customer_name = cn
 		self._apply_common_material()
 		self._apply_lowest_profit_margin()
+		self._sync_item_currency()
+
+	def _sync_item_currency(self):
+		"""Keep each item's base (LKR) and transaction-currency rates consistent.
+
+		base_selling_price (company base, LKR) is the anchor produced by costing; the shown
+		selling_price is that base converted to the quotation currency:
+		    selling_price = base_selling_price / conversion_rate
+		Legacy rows (created before base_selling_price existed) hold the base value in
+		selling_price, so we backfill base from it. This also re-derives the transaction rate
+		whenever the currency / conversion_rate changes."""
+		crate = flt(self.conversion_rate) or 1
+		for it in (self.items or []):
+			it.currency = self.currency
+			base = flt(it.base_selling_price) or flt(it.selling_price)
+			it.base_selling_price = base
+			it.selling_price = base / crate
 
 	def _apply_lowest_profit_margin(self):
 		"""Header profit margin = the LOWEST profit margin among the quoted items'
@@ -129,7 +146,7 @@ class SavindaQuotation(Document):
 			return
 		cs = frappe.db.get_value(
 			"Cost Sheet", self.cost_sheet,
-			["inquiry", "customer_name"],
+			["inquiry", "customer_name","sales_person"],
 			as_dict=True,
 		)
 		if not cs:
@@ -145,6 +162,8 @@ class SavindaQuotation(Document):
 			cust = frappe.db.get_value("Customer", {"customer_name": cs["customer_name"]}, "name")
 			if cust:
 				self.customer = cust
+		if not self.sales_person and cs.get("sales_person"):
+			self.sales_person = cs["sales_person"]
 
 	# ── Auto-fill from Inquiry (Lead / Customer / Prospect) ────
 	def _fetch_from_inquiry(self):

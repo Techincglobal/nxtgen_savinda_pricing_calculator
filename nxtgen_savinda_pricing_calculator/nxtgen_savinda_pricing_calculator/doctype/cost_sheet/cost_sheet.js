@@ -56,7 +56,14 @@ frappe.ui.form.on("Cost Sheet", {
 				);
 			}
 		}
-
+		frm.set_query("sales_person", function () {
+			return {
+				filters: {
+					department: "Marketing - SGSPL",
+					status: "Active"
+				}
+			};
+		});
 		// ── Create FG Items (before an NPD — the light NPD pulls FGs from here) ──
 		if (!frm.is_new() && (frm.doc.pricing_list || []).length) {
 			frm.add_custom_button(__("Create FG Items"), function () {
@@ -111,59 +118,59 @@ frappe.ui.form.on("Cost Sheet", {
 		}
 
 		// ── Submitted-only actions ─────────────────────────────
-		if (frm.doc.docstatus === 1) {
-			frm.add_custom_button(__("Create Quotation"), function () {
-				frappe.call({
-					method: "frappe.client.insert",
-					args: {
-						doc: {
-							doctype: "Savinda Quotation",
-							cost_sheet: frm.doc.name,
-							inquiry: frm.doc.inquiry || "",
-						},
+		// if (frm.doc.docstatus === 1) {
+		frm.add_custom_button(__("Create Quotation"), function () {
+			frappe.call({
+				method: "frappe.client.insert",
+				args: {
+					doc: {
+						doctype: "Savinda Quotation",
+						cost_sheet: frm.doc.name,
+						inquiry: frm.doc.inquiry || "",
 					},
-					callback: function (r) {
-						if (r.message) {
-							frappe.show_alert({ message: "Quotation created — loading items…", indicator: "green" });
-							frappe.set_route("Form", "Savinda Quotation", r.message.name);
-						}
-					},
-				});
-			}, __("Actions"));
-
-			frm.add_custom_button(__("Print / PDF"), function () {
-				var url = "/printview?doctype=Cost+Sheet&name="
-					+ encodeURIComponent(frm.doc.name)
-					+ "&format=Cost+Sheet+Summary&trigger_print=1&no_letterhead=0";
-				var w = window.open(frappe.urllib.get_full_url(url));
-				if (!w) frappe.msgprint(__("Please allow pop-ups to open the print view."));
+				},
+				callback: function (r) {
+					if (r.message) {
+						frappe.show_alert({ message: "Quotation created — loading items…", indicator: "green" });
+						frappe.set_route("Form", "Savinda Quotation", r.message.name);
+					}
+				},
 			});
+		}, __("Actions"));
 
-			// ── Pricing totals bar below the grid ──────────────
-			setTimeout(function () {
-				if (!frm.fields_dict.pricing_list) return;
-				var rows = frm.doc.pricing_list || [];
-				var total_cost = 0, total_sell = 0;
-				rows.forEach(function (r) {
-					total_cost += flt_v(r.ammount);
-					total_sell += flt_v(r.selling_ammount);
-				});
-				var $grid = frm.fields_dict.pricing_list.$wrapper;
-				$grid.find(".pricing-totals-bar").remove();
-				if (rows.length) {
-					$grid.append(
-						"<div class='pricing-totals-bar' style='display:flex;justify-content:flex-end;"
-						+ "gap:24px;padding:8px 16px;margin-top:4px;background:#f0f4ff;"
-						+ "border:1px solid #dde4f0;border-radius:4px;font-size:12px'>"
-						+ "<span style='color:#555'>Total Cost Amount: "
-						+ "<b style='font-family:monospace;color:#1a3a5c'>LKR " + cur_fmt(total_cost) + "</b></span>"
-						+ "<span style='color:#555'>Total Selling Amount: "
-						+ "<b style='font-family:monospace;color:#166534'>LKR " + cur_fmt(total_sell) + "</b></span>"
-						+ "</div>"
-					);
-				}
-			}, 600);
-		}
+		frm.add_custom_button(__("Print / PDF"), function () {
+			var url = "/printview?doctype=Cost+Sheet&name="
+				+ encodeURIComponent(frm.doc.name)
+				+ "&format=Cost+Sheet+Summary&trigger_print=1&no_letterhead=0";
+			var w = window.open(frappe.urllib.get_full_url(url));
+			if (!w) frappe.msgprint(__("Please allow pop-ups to open the print view."));
+		});
+
+		// ── Pricing totals bar below the grid ──────────────
+		setTimeout(function () {
+			if (!frm.fields_dict.pricing_list) return;
+			var rows = frm.doc.pricing_list || [];
+			var total_cost = 0, total_sell = 0;
+			rows.forEach(function (r) {
+				total_cost += flt_v(r.ammount);
+				total_sell += flt_v(r.selling_ammount);
+			});
+			var $grid = frm.fields_dict.pricing_list.$wrapper;
+			$grid.find(".pricing-totals-bar").remove();
+			if (rows.length) {
+				$grid.append(
+					"<div class='pricing-totals-bar' style='display:flex;justify-content:flex-end;"
+					+ "gap:24px;padding:8px 16px;margin-top:4px;background:#f0f4ff;"
+					+ "border:1px solid #dde4f0;border-radius:4px;font-size:12px'>"
+					+ "<span style='color:#555'>Total Cost Amount: "
+					+ "<b style='font-family:monospace;color:#1a3a5c'>LKR " + cur_fmt(total_cost) + "</b></span>"
+					+ "<span style='color:#555'>Total Selling Amount: "
+					+ "<b style='font-family:monospace;color:#166534'>LKR " + cur_fmt(total_sell) + "</b></span>"
+					+ "</div>"
+				);
+			}
+		}, 600);
+		// }
 	},
 
 	inquiry: function (frm) {
@@ -242,14 +249,18 @@ function _cs_fg_create_popup(frm) {
 			var m = r.message || {};
 			var lines = m.lines || [];
 			if (!lines.length) {
-				frappe.msgprint({ title: __("FG Items"),
+				frappe.msgprint({
+					title: __("FG Items"),
 					message: __("All cost items already have an FG Item.") + (m.existing && m.existing.length ? "<br>" + m.existing.join(", ") : ""),
-					indicator: "blue" });
+					indicator: "blue"
+				});
 				return;
 			}
-			var fields = [{ fieldtype: "HTML", fieldname: "hdr", options:
-				"<div style='color:#555;font-size:12px;margin-bottom:6px'>"
-				+ __("Review the product details, change anything if needed, then create the FG item(s) + Product Library.") + "</div>" }];
+			var fields = [{
+				fieldtype: "HTML", fieldname: "hdr", options:
+					"<div style='color:#555;font-size:12px;margin-bottom:6px'>"
+					+ __("Review the product details, change anything if needed, then create the FG item(s) + Product Library.") + "</div>"
+			}];
 			var meta = [];
 			lines.forEach(function (ln, i) {
 				var p = "l" + i + "__";
@@ -261,18 +272,10 @@ function _cs_fg_create_popup(frm) {
 				fields.push({ fieldtype: "Link", options: "UOM", fieldname: p + "stock_uom", label: __("Stock UOM"), default: ln.stock_uom });
 				fields.push({ fieldtype: "Data", fieldname: p + "customer_ref", label: __("Customer Ref"), default: ln.customer_ref });
 				fields.push({ fieldtype: "Column Break" });
-				fields.push({ fieldtype: "Data", fieldname: p + "pl_customer_product_code", label: __("Customer Product Code"), default: ln.pl_customer_product_code });
-				fields.push({ fieldtype: "Int", fieldname: p + "pl_no_of_colors", label: __("No of Colors"), default: ln.pl_no_of_colors });
-				fields.push({ fieldtype: "Int", fieldname: p + "pl_no_of_ups", label: __("No of Ups"), default: ln.pl_no_of_ups });
-				if (ln.pl_department === "Flexo") {
-					fields.push({ fieldtype: "Float", fieldname: p + "pl_width_mm", label: __("Width (mm)"), default: ln.pl_width_mm });
-					fields.push({ fieldtype: "Float", fieldname: p + "pl_length_mm", label: __("Length (mm)"), default: ln.pl_length_mm });
-				} else {
-					fields.push({ fieldtype: "Data", fieldname: p + "pl_full_sheet_size", label: __("Full Sheet Size"), default: ln.pl_full_sheet_size });
-					fields.push({ fieldtype: "Data", fieldname: p + "pl_cut_sheet_size", label: __("Cut Sheet Size"), default: ln.pl_cut_sheet_size });
-				}
-				fields.push({ fieldtype: "Data", fieldname: p + "pl_artwork_no", label: __("Artwork No"), default: ln.pl_artwork_no });
-				fields.push({ fieldtype: "Data", fieldname: p + "pl_artwork_version", label: __("Artwork Version"), default: ln.pl_artwork_version });
+				// All reviewable Product Library fields (schema from the server).
+				nxtgen_pl.fields(m.pl_fields, ln.pl_department === "Flexo", p, ln).forEach(function (f) {
+					fields.push(f);
+				});
 			});
 			var d = new frappe.ui.Dialog({
 				title: __("Create FG Items — Review Details"), size: "large", fields: fields,
@@ -280,16 +283,14 @@ function _cs_fg_create_popup(frm) {
 				primary_action: function (v) {
 					var details = meta.map(function (mt) {
 						var p = "l" + mt.idx + "__";
-						return {
+						var detail = {
 							cost_item: mt.cost_item,
 							item_name: v[p + "item_name"], item_group: v[p + "item_group"],
 							department: v[p + "department"], stock_uom: v[p + "stock_uom"], customer_ref: v[p + "customer_ref"],
-							pl_customer_product_code: v[p + "pl_customer_product_code"],
-							pl_no_of_colors: v[p + "pl_no_of_colors"], pl_no_of_ups: v[p + "pl_no_of_ups"],
-							pl_full_sheet_size: v[p + "pl_full_sheet_size"], pl_cut_sheet_size: v[p + "pl_cut_sheet_size"],
-							pl_width_mm: v[p + "pl_width_mm"], pl_length_mm: v[p + "pl_length_mm"],
-							pl_artwork_no: v[p + "pl_artwork_no"], pl_artwork_version: v[p + "pl_artwork_version"],
 						};
+						var ov = nxtgen_pl.overrides(m.pl_fields, v, p);
+						Object.keys(ov).forEach(function (k) { detail["pl_" + k] = ov[k]; });
+						return detail;
 					});
 					frappe.call({
 						method: PP + "create_fg_from_cost_sheet",
@@ -493,6 +494,11 @@ function render_panel(frm, cdt, cdn) {
 				+ "data-item='" + item_name + "' data-cdt='" + cdt + "' data-cdn='" + cdn + "' "
 				+ "title='Copy an existing calculation and only change the quantity'>"
 				+ "📋 Copy Qty</button>";
+			var dup_btn = is_submitted ? "" :
+				"<button class='btn-dup-item btn btn-xs btn-default' style='margin-left:6px' "
+				+ "data-item='" + item_name + "' data-cdt='" + cdt + "' data-cdn='" + cdn + "' "
+				+ "title='Duplicate this item with its own copy of the cost breakdown — then edit specs on the copy'>"
+				+ "⧉ Duplicate Item</button>";
 			var actions_th = is_submitted
 				? "<th style='padding:5px 8px;color:#fff;font-size:10.5px;text-align:center'>Link</th>"
 				: "<th style='padding:5px 8px;color:#fff;font-size:10.5px;text-align:center'>Actions</th>";
@@ -535,7 +541,7 @@ function render_panel(frm, cdt, cdn) {
 				+ (display_calcs.length ? " <span style='font-size:10px;background:#e0e7ff;color:#3730a3;"
 					+ "border-radius:10px;padding:1px 7px;font-weight:600'>" + display_calcs.length + "</span>" : "")
 				+ "</span>"
-				+ "<span>" + add_btn + copy_btn + "</span>"
+				+ "<span>" + add_btn + copy_btn + dup_btn + "</span>"
 				+ "</div>"
 				+ cut_strip
 				+ ops_html
@@ -582,6 +588,11 @@ function render_panel(frm, cdt, cdn) {
 					// ── Copy Qty button (duplicate an existing calc at a new qty) ──
 					$w.off("click.copy_calc").on("click.copy_calc", ".btn-copy-calc", function () {
 						show_copy_calc_popup(frm, cdt, cdn, item_name);
+					});
+
+					// ── Duplicate Item button (new item + its own cloned breakdown) ──
+					$w.off("click.dup_item").on("click.dup_item", ".btn-dup-item", function () {
+						show_duplicate_item_popup(frm, cdt, cdn, item_name);
 					});
 
 					// ── Edit (open calculator) button ───────────────
@@ -886,6 +897,91 @@ function show_copy_calc_popup(frm, cdt, cdn, item_name) {
 
 
 // ─────────────────────────────────────────────────────────────
+//  DUPLICATE ITEM — new cost Item + its own cloned breakdown(s)
+//  Use case: quote a with / without-spec variant. The copy starts
+//  identical; edit specs on it in the calculator without touching
+//  the original.
+// ─────────────────────────────────────────────────────────────
+
+function show_duplicate_item_popup(frm, cdt, cdn, item_name) {
+	var row = locals[cdt][cdn];
+	var d = new frappe.ui.Dialog({
+		title: "Duplicate Item",
+		fields: [
+			{
+				fieldtype: "HTML",
+				options: "<div style='padding:7px 10px;background:#f0f4ff;border-radius:4px;"
+					+ "font-size:12px;color:#1a3a5c;margin-bottom:6px'>"
+					+ "Creates a <b>new item</b> with its own copy of this item's cost breakdown, "
+					+ "added as a new row. Use it to quote a <b>with / without-spec</b> variant — "
+					+ "then edit specs on the copy in the calculator without changing the original.</div>",
+			},
+			{
+				fieldtype: "Data", fieldname: "new_name",
+				label: "New Item Name", reqd: 1,
+				default: (row.item_name || "Item") + " (Copy)",
+			},
+			{
+				fieldtype: "Check", fieldname: "open_calc",
+				label: "Open the calculator to add / remove specs after creating",
+				default: 1,
+			},
+		],
+		primary_action_label: "Duplicate",
+		primary_action: function (vals) {
+			d.hide();
+			frappe.call({
+				method: "nxtgen_savinda_pricing_calculator.api.offset_calculator.duplicate_cost_item",
+				args: { source_cost_item: item_name, new_name: vals.new_name },
+				freeze: true,
+				freeze_message: "Duplicating item…",
+				callback: function (res) {
+					var m = res.message || {};
+					if (!m.new_cost_item) {
+						frappe.msgprint({
+							title: "Duplicate failed",
+							message: m.error || "Unknown error.",
+							indicator: "red",
+						});
+						return;
+					}
+					// Add the copy as a new Cost Sheet row, carrying the source row's sale-side
+					// fields; the copy links to its own cloned breakdown(s).
+					var srow = locals[cdt][cdn];
+					frm.add_child("pricing_list", {
+						item: m.new_cost_item,
+						item_name: m.new_cost_item_name,
+						qty: srow.qty,
+						unit_price: m.unit_cost,
+						product_code: srow.product_code,
+						order_number: srow.order_number,
+						packing_date: srow.packing_date,
+						batch_no: srow.batch_no,
+						expiry_date: srow.expiry_date,
+						sscl: srow.sscl,
+						vat: srow.vat,
+						profit_margin: srow.profit_margin,
+					});
+					frm.save().then(function () {
+						frappe.show_alert({ message: "Duplicated → " + m.new_cost_item_name, indicator: "green" });
+						if (vals.open_calc && (m.new_cbs || []).length) {
+							var pt = frm.doc.pricing_type || "Offset";
+							window.location.href = "/app/offset-calculator?ref=" + encodeURIComponent(m.new_cbs[0])
+								+ "&cost_sheet=" + encodeURIComponent(frm.doc.name)
+								+ "&pricing_type=" + encodeURIComponent(pt);
+						} else {
+							frm.refresh();
+						}
+					});
+				},
+			});
+		},
+	});
+	d.show();
+}
+
+
+// ─────────────────────────────────────────────────────────────
 //  CREATE Calculation Breakdown → link to Cost Item → open calculator
 // ─────────────────────────────────────────────────────────────
 
@@ -930,29 +1026,29 @@ function create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pric
 	// Flexo reel dimensions have no dedicated CB columns — they live only in ui_state —
 	// so without this they were lost when the calculator opened.
 	var cbForm = {
-		pricing_type:  pricingType || "Offset",
+		pricing_type: pricingType || "Offset",
 		customer_name: frm.doc.customer_name || "",
-		ref:           frm.doc.inquiry || "",
+		ref: frm.doc.inquiry || "",
 		material_type: matType,
 		base_material: matType === "Custom" ? "" : (vals.base_material || ""),
 		custom_material_name: matType === "Custom" ? (vals.custom_material_name || "") : "",
 		material_rate: matType === "Custom" ? (parseFloat(vals.material_rate) || 0) : 0,
-		no_of_colors:  parseInt(vals.no_of_colors) || 0,
-		item_qty:      parseFloat(vals.item_qty) || 0,
+		no_of_colors: parseInt(vals.no_of_colors) || 0,
+		item_qty: parseFloat(vals.item_qty) || 0,
 	};
 	if (pricingType === "Flexo") {
-		cbForm.reel_width_mm     = parseFloat(vals.reel_width_mm) || 0;
-		cbForm.product_width_mm  = parseFloat(vals.product_width_mm) || 0;
+		cbForm.reel_width_mm = parseFloat(vals.reel_width_mm) || 0;
+		cbForm.product_width_mm = parseFloat(vals.product_width_mm) || 0;
 		cbForm.product_length_mm = parseFloat(vals.product_length_mm) || 0;
 		cbForm.product_margin_mm = parseFloat(vals.product_margin_mm) || 0;
-		cbForm.product_gap_mm    = parseFloat(vals.product_gap_mm) || 0;
+		cbForm.product_gap_mm = parseFloat(vals.product_gap_mm) || 0;
 	} else {
 		cbForm.full_sheet_l = parseFloat(vals.full_sheet_l) || 0;
 		cbForm.full_sheet_w = parseFloat(vals.full_sheet_w) || 0;
-		cbForm.cut_sheet_l  = parseFloat(vals.cut_sheet_l) || 0;
-		cbForm.cut_sheet_w  = parseFloat(vals.cut_sheet_w) || 0;
-		cbForm.no_of_cuts   = parseInt(vals.no_of_cuts) || 0;
-		cbForm.no_of_ups    = parseInt(vals.no_of_ups) || 0;
+		cbForm.cut_sheet_l = parseFloat(vals.cut_sheet_l) || 0;
+		cbForm.cut_sheet_w = parseFloat(vals.cut_sheet_w) || 0;
+		cbForm.no_of_cuts = parseInt(vals.no_of_cuts) || 0;
+		cbForm.no_of_ups = parseInt(vals.no_of_ups) || 0;
 	}
 	cbDoc.ui_state = JSON.stringify({ form: cbForm, selected_specs: [], machine_spec: null, calc_result: null });
 
@@ -1416,20 +1512,20 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 // the final saved value on the Cost Item is what flows forward (inquiry not re-read).
 function _cs_packing(bd) {
 	return {
-		packing_type:      (bd && bd.packing_type) || "",
+		packing_type: (bd && bd.packing_type) || "",
 		winding_direction: (bd && bd.winding_direction) || "",
-		pcs_per_role:      (bd && bd.pcs_per_role) || 0,
-		up:                (bd && bd.up) || 0,
-		is_printed:        (bd && bd.is_printed) || "",
+		pcs_per_role: (bd && bd.pcs_per_role) || 0,
+		up: (bd && bd.up) || 0,
+		is_printed: (bd && bd.is_printed) || "",
 	};
 }
 function _apply_packing(target, pk) {
 	if (!target || !pk) return;
-	target.packing_type      = pk.packing_type;
+	target.packing_type = pk.packing_type;
 	target.winding_direction = pk.winding_direction;
-	target.pcs_per_role      = pk.pcs_per_role;
-	target.up                = pk.up;
-	target.is_printed        = pk.is_printed;
+	target.pcs_per_role = pk.pcs_per_role;
+	target.up = pk.up;
+	target.is_printed = pk.is_printed;
 }
 
 function build_items(subject, pages, breakdowns, selected, total_bd_qty) {
