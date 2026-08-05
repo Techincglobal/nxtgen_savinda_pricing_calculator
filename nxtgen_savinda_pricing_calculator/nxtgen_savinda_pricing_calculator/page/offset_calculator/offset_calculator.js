@@ -290,15 +290,15 @@ function oc_mount_app(el) {
 						skip_machine_if_spec: spec.skip_machine_if_spec || '',
 						machines: spec.machines || [],
 						machine_assignment: {
-							machine:                st._machine    || '',
-							cycles:                 parseInt(st._cycles || 1),
+							machine: st._machine || '',
+							cycles: parseInt(st._cycles || 1),
 							customer_sample_colors: !!(st._csc),
-							inks:                   st._inks   || [],
-							foils:                  st._foils  || [],
-							manual_process:         !!(st._manual_process),
-							manual_unit:            st._manual_unit      || 'Fixed Amount',
-							manual_unit_cost:       parseFloat(st._manual_unit_cost || 0),
-							skip_machine:           self.effectiveSkip(spec.spec_name),
+							inks: st._inks || [],
+							foils: st._foils || [],
+							manual_process: !!(st._manual_process),
+							manual_unit: st._manual_unit || 'Fixed Amount',
+							manual_unit_cost: parseFloat(st._manual_unit_cost || 0),
+							skip_machine: self.effectiveSkip(spec.spec_name),
 						},
 						cost_facts: facts,
 					};
@@ -416,11 +416,13 @@ function oc_mount_app(el) {
 				var pt = self.form.pricing_type || 'Offset';
 				var done = 0;
 				function check() { done++; if (done >= 3) { self.loading = false; self.checkUrlRef(); } }
-				frappe.call({ method: API.getSpecs, args: { pricing_type: pt }, callback: function (r) {
-					self.allSpecs = r.message || [];
-					if (self.needsAutoSelect) { self.needsAutoSelect = false; self._autoSelectFromOperations(); }
-					check();
-				}});
+				frappe.call({
+					method: API.getSpecs, args: { pricing_type: pt }, callback: function (r) {
+						self.allSpecs = r.message || [];
+						if (self.needsAutoSelect) { self.needsAutoSelect = false; self._autoSelectFromOperations(); }
+						check();
+					}
+				});
 				frappe.call({ method: API.getMachines, args: { pricing_type: pt }, callback: function (r) { self.allMachines = r.message || []; check(); } });
 				// Load inks + foils (needed for both Offset and Flexo Production Assignment)
 				var inkDone = 0;
@@ -680,17 +682,17 @@ function oc_mount_app(el) {
 			getAttrValue(sn, cf, a) { return ((this.specState[sn] || {})[cf] || {}).attr_values && ((this.specState[sn] || {})[cf] || {}).attr_values[a] || ''; },
 			getMachineAttrValue(cf, a) { return (this.machineSpecState[cf] || {}).attr_values && (this.machineSpecState[cf] || {}).attr_values[a] || ''; },
 
-				openInkDialog(spec) {
+			openInkDialog(spec) {
 				var st = this.specState[spec.spec_name] || {};
 				this.inkDialog = spec;
 				this.inkDialogState = {
-					machine:      st._machine      || '',
-					cycles:       parseInt(st._cycles || 1),
-					csc:          !!(st._csc),
-					inks:         JSON.parse(JSON.stringify(st._inks  || [])),
-					foils:        JSON.parse(JSON.stringify(st._foils || [])),
-					manual_process:   !!(st._manual_process),
-					manual_unit:      st._manual_unit      || 'Fixed Amount',
+					machine: st._machine || '',
+					cycles: parseInt(st._cycles || 1),
+					csc: !!(st._csc),
+					inks: JSON.parse(JSON.stringify(st._inks || [])),
+					foils: JSON.parse(JSON.stringify(st._foils || [])),
+					manual_process: !!(st._manual_process),
+					manual_unit: st._manual_unit || 'Fixed Amount',
 					manual_unit_cost: parseFloat(st._manual_unit_cost || 0),
 				};
 				this.inkNewInk = '';
@@ -703,13 +705,13 @@ function oc_mount_app(el) {
 				if (!this.inkDialog) return;
 				var st = this.specState[this.inkDialog.spec_name];
 				if (!st) return;
-				st._machine          = this.inkDialogState.machine;
-				st._cycles           = this.inkDialogState.cycles;
-				st._csc              = this.inkDialogState.csc;
-				st._inks             = JSON.parse(JSON.stringify(this.inkDialogState.inks));
-				st._foils            = JSON.parse(JSON.stringify(this.inkDialogState.foils));
-				st._manual_process   = this.inkDialogState.manual_process;
-				st._manual_unit      = this.inkDialogState.manual_unit;
+				st._machine = this.inkDialogState.machine;
+				st._cycles = this.inkDialogState.cycles;
+				st._csc = this.inkDialogState.csc;
+				st._inks = JSON.parse(JSON.stringify(this.inkDialogState.inks));
+				st._foils = JSON.parse(JSON.stringify(this.inkDialogState.foils));
+				st._manual_process = this.inkDialogState.manual_process;
+				st._manual_unit = this.inkDialogState.manual_unit;
 				st._manual_unit_cost = this.inkDialogState.manual_unit_cost;
 				// Sync Flexo top-level machine card if this is the printing spec
 				if (this.isFlexo && this.flexoPrintingSpec && this.flexoPrintingSpec.spec_name === this.inkDialog.spec_name) {
@@ -750,20 +752,20 @@ function oc_mount_app(el) {
 				this.inkDialogState.inks.splice(idx, 1);
 			},
 			addDialogFoil() {
-				var name  = this.foilNewName;
-				var grp   = this.foilNewGroup || 'COLD';
-				var pct   = parseFloat(this.foilNewPct) || 100;
+				var name = this.foilNewName;
+				var grp = this.foilNewGroup || 'COLD';
+				var pct = parseFloat(this.foilNewPct) || 100;
 				if (!name) return;
 				// Get foil_name from the selected foil key (which is foil.name = "HOT-Gold" etc.)
-				var foilDoc = this.allFoils.find(function(f){ return f.name === name; });
+				var foilDoc = this.allFoils.find(function (f) { return f.name === name; });
 				this.inkDialogState.foils.push({
-					foil_name:  foilDoc ? foilDoc.foil_name : name,
-					foil_key:   name,
+					foil_name: foilDoc ? foilDoc.foil_name : name,
+					foil_key: name,
 					foil_group: foilDoc ? foilDoc.foil_group : grp,
 					percentage: pct,
 				});
 				this.foilNewName = '';
-				this.foilNewPct  = 100;
+				this.foilNewPct = 100;
 			},
 			removeDialogFoil(idx) {
 				this.inkDialogState.foils.splice(idx, 1);
@@ -895,8 +897,8 @@ function oc_mount_app(el) {
 						if (r.message && r.message.length > 0) {
 							self.form.item_qty = parseFloat(r.message[0].qty) || self.form.item_qty;
 							var allQtys = r.message.map(function (b) { return parseFloat(b.qty) || 0; }).filter(function (q) { return q > 0; });
-						self.additionalBreakdowns = allQtys;
-						if (allQtys.length > 0) self.form.item_qty = allQtys.reduce(function (s, q) { return s + q; }, 0);
+							self.additionalBreakdowns = allQtys;
+							if (allQtys.length > 0) self.form.item_qty = allQtys.reduce(function (s, q) { return s + q; }, 0);
 							self.scheduleCalc();
 						}
 					},
@@ -1126,33 +1128,33 @@ function oc_mount_app(el) {
 							// Restore machine assignment if this spec has_machine
 							if (spec.has_machine && spec.machine_assignment) {
 								state._machine = spec.machine_assignment.machine || '';
-								state._cycles  = parseInt(spec.machine_assignment.cycles || 1);
-								state._csc     = !!(spec.machine_assignment.customer_sample_colors);
-								state._inks    = spec.machine_assignment.inks  || [];
-								state._foils   = spec.machine_assignment.foils || [];
+								state._cycles = parseInt(spec.machine_assignment.cycles || 1);
+								state._csc = !!(spec.machine_assignment.customer_sample_colors);
+								state._inks = spec.machine_assignment.inks || [];
+								state._foils = spec.machine_assignment.foils || [];
 								// Restore the skip-machine choice if it was saved
 								if (typeof spec.machine_assignment.skip_machine === 'boolean') {
 									state._skipOverride = spec.machine_assignment.skip_machine;
 								}
 							} else if (spec.has_machine) {
 								state._machine = '';
-								state._cycles  = 1;
-								state._inks    = [];
-								state._foils   = [];
-								state._csc     = false;
+								state._cycles = 1;
+								state._inks = [];
+								state._foils = [];
+								state._csc = false;
 							}
 							self.specState[spec.spec_name] = state;
-					});
-					// For Flexo: sync top-level print machine from the printing spec's saved assignment
-					if (self.isFlexo || (d.form && d.form.pricing_type === 'Flexo')) {
-						var printSpec = self.allSpecs.find(function (s) {
-							return s.has_machine && (s.machines || []).some(function (m) { return m.is_printing_machine; });
 						});
-						if (printSpec && self.specState[printSpec.spec_name]) {
-							self.flexoPrintMachine = self.specState[printSpec.spec_name]._machine || '';
+						// For Flexo: sync top-level print machine from the printing spec's saved assignment
+						if (self.isFlexo || (d.form && d.form.pricing_type === 'Flexo')) {
+							var printSpec = self.allSpecs.find(function (s) {
+								return s.has_machine && (s.machines || []).some(function (m) { return m.is_printing_machine; });
+							});
+							if (printSpec && self.specState[printSpec.spec_name]) {
+								self.flexoPrintMachine = self.specState[printSpec.spec_name]._machine || '';
+							}
 						}
-					}
-					// Restore ALL breakdown splits (not just the "additional" ones)
+						// Restore ALL breakdown splits (not just the "additional" ones)
 						self.additionalBreakdowns = (d.form && d.form.breakdown_qtys && d.form.breakdown_qtys.length > 0)
 							? d.form.breakdown_qtys.map(function (q) { return parseFloat(q) || 0; }).filter(function (q) { return q > 0; })
 							: [];
@@ -1244,17 +1246,17 @@ function oc_mount_app(el) {
 					var snap = {
 						_v: 1,
 						_ts: new Date().getTime(),
-						savedDocName:         this.savedDocName || '',
-						form:                 JSON.parse(JSON.stringify(this.form)),
-						selectedSpecNames:    JSON.parse(JSON.stringify(this.selectedSpecNames)),
-						specState:            JSON.parse(JSON.stringify(this.specState)),
-						machineSpecState:     JSON.parse(JSON.stringify(this.machineSpecState)),
-						selectedMachine:      this.selectedMachine ? this.selectedMachine.spec_name : '',
-						flexoPrintMachine:    this.flexoPrintMachine || '',
-						manualCosts:          JSON.parse(JSON.stringify(this.manualCosts)),
+						savedDocName: this.savedDocName || '',
+						form: JSON.parse(JSON.stringify(this.form)),
+						selectedSpecNames: JSON.parse(JSON.stringify(this.selectedSpecNames)),
+						specState: JSON.parse(JSON.stringify(this.specState)),
+						machineSpecState: JSON.parse(JSON.stringify(this.machineSpecState)),
+						selectedMachine: this.selectedMachine ? this.selectedMachine.spec_name : '',
+						flexoPrintMachine: this.flexoPrintMachine || '',
+						manualCosts: JSON.parse(JSON.stringify(this.manualCosts)),
 						additionalBreakdowns: JSON.parse(JSON.stringify(this.additionalBreakdowns)),
-						matSearch:            this.matSearch || '',
-						calc:                 JSON.parse(JSON.stringify(this.calc || {})),
+						matSearch: this.matSearch || '',
+						calc: JSON.parse(JSON.stringify(this.calc || {})),
 					};
 					window.localStorage.setItem(this._draftKey(), JSON.stringify(snap));
 				} catch (e) { /* storage full / unavailable — ignore */ }
@@ -1263,7 +1265,7 @@ function oc_mount_app(el) {
 			autoSaveDraft: debounce(function () { if (this._draftReady) this.saveDraft(); }, 800),
 			_flushDraft() { if (this._draftReady) this.saveDraft(); },
 			clearDraft() {
-				try { window.localStorage.removeItem(this._draftKey()); } catch (e) {}
+				try { window.localStorage.removeItem(this._draftKey()); } catch (e) { }
 			},
 			restoreDraft() {
 				var raw;
@@ -1276,13 +1278,13 @@ function oc_mount_app(el) {
 
 				self.savedDocName = d.savedDocName || self.savedDocName || '';
 				Object.assign(self.form, d.form);
-				self.selectedSpecNames    = Array.isArray(d.selectedSpecNames) ? d.selectedSpecNames.slice() : [];
-				self.specState            = d.specState || {};
-				self.machineSpecState     = d.machineSpecState || {};
-				self.flexoPrintMachine    = d.flexoPrintMachine || '';
-				self.manualCosts          = Array.isArray(d.manualCosts) ? d.manualCosts : [];
+				self.selectedSpecNames = Array.isArray(d.selectedSpecNames) ? d.selectedSpecNames.slice() : [];
+				self.specState = d.specState || {};
+				self.machineSpecState = d.machineSpecState || {};
+				self.flexoPrintMachine = d.flexoPrintMachine || '';
+				self.manualCosts = Array.isArray(d.manualCosts) ? d.manualCosts : [];
 				self.additionalBreakdowns = Array.isArray(d.additionalBreakdowns) ? d.additionalBreakdowns : [];
-				self.matSearch            = d.matSearch || '';
+				self.matSearch = d.matSearch || '';
 				if (d.calc && d.calc.cost_rows) self.calc = d.calc;
 
 				// Resolve the selected machine object from its saved name
@@ -1314,16 +1316,16 @@ function oc_mount_app(el) {
 				}
 			},
 			// Autosave a draft whenever any working state changes (debounced + gated)
-			form:                 { deep: true, handler: function () { this.autoSaveDraft(); } },
-			specState:            { deep: true, handler: function () { this.autoSaveDraft(); } },
-			machineSpecState:     { deep: true, handler: function () { this.autoSaveDraft(); } },
-			selectedSpecNames:    { deep: true, handler: function () { this.autoSaveDraft(); } },
-			manualCosts:          { deep: true, handler: function () { this.autoSaveDraft(); } },
+			form: { deep: true, handler: function () { this.autoSaveDraft(); } },
+			specState: { deep: true, handler: function () { this.autoSaveDraft(); } },
+			machineSpecState: { deep: true, handler: function () { this.autoSaveDraft(); } },
+			selectedSpecNames: { deep: true, handler: function () { this.autoSaveDraft(); } },
+			manualCosts: { deep: true, handler: function () { this.autoSaveDraft(); } },
 			additionalBreakdowns: { deep: true, handler: function () { this.autoSaveDraft(); } },
-			calc:                 { deep: true, handler: function () { this.autoSaveDraft(); } },
-			selectedMachine:      function () { this.autoSaveDraft(); },
-			flexoPrintMachine:    function () { this.autoSaveDraft(); },
-			matSearch:            function () { this.autoSaveDraft(); },
+			calc: { deep: true, handler: function () { this.autoSaveDraft(); } },
+			selectedMachine: function () { this.autoSaveDraft(); },
+			flexoPrintMachine: function () { this.autoSaveDraft(); },
+			matSearch: function () { this.autoSaveDraft(); },
 		},
 
 		// ── TEMPLATE ────────────────────────────────────────────────
@@ -1605,9 +1607,10 @@ function oc_mount_app(el) {
               </div>
             </div>
           </div>
-          <div class="oc-field"><label class="oc-lbl">Profit Margin (%)</label><input v-model.number="form.profit_margin" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
+         <!-- <div class="oc-field"><label class="oc-lbl">Profit Margin (%)</label><input v-model.number="form.profit_margin" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
           <div class="oc-field"><label class="oc-lbl">Extra Production Cost (%)</label><input v-model.number="form.extra_prod_cost_pct" type="number" min="0" step="0.5" class="oc-inp" @change="scheduleCalc" /><div class="oc-hint">Added on top of total production cost before profit margin.</div></div>
-        </div>
+        -->
+		  </div>
       </div>
 
       <!-- ══ FLEXO: Label & Reel Specs ══ -->
@@ -1651,10 +1654,10 @@ function oc_mount_app(el) {
           </div>
           <div class="oc-field"><label class="oc-lbl">Plate Price (per plate)</label><input v-model.number="form.plate_price" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
         </div>
-        <div class="oc-2col">
-          <div class="oc-field"><label class="oc-lbl">Profit Margin (%)</label><input v-model.number="form.profit_margin" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
-          <div class="oc-field"><label class="oc-lbl">Extra Production Cost (%)</label><input v-model.number="form.extra_prod_cost_pct" type="number" min="0" step="0.5" class="oc-inp" @change="scheduleCalc" /></div>
-        </div>
+    	<!-- <div class="oc-2col">
+           <div class="oc-field"><label class="oc-lbl">Profit Margin (%)</label><input v-model.number="form.profit_margin" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
+           <div class="oc-field"><label class="oc-lbl">Extra Production Cost (%)</label><input v-model.number="form.extra_prod_cost_pct" type="number" min="0" step="0.5" class="oc-inp" @change="scheduleCalc" /></div>
+    	</div>  -->
       </div>
       <div class="oc-field">
         <label class="oc-lbl">Taxes</label>
@@ -1791,6 +1794,14 @@ function oc_mount_app(el) {
       <div v-if="!manualCosts.length" class="oc-hint" style="margin-top:3px">Add ad-hoc costs (delivery, handling, etc.). Pick a type: Production / Material / Preparation.</div>
 
     </div>
+	<div class="" style="padding:12px 16px;border-top:1px solid #e5e7eb; background:#f9fafb">
+	
+	<div class="oc-divider-label">Profit & Extra Costs</div>
+	<div class="oc-2col">
+    <div class="oc-field"><label class="oc-lbl">Profit Margin (%)</label><input v-model.number="form.profit_margin" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
+    <div class="oc-field"><label class="oc-lbl">Extra Production Cost (%)</label><input v-model.number="form.extra_prod_cost_pct" type="number" min="0" step="0.5" class="oc-inp" @change="scheduleCalc" /></div>
+	</div>
+	</div>
   </div>
 
   <!-- ═══════ RIGHT PANEL ═══════ -->
