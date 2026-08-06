@@ -27,6 +27,14 @@ frappe.ui.form.on("Savinda Quotation", {
 				}
 			};
 		});
+
+		// View the linked Cost Sheet (full costing detail) in a new tab — for checking the
+		// costing behind this quote. The Cost Sheet is read-only once submitted.
+		if (!frm.is_new() && frm.doc.cost_sheet) {
+			frm.add_custom_button(__("View Cost Sheet"), function () {
+				window.open("/app/cost-sheet/" + encodeURIComponent(frm.doc.cost_sheet), "_blank");
+			}, __("Actions"));
+		}
 		// Fill from Cost Sheet button (draft only — locked after submit)
 		// if (frm.doc.cost_sheet && frm.doc.docstatus === 0) {
 		// 	frm.add_custom_button(__("Reload from Cost Sheet"), function () {
