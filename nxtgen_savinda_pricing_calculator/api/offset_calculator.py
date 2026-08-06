@@ -1963,13 +1963,16 @@ def copy_calculation(source_cb, target_cost_item, new_qty=None, description=None
 
 
 @frappe.whitelist()
-def duplicate_cost_item(source_cost_item, new_name=None):
+def duplicate_cost_item(source_cost_item, new_name=None, new_qty=None):
     """Duplicate a cost Item into a NEW one that carries its OWN cloned Calculation
     Breakdown(s). The caller adds the returned item as a new Cost Sheet row.
 
     Lets sales quote a with/without-spec variant of a product: the copy starts identical,
     then the user edits specs on the copy in the calculator without touching the original.
     Reuses copy_calculation() to clone each breakdown so the copy's costs are independent.
+
+    When `new_qty` is given, each cloned breakdown is recomputed at that quantity (and the
+    copy's item_qty is set to it) — used by add_qty_variant() for quantity-break pricing.
     """
     if not source_cost_item:
         return {"error": "source_cost_item is required"}
@@ -1982,6 +1985,8 @@ def duplicate_cost_item(source_cost_item, new_name=None):
     # breakdowns below so editing the copy never affects the original).
     new_ci = frappe.copy_doc(src)
     new_ci.cost_item_name = (new_name or f"{src.cost_item_name} (Copy)").strip()
+    if new_qty is not None and flt(new_qty) > 0:
+        new_ci.item_qty = flt(new_qty)
     new_ci.set("calculations", [])
     new_ci.insert(ignore_permissions=True)
 
@@ -1989,7 +1994,7 @@ def duplicate_cost_item(source_cost_item, new_name=None):
     for calc in src.calculations:
         if not calc.calculation_breakdown:
             continue
-        res = copy_calculation(calc.calculation_breakdown, new_ci.name, description=calc.description)
+        res = copy_calculation(calc.calculation_breakdown, new_ci.name, new_qty=new_qty, description=calc.description)
         if isinstance(res, dict) and res.get("new_cb"):
             new_cbs.append(res["new_cb"])
 
@@ -2001,3 +2006,17 @@ def duplicate_cost_item(source_cost_item, new_name=None):
         "unit_cost":          flt(new_ci.unit_cost),
         "new_cbs":            new_cbs,
     }
+
+
+@frappe.whitelist()
+def add_qty_variant(source_cost_item, new_qty):
+    """Create a QUANTITY variant of a cost Item: a fresh cost Item with the SAME name and
+    specs, but its breakdown(s) recomputed at `new_qty`. The caller adds it as a new Cost
+    Sheet row. Because it keeps the SAME cost_item_name, the quotation groups it under the
+    same item and prints it as an extra qty/price line (item details shown once)."""
+    if not source_cost_item or not frappe.db.exists("cost Item", source_cost_item):
+        return {"error": "Source cost item not found"}
+    if not new_qty or flt(new_qty) <= 0:
+        return {"error": "New quantity must be greater than 0"}
+    src_name = frappe.db.get_value("cost Item", source_cost_item, "cost_item_name")
+    return duplicate_cost_item(source_cost_item, new_name=src_name, new_qty=new_qty)
