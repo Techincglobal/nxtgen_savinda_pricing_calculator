@@ -18,6 +18,7 @@ import frappe
 from frappe.utils import flt, cint
 
 
+
 @frappe.whitelist()
 def get_specs(pricing_type="Offset"):
     """
@@ -939,7 +940,7 @@ def get_costing_config():
 
 
 @frappe.whitelist()
-def resolve_common_material_name(raw_material=None, base_material=None):
+def resolve_common_material_name(raw_material=None, base_material=None, calculation_breakdown=None):
     """Customer-facing common material name held on the Boards and Papers master.
 
     Used to HIDE the real material on the customer quotation. Resolution order:
@@ -948,17 +949,35 @@ def resolve_common_material_name(raw_material=None, base_material=None):
       3. base_material code → Boards and Papers directly.
     Returns the common_name, or "" — NEVER the real material/item name.
     """
-    if not frappe.db.has_column("Boards and Papers", "common_name"):
+    if not frappe.db.has_column("Boards and Papers", "item"):
         return ""
 
     def _bp_common(name):
         if not name:
             return ""
-        cn = frappe.db.get_value("Boards and Papers", name, "common_name")
+        cn = frappe.db.get_value("Boards and Papers", name, "item")
         if cn:
             return cn
         return frappe.db.get_value("Boards and Papers", {"item": name}, "common_name") or ""
+    def _get_bp_item(name,cost_breakdown=None):
+        cn =frappe.db.get_value("Item", name, "custom_board_and_paper_group")
+        if not name:
+            return ""
+        if cn:
+            return cn
+        if cost_breakdown:
+            inquery=frappe.db.get_value("Calculation Breakdown", cost_breakdown, "ref")
+            if  inquery:
+                common_name=frappe.db.get_value("Opportunity",inquery,"custom_board")
+                if common_name:
+                    return common_name
+                else:
+                    return ""
+                # for row in inquery_doc.custom_breakdown:
+                #     if row.description==name:
+                #         return row.common_name
 
+        return frappe.db.get_value("Boards and Papers", {"item": name}, "name") or ""
     raw_material  = (raw_material or "").strip()
     base_material = (base_material or "").strip()
 
@@ -967,7 +986,7 @@ def resolve_common_material_name(raw_material=None, base_material=None):
         return cn
     if base_material:
         iname = frappe.db.get_value("Item", base_material, "item_name") or base_material
-        cn = _bp_common(iname) or _bp_common(base_material)
+        cn = _bp_common(iname) or _get_bp_item(base_material, calculation_breakdown)
         if cn:
             return cn
     return ""

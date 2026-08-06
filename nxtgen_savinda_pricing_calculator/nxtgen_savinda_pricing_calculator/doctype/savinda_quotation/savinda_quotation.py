@@ -95,7 +95,7 @@ class SavindaQuotation(Document):
 					"Calculation Breakdown", it.calculation_breakdown, "base_material"
 				) or ""
 			it.material = resolve_common_material_name(
-				raw_material=it.material or "", base_material=base_mat
+				raw_material=it.material or "", base_material=base_mat, calculation_breakdown=it.calculation_breakdown
 			) or ""
 
 	# ── Inquiry (Opportunity) lifecycle — mirrors ERPNext Quotation→Opportunity ──

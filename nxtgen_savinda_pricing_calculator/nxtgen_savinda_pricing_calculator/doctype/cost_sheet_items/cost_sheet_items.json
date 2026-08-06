@@ -10,11 +10,22 @@
   "qty",
   "column_break_djsy",
   "item_name",
-  "unit_price",
   "profit_margin",
+  "section_break_ppqd",
+  "unit_price",
   "ammount",
+  "column_break_uxne",
   "selling_unit_price",
   "selling_ammount",
+  "section_break_qauz",
+  "html_sfyo",
+  "section_break_packing",
+  "packing_type",
+  "winding_direction",
+  "is_printed",
+  "column_break_pack2",
+  "pcs_per_role",
+  "up",
   "section_break_iefe",
   "item",
   "order_number",
@@ -24,19 +35,10 @@
   "column_break_tirb",
   "batch_no",
   "expiry_date",
-  "section_break_packing",
-  "packing_type",
-  "winding_direction",
-  "is_printed",
-  "column_break_pack2",
-  "pcs_per_role",
-  "up",
   "section_break_byhw",
   "sscl",
   "column_break_fpia",
-  "vat",
-  "section_break_qauz",
-  "html_sfyo"
+  "vat"
  ],
  "fields": [
   {
@@ -70,12 +72,12 @@
   },
   {
    "columns": 1,
+   "description": "Copied from Calculation Breakdown. Edit in the calculator.",
    "fieldname": "profit_margin",
    "fieldtype": "Float",
    "in_list_view": 1,
    "label": "Margin %",
-   "read_only": 1,
-   "description": "Copied from Calculation Breakdown. Edit in the calculator."
+   "read_only": 1
   },
   {
    "columns": 2,
@@ -216,13 +218,21 @@
   {
    "fieldname": "column_break_djsy",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_ppqd",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_uxne",
+   "fieldtype": "Column Break"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-05-17 20:08:00.622573",
+ "modified": "2026-08-06 15:28:47.774529",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Cost Sheet Items",
