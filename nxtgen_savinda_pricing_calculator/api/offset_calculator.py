@@ -590,6 +590,14 @@ def calculate(payload):
 
 
 @frappe.whitelist()
+def get_finishings():
+    """Finishing master records for the calculator's finishing multi-select. These are
+    display-only labels printed on the quotation (they do NOT affect cost). Returns the
+    active finishings by name (Finishing.name == finishing_operation)."""
+    return frappe.get_all("Finishing", filters={"disabled": 0}, pluck="name", order_by="name asc")
+
+
+@frappe.whitelist()
 def save_costing(payload):
     if isinstance(payload, str):
         payload = json.loads(payload)
@@ -599,6 +607,7 @@ def save_costing(payload):
     selected_specs = payload.get("selected_specs", [])
     calc_result    = payload.get("calc_result", {})
     doc_name       = payload.get("doc_name", "")
+    finishing      = payload.get("finishing", []) or []
 
     pricing = calc_result.get("pricing", {})
     sheet   = calc_result.get("sheet",   {})
@@ -675,7 +684,19 @@ def save_costing(payload):
             "machine_spec":   machine_spec,
             "selected_specs": selected_specs,
             "calc_result":    calc_result,
+            "finishing":      finishing,
         })
+
+    # Finishing multi-select — display-only labels for the quotation (no cost impact).
+    # Reset + re-append the chosen Finishing master records; skip any that no longer exist.
+    if hasattr(doc, "finishing"):
+        doc.set("finishing", [])
+        _seen_fin = set()
+        for fn in finishing:
+            fn = (fn or "").strip()
+            if fn and fn not in _seen_fin and frappe.db.exists("Finishing", fn):
+                doc.append("finishing", {"finishing": fn})
+                _seen_fin.add(fn)
 
     for row in calc_result.get("cost_rows", []):
         cf = doc.append("cost_facts", {})
@@ -717,6 +738,10 @@ def load_costing(name):
             state = json.loads(doc.ui_state)
             state["doc_name"] = doc.name
             state["status"]   = doc.docstatus
+            # Finishing selection: prefer the stored child table (authoritative), else ui_state.
+            fin_rows = [r.finishing for r in (doc.get("finishing") or []) if r.finishing]
+            if fin_rows or "finishing" not in state:
+                state["finishing"] = fin_rows
             return state
         except Exception:
             pass
@@ -745,7 +770,8 @@ def load_costing(name):
     }
     return {"doc_name": doc.name, "status": doc.docstatus,
             "form": form, "machine_spec": None, "selected_specs": [],
-            "calc_result": None}
+            "calc_result": None,
+            "finishing": [r.finishing for r in (doc.get("finishing") or []) if r.finishing]}
 
 
 # ── Helpers ───────────────────────────────────────────────────

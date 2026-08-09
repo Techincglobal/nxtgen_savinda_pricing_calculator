@@ -22,6 +22,7 @@
   "material_rate",
   "full_sheet_w",
   "cut_sheetw",
+  "finishing",
   "section_break_nqdo",
   "no_of_cuts",
   "column_break_mcfx",
@@ -102,12 +103,12 @@
    "fieldtype": "Section Break"
   },
   {
+   "default": "Existing",
+   "description": "Existing = select from ERPNext Item master. Custom = manually enter name and rate.",
    "fieldname": "material_type",
    "fieldtype": "Select",
    "label": "Material Type",
-   "options": "Existing\nCustom",
-   "default": "Existing",
-   "description": "Existing = select from ERPNext Item master. Custom = manually enter name and rate."
+   "options": "Existing\nCustom"
   },
   {
    "fieldname": "base_material",
@@ -116,11 +117,11 @@
    "options": "Item"
   },
   {
+   "depends_on": "eval:doc.material_type=='Custom'",
+   "description": "Free-text material name for non-stock or non-existing boards/reels.",
    "fieldname": "custom_material_name",
    "fieldtype": "Data",
-   "label": "Custom Material Name",
-   "depends_on": "eval:doc.material_type=='Custom'",
-   "description": "Free-text material name for non-stock or non-existing boards/reels."
+   "label": "Custom Material Name"
   },
   {
    "fieldname": "full_sheet_l",
@@ -259,11 +260,11 @@
    "label": "Profit Margin (%)"
   },
   {
+   "default": "0",
+   "description": "Added on top of production total before profit margin",
    "fieldname": "extra_prod_cost_pct",
    "fieldtype": "Float",
-   "label": "Extra Production Cost (%)",
-   "default": "0",
-   "description": "Added on top of production total before profit margin"
+   "label": "Extra Production Cost (%)"
   },
   {
    "fieldname": "column_break_vjaw",
@@ -313,13 +314,19 @@
    "fieldtype": "Long Text",
    "hidden": 1,
    "label": "UI state"
+  },
+  {
+   "fieldname": "finishing",
+   "fieldtype": "Table MultiSelect",
+   "label": "Finishing",
+   "options": "cost breakdown finishings"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-06-14 00:00:00.000000",
+ "modified": "2026-08-06 20:20:28.903444",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Calculation Breakdown",
@@ -340,7 +347,6 @@
   },
   {
    "create": 1,
-   "delete": 0,
    "email": 1,
    "export": 1,
    "print": 1,
@@ -348,12 +354,11 @@
    "report": 1,
    "role": "Sales User",
    "share": 1,
-   "write": 1,
-   "submit": 0,
-   "cancel": 0,
-   "amend": 0
+   "write": 1
   },
   {
+   "amend": 1,
+   "cancel": 1,
    "create": 1,
    "delete": 1,
    "email": 1,
@@ -363,10 +368,8 @@
    "report": 1,
    "role": "Sales Manager",
    "share": 1,
-   "write": 1,
    "submit": 1,
-   "cancel": 1,
-   "amend": 1
+   "write": 1
   }
  ],
  "row_format": "Dynamic",

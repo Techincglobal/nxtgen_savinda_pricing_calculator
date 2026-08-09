@@ -104,25 +104,26 @@ frappe.ui.form.on("Cost Sheet", {
 		}
 
 		// ── Submitted-only actions ─────────────────────────────
-		// if (frm.doc.docstatus === 1) {
-		frm.add_custom_button(__("Create Quotation"), function () {
-			frappe.call({
-				method: "frappe.client.insert",
-				args: {
-					doc: {
-						doctype: "Savinda Quotation",
-						cost_sheet: frm.doc.name,
-						inquiry: frm.doc.inquiry || "",
+		if (frm.doc.docstatus === 1) {
+			frm.add_custom_button(__("Create Quotation"), function () {
+				frappe.call({
+					method: "frappe.client.insert",
+					args: {
+						doc: {
+							doctype: "Savinda Quotation",
+							cost_sheet: frm.doc.name,
+							inquiry: frm.doc.inquiry || "",
+						},
 					},
-				},
-				callback: function (r) {
-					if (r.message) {
-						frappe.show_alert({ message: "Quotation created — loading items…", indicator: "green" });
-						frappe.set_route("Form", "Savinda Quotation", r.message.name);
-					}
-				},
+					callback: function (r) {
+						if (r.message) {
+							frappe.show_alert({ message: "Quotation created — loading items…", indicator: "green" });
+							frappe.set_route("Form", "Savinda Quotation", r.message.name);
+						}
+					},
+				});
 			});
-		}, __("Actions"));
+		}
 
 		frm.add_custom_button(__("Print / PDF"), function () {
 			var url = "/printview?doctype=Cost+Sheet&name="
