@@ -8,18 +8,32 @@ from frappe.utils import flt, format_date, getdate
 
 
 def get_cb_finishings(calculation_breakdown):
-	"""Finishing processes linked to a Calculation Breakdown = the selected specs whose Offset
-	Spec `group` is 'Finishing', in selection order. Used on the quotation print (show linked
-	finishings only) and copied to the Product Library on FG creation."""
+	"""Finishing labels for a Calculation Breakdown, in selection order. Used on the quotation
+	print (with the colour statement) and copied to the Product Library on FG creation.
+
+	Prefers the explicit `finishing` multi-select on the CB (chosen in the calculator — the
+	display-only finishings). Falls back, for older CBs that have none, to the selected specs
+	whose Offset Spec `group` is 'Finishing'."""
 	if not calculation_breakdown or not frappe.db.exists("Calculation Breakdown", calculation_breakdown):
 		return []
+	# 1. Explicit finishing multi-select (authoritative).
+	out = []
+	try:
+		for row in (frappe.get_doc("Calculation Breakdown", calculation_breakdown).get("finishing") or []):
+			name = (row.finishing or "").strip()
+			if name and name not in out:
+				out.append(name)
+	except Exception:
+		out = []
+	if out:
+		return out
+	# 2. Fallback: Finishing-group selected specs from ui_state (legacy behaviour).
 	try:
 		specs = (json.loads(
 			frappe.db.get_value("Calculation Breakdown", calculation_breakdown, "ui_state") or "{}"
 		) or {}).get("selected_specs") or []
 	except Exception:
 		specs = []
-	out = []
 	for sp in specs:
 		name = (sp.get("spec_name") or "").strip()
 		if name and name not in out and frappe.db.get_value("Offset Spec", name, "group") == "Finishing":

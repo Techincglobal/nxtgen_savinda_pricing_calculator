@@ -37,6 +37,7 @@ function oc_mount_app(el) {
 		getInquiryBreakdowns: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.get_inquiry_breakdowns',
 		getOffsetInks: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.get_offset_inks',
 		getFlexoFoils: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.get_flexo_foils',
+		getFinishings: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.get_finishings',
 	};
 
 	function debounce(fn, ms) {
@@ -92,6 +93,13 @@ function oc_mount_app(el) {
 				specState: {},
 				autoSelectOperations: [],
 				needsAutoSelect: false,
+
+				// Finishing multi-select — display-only labels printed on the quotation (no cost
+				// impact). Options come from the Finishing master; initialised from the inquiry.
+				allFinishings: [],
+				selectedFinishings: [],
+				finishingPick: '',
+				needsFinishingAutoSelect: false,
 
 				// Material link-field
 				matSearch: '', matResults: [], matOpen: false,
@@ -339,7 +347,7 @@ function oc_mount_app(el) {
 						};
 					})
 					.filter(function (m) { return m.name && m.qty * m.rate; });
-				return { form: formData, selected_specs: specs, machine_spec: machine_spec };
+				return { form: formData, selected_specs: specs, machine_spec: machine_spec, finishing: this.selectedFinishings.slice() };
 			},
 		},
 
@@ -406,6 +414,8 @@ function oc_mount_app(el) {
 				} else if (!name) {
 					// New calculation → auto-select specs flagged "Auto Select" (cascades children)
 					this._autoSelectDefaults();
+					// …and pre-fill the finishing multi-select from the inquiry's operations.
+					this._autoSelectFinishingsFromOperations();
 				}
 				// Enable autosave once the initial (async) load has settled
 				setTimeout(function () { self._draftReady = true; }, 1500);
@@ -433,6 +443,13 @@ function oc_mount_app(el) {
 				if (!self.allFoils.length) {
 					frappe.call({ method: API.getFlexoFoils, callback: function (r) { self.allFoils = r.message || []; checkInkFoil(); } });
 				} else { checkInkFoil(); }
+				// Finishing master (for the finishing multi-select) — non-blocking.
+				frappe.call({
+					method: API.getFinishings, callback: function (r) {
+						self.allFinishings = r.message || [];
+						if (self.needsFinishingAutoSelect) { self.needsFinishingAutoSelect = false; self._autoSelectFinishingsFromOperations(); }
+					}
+				});
 			},
 
 			// Reload specs when pricing type changes
@@ -623,6 +640,31 @@ function oc_mount_app(el) {
 						self.initSpecState(spec.spec_name);
 					}
 				});
+			},
+
+			// Pre-fill the finishing multi-select from the inquiry's operations (the operation
+			// names ARE Finishing master names). Display-only; no cost impact.
+			_autoSelectFinishingsFromOperations() {
+				var self = this;
+				var ops = self.autoSelectOperations || [];
+				if (!ops.length) return;
+				if (!self.allFinishings.length) { self.needsFinishingAutoSelect = true; return; }
+				ops.forEach(function (op) {
+					if (self.allFinishings.indexOf(op) !== -1 && self.selectedFinishings.indexOf(op) === -1) {
+						self.selectedFinishings.push(op);
+					}
+				});
+			},
+
+			// Finishing multi-select add / remove.
+			addFinishing() {
+				var f = this.finishingPick;
+				if (f && this.selectedFinishings.indexOf(f) === -1) { this.selectedFinishings.push(f); }
+				this.finishingPick = '';
+			},
+			removeFinishing(name) {
+				var i = this.selectedFinishings.indexOf(name);
+				if (i !== -1) this.selectedFinishings.splice(i, 1);
 			},
 
 			getSpecState(sn, cf) { return (this.specState[sn] || {})[cf] || {}; },
@@ -952,6 +994,7 @@ function oc_mount_app(el) {
 							form: Object.assign({}, self.form, { manual_costs: self.calcPayload.form.manual_costs }),
 							selected_specs: self.calcPayload.selected_specs,
 							machine_spec: self.calcPayload.machine_spec,
+							finishing: self.selectedFinishings.slice(),
 							calc_result: self.calc,
 							doc_name: self.savedDocName || '',
 						})
@@ -1160,9 +1203,15 @@ function oc_mount_app(el) {
 							: [];
 						{  // dummy block to match old else
 						}
+						// Restore the finishing multi-select (display-only labels for the quotation).
+						self.selectedFinishings = (d.finishing || []).slice();
 						// Auto-select finishing specs from inquiry (only for new CBs with no saved specs)
 						if (!(d.selected_specs && d.selected_specs.length) && self.autoSelectOperations.length) {
 							self._autoSelectFromOperations();
+						}
+						// Pre-fill the finishing multi-select from the inquiry only when nothing is saved yet.
+						if (!self.selectedFinishings.length && self.autoSelectOperations.length) {
+							self._autoSelectFinishingsFromOperations();
 						}
 
 						// Restore stored calculation — show as-is, no recalculation
@@ -1249,6 +1298,7 @@ function oc_mount_app(el) {
 						savedDocName: this.savedDocName || '',
 						form: JSON.parse(JSON.stringify(this.form)),
 						selectedSpecNames: JSON.parse(JSON.stringify(this.selectedSpecNames)),
+						selectedFinishings: JSON.parse(JSON.stringify(this.selectedFinishings)),
 						specState: JSON.parse(JSON.stringify(this.specState)),
 						machineSpecState: JSON.parse(JSON.stringify(this.machineSpecState)),
 						selectedMachine: this.selectedMachine ? this.selectedMachine.spec_name : '',
@@ -1279,6 +1329,7 @@ function oc_mount_app(el) {
 				self.savedDocName = d.savedDocName || self.savedDocName || '';
 				Object.assign(self.form, d.form);
 				self.selectedSpecNames = Array.isArray(d.selectedSpecNames) ? d.selectedSpecNames.slice() : [];
+				self.selectedFinishings = Array.isArray(d.selectedFinishings) ? d.selectedFinishings.slice() : [];
 				self.specState = d.specState || {};
 				self.machineSpecState = d.machineSpecState || {};
 				self.flexoPrintMachine = d.flexoPrintMachine || '';
@@ -1320,6 +1371,7 @@ function oc_mount_app(el) {
 			specState: { deep: true, handler: function () { this.autoSaveDraft(); } },
 			machineSpecState: { deep: true, handler: function () { this.autoSaveDraft(); } },
 			selectedSpecNames: { deep: true, handler: function () { this.autoSaveDraft(); } },
+			selectedFinishings: { deep: true, handler: function () { this.autoSaveDraft(); } },
 			manualCosts: { deep: true, handler: function () { this.autoSaveDraft(); } },
 			additionalBreakdowns: { deep: true, handler: function () { this.autoSaveDraft(); } },
 			calc: { deep: true, handler: function () { this.autoSaveDraft(); } },
@@ -1666,6 +1718,26 @@ function oc_mount_app(el) {
           <label class="oc-chk-lbl"><input type="checkbox" v-model="form.tax_vat"  class="oc-chk" @change="scheduleCalc" /><span>VAT (18%)</span></label>
         </div>
       </div>
+
+      <!-- ══ FINISHING (display-only labels for the Quotation; no cost impact) ══ -->
+      <div class="oc-divider"></div>
+      <div class="oc-divider-label">Finishing (shown on Quotation)</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+        <select v-model="finishingPick"
+                style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;background:#fff">
+          <option value="">— Select a finishing —</option>
+          <option v-for="f in allFinishings" :key="f" :value="f" :disabled="selectedFinishings.indexOf(f) !== -1">{{ f }}</option>
+        </select>
+        <button type="button" class="btn btn-xs btn-default" style="white-space:nowrap" @click="addFinishing" :disabled="!finishingPick">+ Add</button>
+      </div>
+      <div v-if="selectedFinishings.length" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+        <span v-for="f in selectedFinishings" :key="f"
+              style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:14px;font-size:12px;color:#3730a3">
+          {{ f }}
+          <a href="#" @click.prevent="removeFinishing(f)" title="Remove" style="color:#6366f1;font-weight:700;text-decoration:none;line-height:1">×</a>
+        </span>
+      </div>
+      <div v-else style="font-size:11.5px;color:#9ca3af;margin-bottom:6px">No finishing selected — the quotation will show only the colour statement.</div>
 
       <!-- ══ ADDITIONAL COST ITEMS (checkboxes) ══ -->
       <div class="oc-divider"></div>

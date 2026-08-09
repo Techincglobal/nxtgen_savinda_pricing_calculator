@@ -255,8 +255,13 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
- "links": [],
- "modified": "2026-07-25 12:24:39.656206",
+ "links": [
+  {
+   "link_doctype": "Savinda Quotation",
+   "link_fieldname": "cost_sheet"
+  }
+ ],
+ "modified": "2026-08-06 16:04:21.230801",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Cost Sheet",

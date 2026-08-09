@@ -104,25 +104,26 @@ frappe.ui.form.on("Cost Sheet", {
 		}
 
 		// ── Submitted-only actions ─────────────────────────────
-		// if (frm.doc.docstatus === 1) {
-		frm.add_custom_button(__("Create Quotation"), function () {
-			frappe.call({
-				method: "frappe.client.insert",
-				args: {
-					doc: {
-						doctype: "Savinda Quotation",
-						cost_sheet: frm.doc.name,
-						inquiry: frm.doc.inquiry || "",
+		if (frm.doc.docstatus === 1) {
+			frm.add_custom_button(__("Create Quotation"), function () {
+				frappe.call({
+					method: "frappe.client.insert",
+					args: {
+						doc: {
+							doctype: "Savinda Quotation",
+							cost_sheet: frm.doc.name,
+							inquiry: frm.doc.inquiry || "",
+						},
 					},
-				},
-				callback: function (r) {
-					if (r.message) {
-						frappe.show_alert({ message: "Quotation created — loading items…", indicator: "green" });
-						frappe.set_route("Form", "Savinda Quotation", r.message.name);
-					}
-				},
+					callback: function (r) {
+						if (r.message) {
+							frappe.show_alert({ message: "Quotation created — loading items…", indicator: "green" });
+							frappe.set_route("Form", "Savinda Quotation", r.message.name);
+						}
+					},
+				});
 			});
-		}, __("Actions"));
+		}
 
 		frm.add_custom_button(__("Print / PDF"), function () {
 			var url = "/printview?doctype=Cost+Sheet&name="
@@ -485,6 +486,11 @@ function render_panel(frm, cdt, cdn) {
 				+ "data-item='" + item_name + "' data-cdt='" + cdt + "' data-cdn='" + cdn + "' "
 				+ "title='Duplicate this item with its own copy of the cost breakdown — then edit specs on the copy'>"
 				+ "⧉ Duplicate Item</button>";
+			var qtyvar_btn = is_submitted ? "" :
+				"<button class='btn-add-qty btn btn-xs btn-default' style='margin-left:6px' "
+				+ "data-item='" + item_name + "' data-cdt='" + cdt + "' data-cdn='" + cdn + "' "
+				+ "title='Add a quantity variant — same item at a different qty; the quotation shows it as an extra qty/price line'>"
+				+ "➕ Add Qty</button>";
 			var actions_th = is_submitted
 				? "<th style='padding:5px 8px;color:#fff;font-size:10.5px;text-align:center'>Link</th>"
 				: "<th style='padding:5px 8px;color:#fff;font-size:10.5px;text-align:center'>Actions</th>";
@@ -527,7 +533,7 @@ function render_panel(frm, cdt, cdn) {
 				+ (display_calcs.length ? " <span style='font-size:10px;background:#e0e7ff;color:#3730a3;"
 					+ "border-radius:10px;padding:1px 7px;font-weight:600'>" + display_calcs.length + "</span>" : "")
 				+ "</span>"
-				+ "<span>" + add_btn + copy_btn + dup_btn + "</span>"
+				+ "<span>" + add_btn + copy_btn + qtyvar_btn + dup_btn + "</span>"
 				+ "</div>"
 				+ cut_strip
 				+ ops_html
@@ -579,6 +585,11 @@ function render_panel(frm, cdt, cdn) {
 					// ── Duplicate Item button (new item + its own cloned breakdown) ──
 					$w.off("click.dup_item").on("click.dup_item", ".btn-dup-item", function () {
 						show_duplicate_item_popup(frm, cdt, cdn, item_name);
+					});
+
+					// ── Add Qty button (same item at a new qty → extra quotation line) ──
+					$w.off("click.add_qty").on("click.add_qty", ".btn-add-qty", function () {
+						show_add_qty_popup(frm, cdt, cdn, item_name);
 					});
 
 					// ── Edit (open calculator) button ───────────────
@@ -958,6 +969,85 @@ function show_duplicate_item_popup(frm, cdt, cdn, item_name) {
 						} else {
 							frm.refresh();
 						}
+					});
+				},
+			});
+		},
+	});
+	d.show();
+}
+
+
+// ─────────────────────────────────────────────────────────────
+//  ADD QTY — quantity variant of an item (same item, new qty)
+//  Creates a new cost Item at the new qty (price recalculated) with the SAME
+//  display name + a new Cost Sheet row. On the quotation the item is shown once
+//  with each qty and price on its own line (details printed once).
+// ─────────────────────────────────────────────────────────────
+function show_add_qty_popup(frm, cdt, cdn, item_name) {
+	var srow = locals[cdt][cdn];
+	var cur_qty = flt_v(srow.qty) || 0;
+	var d = new frappe.ui.Dialog({
+		title: "Add Quantity Variant",
+		fields: [
+			{
+				fieldtype: "HTML",
+				options: "<div style='padding:7px 10px;background:#f0f4ff;border-radius:4px;"
+					+ "font-size:12px;color:#1a3a5c;margin-bottom:6px'>"
+					+ "Adds a new row for <b>" + frappe.utils.escape_html(srow.item_name || "") + "</b> "
+					+ "at a different quantity — the cost is <b>recalculated for that qty</b> automatically. "
+					+ "On the quotation this item's details are shown once, with each qty and price on its own line.</div>",
+			},
+			{
+				fieldtype: "Float", fieldname: "new_qty", label: "New Order Qty", reqd: 1,
+				description: "This item's current qty is " + cur_qty.toLocaleString() + ".",
+			},
+		],
+		primary_action_label: "Add Qty",
+		primary_action: function (vals) {
+			if (!vals.new_qty || vals.new_qty <= 0) {
+				frappe.msgprint({ message: "Enter a quantity greater than 0.", indicator: "orange" });
+				return;
+			}
+			d.hide();
+			frappe.call({
+				method: "nxtgen_savinda_pricing_calculator.api.offset_calculator.add_qty_variant",
+				args: { source_cost_item: item_name, new_qty: vals.new_qty },
+				freeze: true,
+				freeze_message: "Recalculating for the new qty…",
+				callback: function (res) {
+					var m = res.message || {};
+					if (!m.new_cost_item) {
+						frappe.msgprint({ title: "Add Qty failed", message: m.error || "Unknown error.", indicator: "red" });
+						return;
+					}
+					// New row carries the SAME item_name so the quotation groups it under the
+					// base item; the copy links to its own qty-recalculated breakdown(s).
+					var s = locals[cdt][cdn];
+					frm.add_child("pricing_list", {
+						item: m.new_cost_item,
+						item_name: m.new_cost_item_name,
+						qty: vals.new_qty,
+						unit_price: m.unit_cost,
+						product_code: s.product_code,
+						order_number: s.order_number,
+						packing_date: s.packing_date,
+						batch_no: s.batch_no,
+						expiry_date: s.expiry_date,
+						packing_type: s.packing_type,
+						winding_direction: s.winding_direction,
+						pcs_per_role: s.pcs_per_role,
+						up: s.up,
+						sscl: s.sscl,
+						vat: s.vat,
+						profit_margin: s.profit_margin,
+					});
+					frm.save().then(function () {
+						frappe.show_alert({
+							message: "Added qty " + flt_v(vals.new_qty).toLocaleString() + " → " + m.new_cost_item_name,
+							indicator: "green",
+						});
+						frm.refresh();
 					});
 				},
 			});

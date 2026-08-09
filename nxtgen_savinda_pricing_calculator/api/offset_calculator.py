@@ -18,6 +18,7 @@ import frappe
 from frappe.utils import flt, cint
 
 
+
 @frappe.whitelist()
 def get_specs(pricing_type="Offset"):
     """
@@ -589,6 +590,14 @@ def calculate(payload):
 
 
 @frappe.whitelist()
+def get_finishings():
+    """Finishing master records for the calculator's finishing multi-select. These are
+    display-only labels printed on the quotation (they do NOT affect cost). Returns the
+    active finishings by name (Finishing.name == finishing_operation)."""
+    return frappe.get_all("Finishing", filters={"disabled": 0}, pluck="name", order_by="name asc")
+
+
+@frappe.whitelist()
 def save_costing(payload):
     if isinstance(payload, str):
         payload = json.loads(payload)
@@ -598,6 +607,7 @@ def save_costing(payload):
     selected_specs = payload.get("selected_specs", [])
     calc_result    = payload.get("calc_result", {})
     doc_name       = payload.get("doc_name", "")
+    finishing      = payload.get("finishing", []) or []
 
     pricing = calc_result.get("pricing", {})
     sheet   = calc_result.get("sheet",   {})
@@ -674,7 +684,19 @@ def save_costing(payload):
             "machine_spec":   machine_spec,
             "selected_specs": selected_specs,
             "calc_result":    calc_result,
+            "finishing":      finishing,
         })
+
+    # Finishing multi-select — display-only labels for the quotation (no cost impact).
+    # Reset + re-append the chosen Finishing master records; skip any that no longer exist.
+    if hasattr(doc, "finishing"):
+        doc.set("finishing", [])
+        _seen_fin = set()
+        for fn in finishing:
+            fn = (fn or "").strip()
+            if fn and fn not in _seen_fin and frappe.db.exists("Finishing", fn):
+                doc.append("finishing", {"finishing": fn})
+                _seen_fin.add(fn)
 
     for row in calc_result.get("cost_rows", []):
         cf = doc.append("cost_facts", {})
@@ -716,6 +738,10 @@ def load_costing(name):
             state = json.loads(doc.ui_state)
             state["doc_name"] = doc.name
             state["status"]   = doc.docstatus
+            # Finishing selection: prefer the stored child table (authoritative), else ui_state.
+            fin_rows = [r.finishing for r in (doc.get("finishing") or []) if r.finishing]
+            if fin_rows or "finishing" not in state:
+                state["finishing"] = fin_rows
             return state
         except Exception:
             pass
@@ -744,7 +770,8 @@ def load_costing(name):
     }
     return {"doc_name": doc.name, "status": doc.docstatus,
             "form": form, "machine_spec": None, "selected_specs": [],
-            "calc_result": None}
+            "calc_result": None,
+            "finishing": [r.finishing for r in (doc.get("finishing") or []) if r.finishing]}
 
 
 # ── Helpers ───────────────────────────────────────────────────
@@ -939,7 +966,7 @@ def get_costing_config():
 
 
 @frappe.whitelist()
-def resolve_common_material_name(raw_material=None, base_material=None):
+def resolve_common_material_name(raw_material=None, base_material=None, calculation_breakdown=None):
     """Customer-facing common material name held on the Boards and Papers master.
 
     Used to HIDE the real material on the customer quotation. Resolution order:
@@ -948,17 +975,35 @@ def resolve_common_material_name(raw_material=None, base_material=None):
       3. base_material code → Boards and Papers directly.
     Returns the common_name, or "" — NEVER the real material/item name.
     """
-    if not frappe.db.has_column("Boards and Papers", "common_name"):
+    if not frappe.db.has_column("Boards and Papers", "item"):
         return ""
 
     def _bp_common(name):
         if not name:
             return ""
-        cn = frappe.db.get_value("Boards and Papers", name, "common_name")
+        cn = frappe.db.get_value("Boards and Papers", name, "item")
         if cn:
             return cn
         return frappe.db.get_value("Boards and Papers", {"item": name}, "common_name") or ""
+    def _get_bp_item(name,cost_breakdown=None):
+        cn =frappe.db.get_value("Item", name, "custom_board_and_paper_group")
+        if not name:
+            return ""
+        if cn:
+            return cn
+        if cost_breakdown:
+            inquery=frappe.db.get_value("Calculation Breakdown", cost_breakdown, "ref")
+            if  inquery:
+                common_name=frappe.db.get_value("Opportunity",inquery,"custom_board")
+                if common_name:
+                    return common_name
+                else:
+                    return ""
+                # for row in inquery_doc.custom_breakdown:
+                #     if row.description==name:
+                #         return row.common_name
 
+        return frappe.db.get_value("Boards and Papers", {"item": name}, "name") or ""
     raw_material  = (raw_material or "").strip()
     base_material = (base_material or "").strip()
 
@@ -967,7 +1012,7 @@ def resolve_common_material_name(raw_material=None, base_material=None):
         return cn
     if base_material:
         iname = frappe.db.get_value("Item", base_material, "item_name") or base_material
-        cn = _bp_common(iname) or _bp_common(base_material)
+        cn = _bp_common(iname) or _get_bp_item(base_material, calculation_breakdown)
         if cn:
             return cn
     return ""
@@ -1944,13 +1989,16 @@ def copy_calculation(source_cb, target_cost_item, new_qty=None, description=None
 
 
 @frappe.whitelist()
-def duplicate_cost_item(source_cost_item, new_name=None):
+def duplicate_cost_item(source_cost_item, new_name=None, new_qty=None):
     """Duplicate a cost Item into a NEW one that carries its OWN cloned Calculation
     Breakdown(s). The caller adds the returned item as a new Cost Sheet row.
 
     Lets sales quote a with/without-spec variant of a product: the copy starts identical,
     then the user edits specs on the copy in the calculator without touching the original.
     Reuses copy_calculation() to clone each breakdown so the copy's costs are independent.
+
+    When `new_qty` is given, each cloned breakdown is recomputed at that quantity (and the
+    copy's item_qty is set to it) — used by add_qty_variant() for quantity-break pricing.
     """
     if not source_cost_item:
         return {"error": "source_cost_item is required"}
@@ -1963,6 +2011,8 @@ def duplicate_cost_item(source_cost_item, new_name=None):
     # breakdowns below so editing the copy never affects the original).
     new_ci = frappe.copy_doc(src)
     new_ci.cost_item_name = (new_name or f"{src.cost_item_name} (Copy)").strip()
+    if new_qty is not None and flt(new_qty) > 0:
+        new_ci.item_qty = flt(new_qty)
     new_ci.set("calculations", [])
     new_ci.insert(ignore_permissions=True)
 
@@ -1970,7 +2020,7 @@ def duplicate_cost_item(source_cost_item, new_name=None):
     for calc in src.calculations:
         if not calc.calculation_breakdown:
             continue
-        res = copy_calculation(calc.calculation_breakdown, new_ci.name, description=calc.description)
+        res = copy_calculation(calc.calculation_breakdown, new_ci.name, new_qty=new_qty, description=calc.description)
         if isinstance(res, dict) and res.get("new_cb"):
             new_cbs.append(res["new_cb"])
 
@@ -1982,3 +2032,17 @@ def duplicate_cost_item(source_cost_item, new_name=None):
         "unit_cost":          flt(new_ci.unit_cost),
         "new_cbs":            new_cbs,
     }
+
+
+@frappe.whitelist()
+def add_qty_variant(source_cost_item, new_qty):
+    """Create a QUANTITY variant of a cost Item: a fresh cost Item with the SAME name and
+    specs, but its breakdown(s) recomputed at `new_qty`. The caller adds it as a new Cost
+    Sheet row. Because it keeps the SAME cost_item_name, the quotation groups it under the
+    same item and prints it as an extra qty/price line (item details shown once)."""
+    if not source_cost_item or not frappe.db.exists("cost Item", source_cost_item):
+        return {"error": "Source cost item not found"}
+    if not new_qty or flt(new_qty) <= 0:
+        return {"error": "New quantity must be greater than 0"}
+    src_name = frappe.db.get_value("cost Item", source_cost_item, "cost_item_name")
+    return duplicate_cost_item(source_cost_item, new_name=src_name, new_qty=new_qty)
