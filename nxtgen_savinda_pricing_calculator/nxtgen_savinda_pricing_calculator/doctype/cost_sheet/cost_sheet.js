@@ -83,24 +83,24 @@ frappe.ui.form.on("Cost Sheet", {
 
 		// ── Artwork approval (Artwork Approver role) ──────────
 		if (!frm.is_new()) {
-			var roles = frappe.user_roles || [];
-			var can_approve = roles.indexOf("Artwork Approver") >= 0 || roles.indexOf("System Manager") >= 0;
-			if (frm.doc.artwork_status) {
-				frm.dashboard.set_headline_alert(
-					"Artwork status: <b>" + frm.doc.artwork_status + "</b>"
-					+ (frm.doc.artwork_approved_by ? " — " + frm.doc.artwork_approved_by : "")
-				);
-			}
-			if (can_approve && frm.doc.artwork_status !== "Approved") {
-				frm.add_custom_button(__("Approve Artwork"), function () {
-					_artwork_action(frm, "approve_artwork", "Approve Artwork");
-				}, __("Artwork"));
-			}
-			if (can_approve && frm.doc.artwork_status !== "Rejected") {
-				frm.add_custom_button(__("Reject Artwork"), function () {
-					_artwork_action(frm, "reject_artwork", "Reject Artwork");
-				}, __("Artwork"));
-			}
+			// var roles = frappe.user_roles || [];
+			// var can_approve = roles.indexOf("Artwork Approver") >= 0 || roles.indexOf("System Manager") >= 0;
+			// if (frm.doc.artwork_status) {
+			// 	frm.dashboard.set_headline_alert(
+			// 		"Artwork status: <b>" + frm.doc.artwork_status + "</b>"
+			// 		+ (frm.doc.artwork_approved_by ? " — " + frm.doc.artwork_approved_by : "")
+			// 	);
+			// }
+			// if (can_approve && frm.doc.artwork_status !== "Approved") {
+			// 	frm.add_custom_button(__("Approve Artwork"), function () {
+			// 		_artwork_action(frm, "approve_artwork", "Approve Artwork");
+			// 	}, __("Artwork"));
+			// }
+			// if (can_approve && frm.doc.artwork_status !== "Rejected") {
+			// 	frm.add_custom_button(__("Reject Artwork"), function () {
+			// 		_artwork_action(frm, "reject_artwork", "Reject Artwork");
+			// 	}, __("Artwork"));
+			// }
 		}
 
 		// ── Submitted-only actions ─────────────────────────────
@@ -476,11 +476,11 @@ function render_panel(frm, cdt, cdn) {
 				"<button class='btn-add-calc btn btn-xs btn-primary' "
 				+ "data-item='" + item_name + "' data-cdt='" + cdt + "' data-cdn='" + cdn + "'>"
 				+ "+ Add Calculation</button>";
-			var copy_btn = is_submitted ? "" :
-				"<button class='btn-copy-calc btn btn-xs btn-default' style='margin-left:6px' "
-				+ "data-item='" + item_name + "' data-cdt='" + cdt + "' data-cdn='" + cdn + "' "
-				+ "title='Copy an existing calculation and only change the quantity'>"
-				+ "📋 Copy Qty</button>";
+			// var copy_btn = is_submitted ? "" :
+			// 	"<button class='btn-copy-calc btn btn-xs btn-default' style='margin-left:6px' "
+			// 	+ "data-item='" + item_name + "' data-cdt='" + cdt + "' data-cdn='" + cdn + "' "
+			// 	+ "title='Copy an existing calculation and only change the quantity'>"
+			// 	+ "📋 Copy Qty</button>";
 			var dup_btn = is_submitted ? "" :
 				"<button class='btn-dup-item btn btn-xs btn-default' style='margin-left:6px' "
 				+ "data-item='" + item_name + "' data-cdt='" + cdt + "' data-cdn='" + cdn + "' "
@@ -533,7 +533,7 @@ function render_panel(frm, cdt, cdn) {
 				+ (display_calcs.length ? " <span style='font-size:10px;background:#e0e7ff;color:#3730a3;"
 					+ "border-radius:10px;padding:1px 7px;font-weight:600'>" + display_calcs.length + "</span>" : "")
 				+ "</span>"
-				+ "<span>" + add_btn + copy_btn + qtyvar_btn + dup_btn + "</span>"
+				+ "<span>" + add_btn + qtyvar_btn + dup_btn + "</span>"
 				+ "</div>"
 				+ cut_strip
 				+ ops_html
@@ -734,13 +734,13 @@ function show_add_calc_popup(frm, cdt, cdn, item_name) {
 					{ fieldtype: "Column Break" },
 					{ fieldtype: "Float", fieldname: "full_sheet_w", label: "Full Sheet Width (W)", reqd: 1 },
 					{ fieldtype: "Section Break", label: "Cut Sheet 1 (Inches)" },
-					{ fieldtype: "Float", fieldname: "cut_sheet_l", label: "Cut Sheet 1 — L", reqd: 1, default: ci.cut_sheet_l || 0 },
+					{ fieldtype: "Float", fieldname: "cut_sheet_l", label: "Cut Sheet 1 — L", reqd: 1 },
 					{ fieldtype: "Column Break" },
-					{ fieldtype: "Float", fieldname: "cut_sheet_w", label: "Cut Sheet 1 — W", reqd: 1, default: ci.cut_sheet_w || 0 },
+					{ fieldtype: "Float", fieldname: "cut_sheet_w", label: "Cut Sheet 1 — W", reqd: 1 },
 					{ fieldtype: "Section Break", label: "Cut Sheet 2 (Optional, Inches)" },
-					{ fieldtype: "Float", fieldname: "cut_sheet_l_2", label: "Cut Sheet 2 — L", default: ci.cut_sheet_l_2 || 0, description: "Leave 0 if only one cut size." },
+					{ fieldtype: "Float", fieldname: "cut_sheet_l_2", label: "Cut Sheet 2 — L", description: "Leave 0 if only one cut size." },
 					{ fieldtype: "Column Break" },
-					{ fieldtype: "Float", fieldname: "cut_sheet_w_2", label: "Cut Sheet 2 — W", default: ci.cut_sheet_w_2 || 0 },
+					{ fieldtype: "Float", fieldname: "cut_sheet_w_2", label: "Cut Sheet 2 — W" },
 					{ fieldtype: "Section Break", label: "Cuts & Ups" },
 					{ fieldtype: "Int", fieldname: "no_of_cuts", label: "No of Cuts", default: 2, reqd: 1 },
 					{ fieldtype: "Column Break" },

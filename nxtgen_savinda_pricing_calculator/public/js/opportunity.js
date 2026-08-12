@@ -18,6 +18,13 @@ frappe.ui.form.on("Opportunity", {
 				}
 			};
 		});
+		frm.set_query("custom_currency_type", function () {
+			return {
+				filters: {
+					enabled: 1
+				}
+			};
+		});
 		// NPD is now created from the Savinda Quotation (as an NPD-type Sales Order),
 		// so the Inquiry no longer offers "Create NPD Request".
 
