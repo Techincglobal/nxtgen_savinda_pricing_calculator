@@ -119,6 +119,35 @@ class SavindaQuotation(Document):
 
 	def on_cancel(self):
 		self._update_inquiry_status("Open")
+		self._cancel_linked_cost_sheet()
+
+	def _cancel_linked_cost_sheet(self):
+		"""Cancel the linked Cost Sheet when this quotation is cancelled — which cascades to its
+		Calculation Breakdowns (Cost Sheet.on_cancel). Skipped if another SUBMITTED quotation
+		still uses the same cost sheet, so a shared cost sheet isn't pulled out from under it."""
+		if not self.cost_sheet or not frappe.db.exists("Cost Sheet", self.cost_sheet):
+			return
+		others = frappe.get_all("Savinda Quotation", filters={
+			"cost_sheet": self.cost_sheet, "docstatus": 1, "name": ["!=", self.name],
+		}, limit=1)
+		if others:
+			frappe.msgprint(
+				f"Cost Sheet <b>{self.cost_sheet}</b> is still used by another submitted quotation "
+				f"({others[0].name}) — left as-is.", indicator="orange", alert=True)
+			return
+		cs = frappe.get_doc("Cost Sheet", self.cost_sheet)
+		if cs.docstatus != 1:
+			return
+		try:
+			cs.cancel()  # Cost Sheet.on_cancel cascades → cancels the linked CBs
+			frappe.msgprint(
+				f"Cost Sheet <b>{cs.name}</b> and its cost breakdowns were cancelled.",
+				indicator="blue", alert=True)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "quotation cancel: cost sheet cancel failed")
+			frappe.msgprint(
+				f"Could not auto-cancel Cost Sheet {cs.name}; cancel it manually if needed.",
+				indicator="red")
 
 	def _update_inquiry_status(self, status, copy_lost=False):
 		if not self.inquiry or not frappe.db.exists("Opportunity", self.inquiry):
@@ -203,3 +232,39 @@ class SavindaQuotation(Document):
 				cust = frappe.db.get_value("Customer", {"customer_name": name}, "name")
 				if cust:
 					self.customer = cust
+
+
+@frappe.whitelist()
+def amend_cost_sheet_for_quotation(quotation):
+	"""For an AMENDED (draft) quotation whose linked Cost Sheet is cancelled: create an
+	amendment of that Cost Sheet so its Calculation Breakdowns become editable draft COPIES
+	(Cost Sheet.after_insert -> _amend_linked_cbs re-points the cost items to the new CBs), and
+	relink this quotation to the new cost sheet. The client then reloads item prices; the user
+	edits the (copied) CB prices, re-submits, and updates the quotation.
+
+	Idempotent: if an amendment of the cost sheet already exists, it is reused."""
+	q = frappe.get_doc("Savinda Quotation", quotation)
+	if q.docstatus != 0:
+		frappe.throw("Amend the Cost Sheet only on a draft (amended) quotation.")
+	if not q.cost_sheet or not frappe.db.exists("Cost Sheet", q.cost_sheet):
+		frappe.throw("This quotation has no linked Cost Sheet.")
+
+	old_cs = frappe.get_doc("Cost Sheet", q.cost_sheet)
+	if old_cs.docstatus != 2:
+		frappe.throw(
+			f"Cost Sheet {old_cs.name} must be cancelled before it can be amended - "
+			"cancel the original quotation first.")
+
+	# Reuse an existing (non-cancelled) amendment of this cost sheet if one was already made.
+	new_cs_name = frappe.db.get_value(
+		"Cost Sheet", {"amended_from": old_cs.name, "docstatus": ["<", 2]}, "name")
+	if not new_cs_name:
+		new_cs = frappe.copy_doc(old_cs)
+		new_cs.amended_from = old_cs.name
+		new_cs.docstatus = 0
+		new_cs.insert(ignore_permissions=True)  # after_insert clones the cancelled CBs as drafts
+		new_cs_name = new_cs.name
+
+	frappe.db.set_value("Savinda Quotation", q.name, "cost_sheet", new_cs_name)
+	frappe.db.commit()
+	return {"cost_sheet": new_cs_name}

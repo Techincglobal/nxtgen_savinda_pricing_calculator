@@ -1082,3 +1082,56 @@ function _render_so_dialog(frm, fg_list, order_type) {
 	});
 	d.show();
 }
+
+// ── Amend flow + cancel cascade (merges with the main form handlers above) ──
+frappe.ui.form.on("Savinda Quotation", {
+	// Warn before cancelling: cancelling the quotation cascades to the Cost Sheet + its CBs.
+	before_cancel: function (frm) {
+		if (!frm.doc.cost_sheet) { return; }
+		return new Promise(function (resolve, reject) {
+			frappe.confirm(
+				__("Cancelling this quotation will also cancel its Cost Sheet <b>{0}</b> and the linked cost breakdowns (unless another submitted quotation still uses that cost sheet).<br><br>Continue?", [frm.doc.cost_sheet]),
+				function () { resolve(); },   // Yes → proceed with cancel
+				function () { reject(); }      // No → abort cancel
+			);
+		});
+	},
+
+	refresh: function (frm) {
+		// On an AMENDED draft quotation: rebuild an editable Cost Sheet from the cancelled one.
+		if (frm.doc.docstatus === 0 && frm.doc.amended_from && frm.doc.cost_sheet) {
+			frm.add_custom_button(__("Amend Cost Sheet & Reload"), function () {
+				_amend_cost_sheet_and_reload(frm);
+			}, __("Actions")).addClass("btn-primary");
+		}
+	},
+});
+
+// Amend the (cancelled) linked Cost Sheet into editable draft CB copies, relink, reload prices.
+function _amend_cost_sheet_and_reload(frm) {
+	frappe.confirm(
+		__("This creates an amended Cost Sheet with editable copies of the cost breakdowns, relinks this quotation to it, and reloads the item prices. Continue?"),
+		function () {
+			frappe.call({
+				method: "nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.doctype.savinda_quotation.savinda_quotation.amend_cost_sheet_for_quotation",
+				args: { quotation: frm.doc.name },
+				freeze: true, freeze_message: __("Amending cost sheet…"),
+				callback: function (r) {
+					if (!(r.message && r.message.cost_sheet)) { return; }
+					frm.reload_doc().then(function () {
+						frm.clear_table("items");
+						_do_load_from_cost_sheet(frm, frm.doc.cost_sheet, function (loaded) {
+							frm.save().then(function () {
+								frappe.msgprint({
+									title: __("Cost Sheet Amended"),
+									message: __("New Cost Sheet <b>{0}</b> created with editable breakdown copies; {1} item(s) reloaded.<br>Edit the CB prices (open each item's calculation), re-submit the Cost Sheet, then update this quotation's prices.", [frm.doc.cost_sheet, loaded || 0]),
+									indicator: "green",
+								});
+							});
+						});
+					});
+				},
+			});
+		}
+	);
+}
