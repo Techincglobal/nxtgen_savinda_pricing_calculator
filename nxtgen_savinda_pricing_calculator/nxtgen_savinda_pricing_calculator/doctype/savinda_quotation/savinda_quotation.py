@@ -235,36 +235,27 @@ class SavindaQuotation(Document):
 
 
 @frappe.whitelist()
-def amend_cost_sheet_for_quotation(quotation):
-	"""For an AMENDED (draft) quotation whose linked Cost Sheet is cancelled: create an
-	amendment of that Cost Sheet so its Calculation Breakdowns become editable draft COPIES
-	(Cost Sheet.after_insert -> _amend_linked_cbs re-points the cost items to the new CBs), and
-	relink this quotation to the new cost sheet. The client then reloads item prices; the user
-	edits the (copied) CB prices, re-submits, and updates the quotation.
-
-	Idempotent: if an amendment of the cost sheet already exists, it is reused."""
-	q = frappe.get_doc("Savinda Quotation", quotation)
-	if q.docstatus != 0:
-		frappe.throw("Amend the Cost Sheet only on a draft (amended) quotation.")
-	if not q.cost_sheet or not frappe.db.exists("Cost Sheet", q.cost_sheet):
-		frappe.throw("This quotation has no linked Cost Sheet.")
-
-	old_cs = frappe.get_doc("Cost Sheet", q.cost_sheet)
+def amend_cost_sheet(cost_sheet):
+	"""Amend a CANCELLED Cost Sheet into an EDITABLE draft copy — its Calculation Breakdowns
+	become editable draft copies (Cost Sheet.after_insert -> _amend_linked_cbs re-points the cost
+	items to the new CBs). Returns the (new) cost sheet name. Takes the cost sheet directly so it
+	works from an UNSAVED (amended) quotation. Idempotent + safe:
+	  - not cancelled (already draft/submitted) -> returned as-is (nothing to amend)
+	  - an amendment already exists -> reused
+	"""
+	if not cost_sheet or not frappe.db.exists("Cost Sheet", cost_sheet):
+		frappe.throw("Cost Sheet not found.")
+	old_cs = frappe.get_doc("Cost Sheet", cost_sheet)
 	if old_cs.docstatus != 2:
-		frappe.throw(
-			f"Cost Sheet {old_cs.name} must be cancelled before it can be amended - "
-			"cancel the original quotation first.")
-
-	# Reuse an existing (non-cancelled) amendment of this cost sheet if one was already made.
-	new_cs_name = frappe.db.get_value(
+		# Already editable (draft) or live (submitted) — nothing to amend.
+		return {"cost_sheet": old_cs.name}
+	existing = frappe.db.get_value(
 		"Cost Sheet", {"amended_from": old_cs.name, "docstatus": ["<", 2]}, "name")
-	if not new_cs_name:
-		new_cs = frappe.copy_doc(old_cs)
-		new_cs.amended_from = old_cs.name
-		new_cs.docstatus = 0
-		new_cs.insert(ignore_permissions=True)  # after_insert clones the cancelled CBs as drafts
-		new_cs_name = new_cs.name
-
-	frappe.db.set_value("Savinda Quotation", q.name, "cost_sheet", new_cs_name)
+	if existing:
+		return {"cost_sheet": existing}
+	new_cs = frappe.copy_doc(old_cs)
+	new_cs.amended_from = old_cs.name
+	new_cs.docstatus = 0
+	new_cs.insert(ignore_permissions=True)  # after_insert clones the cancelled CBs as drafts
 	frappe.db.commit()
-	return {"cost_sheet": new_cs_name}
+	return {"cost_sheet": new_cs.name}
