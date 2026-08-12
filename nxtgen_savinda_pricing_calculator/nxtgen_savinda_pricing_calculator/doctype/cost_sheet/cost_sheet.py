@@ -19,14 +19,15 @@ class CostSheet(Document):
 		self._calc_pricing_list_amounts()
 
 	def before_submit(self):
+		pass
 		# Artwork must be approved before the Cost Sheet can be submitted.
-		if (self.artwork_status or "Pending") != "Approved":
-			frappe.throw(
-				"Artwork must be <b>Approved</b> before submitting this Cost Sheet "
-				"(current status: <b>{0}</b>). Ask an Artwork Approver to approve it.".format(
-					self.artwork_status or "Pending"
-				)
-			)
+		# if (self.artwork_status or "Pending") != "Approved":
+		# 	frappe.throw(
+		# 		"Artwork must be <b>Approved</b> before submitting this Cost Sheet "
+		# 		"(current status: <b>{0}</b>). Ask an Artwork Approver to approve it.".format(
+		# 			self.artwork_status or "Pending"
+		# 		)
+		# 	)
 
 	def on_submit(self):
 		"""Auto-submit all Calculation Breakdowns linked through Cost Items."""

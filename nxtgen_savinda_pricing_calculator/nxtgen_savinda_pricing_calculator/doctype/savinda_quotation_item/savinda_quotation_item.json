@@ -10,6 +10,7 @@
   "column_break_1",
   "cost_item",
   "calculation_breakdown",
+  "no_of_colours",
   "section_break_desc",
   "size",
   "material",
@@ -146,7 +147,7 @@
    "options": "currency"
   },
   {
-   "description": "Company-base rate (LKR) from costing — the anchor. Transaction rate = this / conversion rate.",
+   "description": "Company-base rate (LKR) from costing \u2014 the anchor. Transaction rate = this / conversion rate.",
    "fieldname": "base_selling_price",
    "fieldtype": "Currency",
    "label": "Selling Price (Company Currency)",
@@ -210,11 +211,18 @@
    "fieldname": "up",
    "fieldtype": "Int",
    "label": "UP"
+  },
+  {
+   "allow_on_submit": 1,
+   "description": "Add the number if there are any changes needs to show to the customer.",
+   "fieldname": "no_of_colours",
+   "fieldtype": "Int",
+   "label": "No. of Colours"
   }
  ],
  "istable": 1,
  "links": [],
- "modified": "2026-07-05 10:19:50.058645",
+ "modified": "2026-08-12 05:46:53.808774",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Savinda Quotation Item",

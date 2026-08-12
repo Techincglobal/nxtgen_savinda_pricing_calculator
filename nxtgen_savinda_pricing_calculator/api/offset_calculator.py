@@ -314,9 +314,18 @@ def calculate(payload):
             flexo_wastage_override = max(_ovr)
     foil_wastage_frac = (flt(flexo_wastage_override) / 100.0) if flexo_wastage_override is not None else 0.25
 
+    # Manual overrides typed into the right-panel requirement cards. Only the wastage figure
+    # is editable; changing it cascades to the dependent totals (full sheet qty / total reel
+    # area) so the whole cost recalculates from the edited wastage.
+    sheet_overrides = payload.get("sheet_overrides") or {}
+
     # Route sheet calculation by pricing type
     if pricing_type == "Flexo":
         sheet = _calc_flexo(form, wastage_override_pct=flexo_wastage_override)
+        _wa = sheet_overrides.get("wastage_area")
+        if _wa not in (None, ""):
+            sheet["wastage_area"] = flt(_wa)
+            sheet["reel_area"] = round(flt(sheet.get("reel_area_net", 0)) + flt(_wa), 4)
         reel_area      = sheet.get("reel_area", 0)
         reel_length    = sheet.get("reel_length", 0)
         ups            = sheet.get("ups", 0)
@@ -325,6 +334,12 @@ def calculate(payload):
         cut_sheet_area = 0
     else:
         sheet = _calc_sheet(form, breakdown_qtys or None)
+        _w = sheet_overrides.get("wastage")
+        if _w not in (None, ""):
+            _no_cuts = max(cint(form.get("no_of_cuts")) or 1, 1)
+            sheet["wastage"] = flt(_w)
+            sheet["req_cut_sheets"] = flt(sheet.get("cut_sheet_qty", 0)) + flt(_w)
+            sheet["full_sheet_qty"] = math.ceil(sheet["req_cut_sheets"] / _no_cuts) if sheet["req_cut_sheets"] else 0
         full_sheet_qty = sheet.get("full_sheet_qty", 0)
         cut_sheet_qty  = sheet.get("cut_sheet_qty",  0)
         cut_sheet_area = flt(form.get("cut_sheet_l", 0)) * flt(form.get("cut_sheet_w", 0))
@@ -608,6 +623,7 @@ def save_costing(payload):
     calc_result    = payload.get("calc_result", {})
     doc_name       = payload.get("doc_name", "")
     finishing      = payload.get("finishing", []) or []
+    sheet_overrides = payload.get("sheet_overrides") or {}
 
     pricing = calc_result.get("pricing", {})
     sheet   = calc_result.get("sheet",   {})
@@ -685,6 +701,7 @@ def save_costing(payload):
             "selected_specs": selected_specs,
             "calc_result":    calc_result,
             "finishing":      finishing,
+            "sheet_overrides": sheet_overrides,
         })
 
     # Finishing multi-select — display-only labels for the quotation (no cost impact).
@@ -1920,6 +1937,10 @@ def copy_calculation(source_cb, target_cost_item, new_qty=None, description=None
     except Exception:
         return {"error": "Could not parse source calculation state"}
 
+    # Carry the finishing multi-select from the SOURCE breakdown (not the inquiry) — the
+    # child table is authoritative, so this works for old CBs too.
+    src_finishing = [r.finishing for r in (src.get("finishing") or []) if r.finishing]
+
     form = state.get("form", {})
     if new_qty is not None and flt(new_qty) > 0:
         form["item_qty"] = flt(new_qty)
@@ -1945,6 +1966,7 @@ def copy_calculation(source_cb, target_cost_item, new_qty=None, description=None
         "machine_spec":   state.get("machine_spec"),
         "selected_specs": state.get("selected_specs", []),
         "calc_result":    result,
+        "finishing":      src_finishing,
         "doc_name":       "",
     }
     try:

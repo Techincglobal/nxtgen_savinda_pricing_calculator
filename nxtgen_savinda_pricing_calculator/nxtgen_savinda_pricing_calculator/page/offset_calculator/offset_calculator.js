@@ -101,6 +101,10 @@ function oc_mount_app(el) {
 				finishingPick: '',
 				needsFinishingAutoSelect: false,
 
+				// Manual overrides for the calculated requirement values (only wastage is editable).
+				// Key → number; when set, calculate() uses it and cascades to the dependent totals.
+				sheetOverrides: {},
+
 				// Material link-field
 				matSearch: '', matResults: [], matOpen: false,
 				matLoading: false, matHighlight: 0, matTimer: null,
@@ -347,7 +351,7 @@ function oc_mount_app(el) {
 						};
 					})
 					.filter(function (m) { return m.name && m.qty * m.rate; });
-				return { form: formData, selected_specs: specs, machine_spec: machine_spec, finishing: this.selectedFinishings.slice() };
+				return { form: formData, selected_specs: specs, machine_spec: machine_spec, finishing: this.selectedFinishings.slice(), sheet_overrides: Object.assign({}, this.sheetOverrides) };
 			},
 		},
 
@@ -666,6 +670,19 @@ function oc_mount_app(el) {
 				var i = this.selectedFinishings.indexOf(name);
 				if (i !== -1) this.selectedFinishings.splice(i, 1);
 			},
+
+			// ── Editable requirement values (wastage only) ──
+			// Shows the manual override if set, else the auto-computed value.
+			reqDisplay(key) {
+				if (this.sheetOverrides[key] !== undefined && this.sheetOverrides[key] !== '') return this.sheetOverrides[key];
+				return (this.calc.sheet && this.calc.sheet[key] != null) ? this.calc.sheet[key] : '';
+			},
+			isReqManual(key) { return this.sheetOverrides[key] !== undefined; },
+			setReq(key, val) {
+				if (val === '' || val === null || isNaN(parseFloat(val))) { delete this.sheetOverrides[key]; }
+				else { this.sheetOverrides[key] = parseFloat(val); }
+			},
+			clearReq(key) { delete this.sheetOverrides[key]; this.scheduleCalc(); },
 
 			getSpecState(sn, cf) { return (this.specState[sn] || {})[cf] || {}; },
 			getMachineState(cf) { return this.machineSpecState[cf] || {}; },
@@ -995,6 +1012,7 @@ function oc_mount_app(el) {
 							selected_specs: self.calcPayload.selected_specs,
 							machine_spec: self.calcPayload.machine_spec,
 							finishing: self.selectedFinishings.slice(),
+							sheet_overrides: Object.assign({}, self.sheetOverrides),
 							calc_result: self.calc,
 							doc_name: self.savedDocName || '',
 						})
@@ -1205,6 +1223,8 @@ function oc_mount_app(el) {
 						}
 						// Restore the finishing multi-select (display-only labels for the quotation).
 						self.selectedFinishings = (d.finishing || []).slice();
+						// Restore manual requirement overrides (wastage).
+						self.sheetOverrides = d.sheet_overrides ? Object.assign({}, d.sheet_overrides) : {};
 						// Auto-select finishing specs from inquiry (only for new CBs with no saved specs)
 						if (!(d.selected_specs && d.selected_specs.length) && self.autoSelectOperations.length) {
 							self._autoSelectFromOperations();
@@ -1299,6 +1319,7 @@ function oc_mount_app(el) {
 						form: JSON.parse(JSON.stringify(this.form)),
 						selectedSpecNames: JSON.parse(JSON.stringify(this.selectedSpecNames)),
 						selectedFinishings: JSON.parse(JSON.stringify(this.selectedFinishings)),
+						sheetOverrides: JSON.parse(JSON.stringify(this.sheetOverrides)),
 						specState: JSON.parse(JSON.stringify(this.specState)),
 						machineSpecState: JSON.parse(JSON.stringify(this.machineSpecState)),
 						selectedMachine: this.selectedMachine ? this.selectedMachine.spec_name : '',
@@ -1330,6 +1351,7 @@ function oc_mount_app(el) {
 				Object.assign(self.form, d.form);
 				self.selectedSpecNames = Array.isArray(d.selectedSpecNames) ? d.selectedSpecNames.slice() : [];
 				self.selectedFinishings = Array.isArray(d.selectedFinishings) ? d.selectedFinishings.slice() : [];
+				self.sheetOverrides = (d.sheetOverrides && typeof d.sheetOverrides === 'object') ? Object.assign({}, d.sheetOverrides) : {};
 				self.specState = d.specState || {};
 				self.machineSpecState = d.machineSpecState || {};
 				self.flexoPrintMachine = d.flexoPrintMachine || '';
@@ -1372,6 +1394,7 @@ function oc_mount_app(el) {
 			machineSpecState: { deep: true, handler: function () { this.autoSaveDraft(); } },
 			selectedSpecNames: { deep: true, handler: function () { this.autoSaveDraft(); } },
 			selectedFinishings: { deep: true, handler: function () { this.autoSaveDraft(); } },
+			sheetOverrides: { deep: true, handler: function () { this.autoSaveDraft(); } },
 			manualCosts: { deep: true, handler: function () { this.autoSaveDraft(); } },
 			additionalBreakdowns: { deep: true, handler: function () { this.autoSaveDraft(); } },
 			calc: { deep: true, handler: function () { this.autoSaveDraft(); } },
@@ -1912,7 +1935,11 @@ function oc_mount_app(el) {
         <div v-show="sheetExpanded" class="oc-kv-grid" style="margin-top:8px">
           <div class="oc-kv"><span class="k">Cut Sheet Ups</span><span class="v">{{ calc.sheet.cut_sheet_ups }}</span></div>
           <div class="oc-kv"><span class="k">Cut Sheet Qty</span><span class="v">{{ fmtNum(calc.sheet.cut_sheet_qty) }}</span></div>
-          <div class="oc-kv"><span class="k">Wastage</span><span class="v">{{ fmtNum(calc.sheet.wastage) }}</span></div>
+          <div class="oc-kv"><span class="k">Wastage <span class="oc-calc-tag">{{ isReqManual('wastage') ? 'manual' : 'auto' }}</span></span><span class="v">
+            <input type="number" min="0" step="1" style="width:90px;text-align:right;padding:2px 6px;border:1px solid #d1d5db;border-radius:4px"
+                   :value="reqDisplay('wastage')" @input="setReq('wastage', $event.target.value)" @change="scheduleCalc" />
+            <a v-if="isReqManual('wastage')" href="#" @click.prevent="clearReq('wastage')" title="Reset to auto" style="margin-left:5px;color:#ef4444;font-weight:700;text-decoration:none">×</a>
+          </span></div>
           <div class="oc-kv"><span class="k">Req. Cut Sheets</span><span class="v">{{ fmtNum(calc.sheet.req_cut_sheets) }}</span></div>
           <div class="oc-kv"><span class="k">Full Sheet Qty</span><span class="v oc-v-blue">{{ fmtNum(calc.sheet.full_sheet_qty) }}</span></div>
         </div>
@@ -1931,7 +1958,11 @@ function oc_mount_app(el) {
           <div class="oc-kv"><span class="k">Net Reel Area (m²)</span><span class="v">{{ fmtNum(calc.sheet.reel_area_net) }}</span></div>
           <div class="oc-kv"><span class="k">Setup Metrage (m)</span><span class="v">{{ calc.sheet.setup_metrage }}</span></div>
           <div class="oc-kv"><span class="k">Wastage %</span><span class="v">{{ (calc.sheet.wastage_pct * 100).toFixed(0) }}%</span></div>
-          <div class="oc-kv"><span class="k">Wastage Area (m²)</span><span class="v">{{ fmtNum(calc.sheet.wastage_area) }}</span></div>
+          <div class="oc-kv"><span class="k">Wastage Area (m²) <span class="oc-calc-tag">{{ isReqManual('wastage_area') ? 'manual' : 'auto' }}</span></span><span class="v">
+            <input type="number" min="0" step="0.0001" style="width:90px;text-align:right;padding:2px 6px;border:1px solid #d1d5db;border-radius:4px"
+                   :value="reqDisplay('wastage_area')" @input="setReq('wastage_area', $event.target.value)" @change="scheduleCalc" />
+            <a v-if="isReqManual('wastage_area')" href="#" @click.prevent="clearReq('wastage_area')" title="Reset to auto" style="margin-left:5px;color:#ef4444;font-weight:700;text-decoration:none">×</a>
+          </span></div>
           <div class="oc-kv"><span class="k">Total Reel Area (m²)</span><span class="v oc-v-blue">{{ fmtNum(calc.sheet.reel_area) }}</span></div>
         </div>
       </div>
