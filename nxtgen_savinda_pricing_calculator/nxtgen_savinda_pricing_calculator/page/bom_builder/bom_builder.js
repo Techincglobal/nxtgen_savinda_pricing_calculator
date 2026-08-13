@@ -29,6 +29,7 @@ function bb_mount_app(el) {
 		getBomData:      'nxtgen_savinda_pricing_calculator.api.bom_builder.get_bom_data',
 		createBomChain:  'nxtgen_savinda_pricing_calculator.api.bom_builder.create_bom_chain',
 		createMultiBom:  'nxtgen_savinda_pricing_calculator.api.bom_builder.create_multi_bom',
+		submitBoms:      'nxtgen_savinda_pricing_calculator.api.bom_builder.submit_boms',
 		searchCB:        'nxtgen_savinda_pricing_calculator.api.bom_builder.search_cb_for_fg',
 		saveBomConfig:   'nxtgen_savinda_pricing_calculator.api.bom_builder.save_bom_config',
 		loadBomConfig:   'nxtgen_savinda_pricing_calculator.api.bom_builder.load_bom_config',
@@ -242,15 +243,14 @@ function bb_mount_app(el) {
 								extra_materials: JSON.stringify(self.extraMaterials),
 								is_default:      0,
 								variant_suffix:  suffix,
+								submit:          0,
 							},
 							freeze: true, freeze_message: 'Creating variant BOM…',
 							callback: function (r) {
 								self.saving = false;
 								if (!r.message) return;
 								var result = r.message;
-								frappe.msgprint({ title: 'Variant BOM Created',
-									message: 'Variant FG BOM: <a href="/app/bom/' + result.fg_bom + '" target="_blank"><b>' + result.fg_bom + '</b></a> (non-default). The default BOM is unchanged.',
-									indicator: 'green' });
+								self._showBomResult('Variant BOM Created', 'Variant FG BOM: <a href="/app/bom/' + result.fg_bom + '" target="_blank"><b>' + result.fg_bom + '</b></a> (non-default). The default BOM is unchanged.', result);
 							},
 							error: function () { self.saving = false; },
 						});
@@ -663,6 +663,35 @@ function bb_mount_app(el) {
 			},
 
 			// Consolidated build for several FGs (common SFGs shared)
+			// Show created (DRAFT) BOMs + a Submit BOMs action (submit bottom-up + link the chain).
+			_showBomResult(title, message, result) {
+				var names = (result.created_boms || []).map(function (b) { return b.bom_name; }).filter(Boolean);
+				var d = frappe.msgprint({
+					title: title,
+					message: message + '<br><br><b>All BOMs are DRAFTS.</b> Review / edit them, then click <b>Submit BOMs</b> to submit them bottom-up and link the chain.',
+					indicator: 'blue',
+					primary_action: names.length ? {
+						label: 'Submit BOMs',
+						action: function () {
+							frappe.call({
+								method: API.submitBoms,
+								args: { bom_names: JSON.stringify(names) },
+								freeze: true, freeze_message: 'Submitting BOMs…',
+								callback: function (r) {
+									var m = r.message || {};
+									if (d && d.hide) { d.hide(); }
+									var msg = '✓ Submitted <b>' + (m.submitted || []).length + '</b> BOM(s).';
+									if ((m.failed || []).length) {
+										msg += '<br>⚠ Failed: ' + m.failed.map(function (f) { return f.bom; }).join(', ');
+									}
+									frappe.msgprint({ title: 'Submit BOMs', message: msg, indicator: (m.failed || []).length ? 'orange' : 'green' });
+								},
+							});
+						}
+					} : null,
+				});
+			},
+
 			_doCreateMulti() {
 				var self = this;
 				var msg = 'Create a <b>consolidated BOM</b> for <b>' + self.selectedFGs.length + ' FGs</b>?<br>'
@@ -679,6 +708,7 @@ function bb_mount_app(el) {
 							operations:      JSON.stringify(self.operations),
 							extra_materials: JSON.stringify(self.extraMaterials),
 							is_default:      self.isDefault ? 1 : 0,
+							submit:          0,
 						},
 						freeze: true,
 						freeze_message: 'Creating consolidated BOM…',
@@ -692,8 +722,7 @@ function bb_mount_app(el) {
 								return (b.reused ? '♻ ' : '') + tag
 									+ '<a href="/app/bom/' + b.bom_name + '" target="_blank"><b>' + b.bom_name + '</b></a> for ' + b.item;
 							}).join('<br>');
-							frappe.msgprint({ title: 'Consolidated BOM Created',
-								message: lines + '<br><br>FG BOMs: ' + (result.fg_boms || []).length, indicator: 'green' });
+							self._showBomResult('Consolidated BOM Created', lines + '<br><br>FG BOMs: ' + (result.fg_boms || []).length, result);
 						},
 						error: function () { self.saving = false; },
 					});
@@ -723,6 +752,7 @@ function bb_mount_app(el) {
 							operations:       JSON.stringify(self.operations),
 							extra_materials:  JSON.stringify(self.extraMaterials),
 							is_default:       self.isDefault ? 1 : 0,
+							submit:           0,
 						},
 						freeze: true,
 						freeze_message: 'Creating BOM chain…',
@@ -734,7 +764,7 @@ function bb_mount_app(el) {
 								return (b.reused ? '♻ Reused: ' : '✓ Created: ')
 									+ '<a href="/app/bom/' + b.bom_name + '" target="_blank"><b>' + b.bom_name + '</b></a> for ' + b.item;
 							}).join('<br>');
-							frappe.msgprint({ title: 'BOM Chain Created', message: lines + '<br><br>FG BOM: <a href="/app/bom/' + result.fg_bom + '" target="_blank"><b>' + result.fg_bom + '</b></a>', indicator: 'green' });
+							self._showBomResult('BOM Chain Created', lines + '<br><br>FG BOM: <a href="/app/bom/' + result.fg_bom + '" target="_blank"><b>' + result.fg_bom + '</b></a>', result);
 						},
 						error: function () { self.saving = false; },
 					});
