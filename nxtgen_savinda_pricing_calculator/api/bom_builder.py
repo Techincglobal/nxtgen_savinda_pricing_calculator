@@ -606,7 +606,7 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item="", overrides=None):
 # ─────────────────────────────────────────────────────────────
 
 @frappe.whitelist()
-def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0, variant_suffix=""):
+def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0, variant_suffix="", submit=1):
 	"""
 	Create the full SFG chain + FG BOM:
 	1. Create ERPNext Items for each SFG (if not existing)
@@ -819,7 +819,8 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 				})
 
 		bom.insert(ignore_permissions=True)
-		bom.submit()
+		if cint(submit):
+			bom.submit()
 		frappe.db.commit()
 		created_boms.append({"bom_name": bom.name, "item": target_item, "reused": False, "is_fg": is_fg_op})
 		prev_qi_template = op.get("quality_inspection_template") if op.get("has_quality_inspection") else None
@@ -856,7 +857,8 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 		fg_bom.append("items", fg_item_row)
 
 	fg_bom.insert(ignore_permissions=True)
-	fg_bom.submit()
+	if cint(submit):
+		fg_bom.submit()
 	frappe.db.commit()
 	created_boms.append({"bom_name": fg_bom.name, "item": fg_item, "reused": False, "is_fg": True})
 
@@ -1051,7 +1053,7 @@ def get_erpnext_operations(search_term=""):
 
 # keep old create_bom for backward compat (single-level BOM)
 @frappe.whitelist()
-def create_bom(fg_item, mfg_qty, operations, raw_materials, is_default=0):
+def create_bom(fg_item, mfg_qty, operations, raw_materials, is_default=0, submit=1):
 	"""Legacy single-level BOM creation (flat, no SFG chain)."""
 	if isinstance(operations, str):    operations    = json.loads(operations)
 	if isinstance(raw_materials, str): raw_materials = json.loads(raw_materials)
@@ -1080,7 +1082,8 @@ def create_bom(fg_item, mfg_qty, operations, raw_materials, is_default=0):
 		                           "workstation": op["workstation"],
 		                           "time_in_mins": flt(op.get("time_in_mins", 60))})
 	bom.insert(ignore_permissions=True)
-	bom.submit()
+	if cint(submit):
+		bom.submit()
 	frappe.db.commit()
 	return {"bom_name": bom.name, "item": fg_item}
 
@@ -1094,7 +1097,7 @@ def _bb_code(s):
 
 
 def _mk_qty1_bom(item_code, input_code, input_name, per_input_qty, materials, op,
-                 prev_qi=None, is_default=0, allow_reuse=True):
+                 prev_qi=None, is_default=0, allow_reuse=True, submit=1):
 	"""Create + submit one qty-1 BOM for item_code. Returns (bom_name, reused)."""
 	if allow_reuse:
 		ex = frappe.db.get_value("BOM", {"item": item_code, "docstatus": 1, "is_active": 1},
@@ -1144,7 +1147,8 @@ def _mk_qty1_bom(item_code, input_code, input_name, per_input_qty, materials, op
 			          "hour_rate": _hr, "base_hour_rate": _hr,
 			          "description": f"{op.get('machine','')} — {op.get('spec_name','')}".strip(" —")})
 	bom.insert(ignore_permissions=True)
-	bom.submit()
+	if cint(submit):
+		bom.submit()
 	frappe.db.commit()
 	return bom.name, False
 
@@ -1179,7 +1183,7 @@ def _per_unit_mats(op):
 
 
 @frappe.whitelist()
-def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, is_default=0):
+def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, is_default=0, submit=1):
 	"""Build BOMs for several FGs of one family in one pass.
 
 	Operations up to the 🧩 Final-Common-SFG marker build ONE shared SFG chain
@@ -1195,7 +1199,7 @@ def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, 
 		frappe.throw("Select at least one FG item.")
 	if len(fg_items) == 1:
 		return create_bom_chain(fg_items[0], mfg_qty, json.dumps(operations),
-		                        json.dumps(extra_materials), is_default)
+		                        json.dumps(extra_materials), is_default, submit=submit)
 	if not operations:
 		frappe.throw("No operations defined.")
 
@@ -1228,7 +1232,7 @@ def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, 
 		in_name = first_inn if i == 0 else last_name
 		per_in  = (flt(op.get("input_qty") or 0) / out_qty) if out_qty else flt(op.get("input_qty") or 0)
 		mats    = _per_unit_mats(op) if i > 0 else (_per_unit_mats(op) or extra_materials)
-		bn, reused = _mk_qty1_bom(code, in_code, in_name, per_in, mats, op, prev_qi)
+		bn, reused = _mk_qty1_bom(code, in_code, in_name, per_in, mats, op, prev_qi, submit=submit)
 		created.append({"bom_name": bn, "item": code, "reused": reused, "common": True})
 		last_code, last_name = code, name
 		prev_qi = op.get("quality_inspection_template") if op.get("has_quality_inspection") else None
@@ -1245,7 +1249,7 @@ def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, 
 		if not tail:
 			# FG consumes the last common SFG directly
 			bn, _ = _mk_qty1_bom(fg, last_code, last_name, 1.0, [], {"spec_name": "Assembly"},
-			                     prev_qi, is_default=is_default, allow_reuse=False)
+			                     prev_qi, is_default=is_default, allow_reuse=False, submit=submit)
 			created.append({"bom_name": bn, "item": fg, "is_fg": True})
 			fg_boms.append(bn)
 			continue
@@ -1261,7 +1265,7 @@ def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, 
 			per_in  = (flt(op.get("input_qty") or 0) / out_qty) if out_qty else 1.0
 			bn, _ = _mk_qty1_bom(target, p_code, p_name, per_in, _per_unit_mats(op), op,
 			                     p_qi, is_default=(is_default if is_fg_op else 0),
-			                     allow_reuse=(not is_fg_op))
+			                     allow_reuse=(not is_fg_op), submit=submit)
 			created.append({"bom_name": bn, "item": target, "is_fg": is_fg_op})
 			p_code, p_name = target, (op.get("sfg_name") or target)
 			p_qi = op.get("quality_inspection_template") if op.get("has_quality_inspection") else None
@@ -1277,3 +1281,40 @@ def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, 
 
 	frappe.db.commit()
 	return {"created_boms": created, "fg_boms": fg_boms}
+
+
+@frappe.whitelist()
+def submit_boms(bom_names):
+	"""Submit a set of DRAFT BOMs BOTTOM-UP and auto-link the chain: before submitting each BOM,
+	point its sub-assembly item rows (bom_no) at the child BOMs already submitted in this pass.
+	`bom_names` must be in creation order (leaf -> FG). Already-submitted BOMs are skipped."""
+	if isinstance(bom_names, str):
+		bom_names = json.loads(bom_names or "[]")
+	item_to_bom = {}   # item_code -> submitted BOM (children submitted first)
+	submitted, failed = [], []
+	for name in (bom_names or []):
+		if not name or not frappe.db.exists("BOM", name):
+			continue
+		bom = frappe.get_doc("BOM", name)
+		if bom.docstatus == 1:
+			item_to_bom[bom.item] = bom.name
+			continue
+		if bom.docstatus == 2:
+			continue
+		try:
+			changed = False
+			for it in bom.items:
+				if not it.bom_no and it.item_code in item_to_bom:
+					it.bom_no = item_to_bom[it.item_code]
+					changed = True
+			if changed:
+				bom.save(ignore_permissions=True)
+			bom.submit()
+			item_to_bom[bom.item] = bom.name
+			submitted.append(bom.name)
+			frappe.db.commit()
+		except Exception as e:
+			frappe.db.rollback()
+			frappe.log_error(frappe.get_traceback(), "submit_boms failed: %s" % name)
+			failed.append({"bom": name, "error": str(e)})
+	return {"submitted": submitted, "failed": failed}

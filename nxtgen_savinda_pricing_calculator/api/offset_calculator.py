@@ -108,6 +108,11 @@ def _enrich_spec(spec):
             for row in (getattr(doc, "allowed_inks", None) or [])
             if row.ink_name
         ],
+        "allowed_foils": [
+            row.foil_name
+            for row in (getattr(doc, "allowed_foils", None) or [])
+            if row.foil_name
+        ],
     }
 
 

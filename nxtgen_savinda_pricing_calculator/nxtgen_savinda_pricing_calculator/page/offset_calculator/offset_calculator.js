@@ -235,6 +235,15 @@ function oc_mount_app(el) {
 				}
 				return this.allInks;
 			},
+			// Filtered foil list for the current dialog spec — restricted to the spec's Allowed Foils
+			// (Offset Spec.allowed_foils) when set, else all foils. Calculation is unchanged.
+			dialogFoilList() {
+				var allowed = this.inkDialog && this.inkDialog.allowed_foils;
+				if (allowed && allowed.length) {
+					return this.allFoils.filter(function (f) { return allowed.indexOf(f.name) !== -1; });
+				}
+				return this.allFoils;
+			},
 
 			// Auto-include material row check
 			materialReady() {
@@ -1502,10 +1511,10 @@ function oc_mount_app(el) {
             <select v-model="foilNewName" class="oc-inp oc-sel oc-ink-sel">
               <option value="">Select Foil</option>
               <optgroup label="COLD Foil">
-                <option v-for="f in allFoils.filter(function(x){return x.foil_group==='COLD'})" :key="f.name" :value="f.name">{{ f.foil_name }}</option>
+                <option v-for="f in dialogFoilList.filter(function(x){return x.foil_group==='COLD'})" :key="f.name" :value="f.name">{{ f.foil_name }}</option>
               </optgroup>
               <optgroup label="HOT Foil">
-                <option v-for="f in allFoils.filter(function(x){return x.foil_group==='HOT'})" :key="f.name" :value="f.name">{{ f.foil_name }}</option>
+                <option v-for="f in dialogFoilList.filter(function(x){return x.foil_group==='HOT'})" :key="f.name" :value="f.name">{{ f.foil_name }}</option>
               </optgroup>
             </select>
             <input type="number" v-model.number="foilNewPct" min="1" max="100" class="oc-inp oc-pct-inp" />

@@ -1,7 +1,8 @@
 {
  "actions": [],
+ "allow_rename": 1,
  "autoname": "field:spec_name",
- "creation": "2026-04-09 00:00:00.000000",
+ "creation": "2026-04-09 00:00:00",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
@@ -31,6 +32,8 @@
   "cost_facts",
   "section_break_allowed_inks",
   "allowed_inks",
+  "section_break_allowed_foils",
+  "allowed_foils",
   "section_break_mfg",
   "bom_include",
   "bom_sequence",
@@ -40,24 +43,24 @@
  ],
  "fields": [
   {
+   "columns": 5,
    "fieldname": "spec_name",
    "fieldtype": "Data",
+   "in_list_view": 1,
    "label": "Spec Name",
    "reqd": 1,
-   "unique": 1,
-   "in_list_view": 1,
-   "columns": 5
+   "unique": 1
   },
   {
+   "columns": 4,
+   "default": "Specification",
+   "description": "Machine = shown as dropdown. Specification, Finishing and Outsource = shown as checkboxes. Outsource specs get their own section in the cost breakdown.",
    "fieldname": "group",
    "fieldtype": "Select",
+   "in_list_view": 1,
    "label": "Group",
    "options": "Specification\nFinishing\nOutsource\nMachine",
-   "default": "Specification",
-   "reqd": 1,
-   "in_list_view": 1,
-   "columns": 4,
-   "description": "Machine = shown as dropdown. Specification, Finishing and Outsource = shown as checkboxes. Outsource specs get their own section in the cost breakdown."
+   "reqd": 1
   },
   {
    "depends_on": "eval:doc.group=='Finishing'",
@@ -68,120 +71,120 @@
    "options": "Finishing"
   },
   {
+   "description": "Optional. If set, this spec is a child shown under its parent in the calculator; selecting the parent auto-selects this child.",
    "fieldname": "parent_spec",
    "fieldtype": "Link",
    "label": "Parent Spec",
-   "options": "Offset Spec",
-   "description": "Optional. If set, this spec is a child shown under its parent in the calculator; selecting the parent auto-selects this child."
+   "options": "Offset Spec"
   },
   {
+   "default": "0",
+   "description": "Auto-tick this spec for the calculation (top-level: on load; child: when its parent is selected). Cascades to its own children.",
    "fieldname": "auto_select",
    "fieldtype": "Check",
-   "default": "0",
-   "label": "Auto Select in Calculator",
-   "description": "Auto-tick this spec for the calculation (top-level: on load; child: when its parent is selected). Cascades to its own children."
+   "label": "Auto Select in Calculator"
   },
   {
    "fieldname": "column_break_1",
    "fieldtype": "Column Break"
   },
   {
+   "columns": 2,
+   "default": "1",
    "fieldname": "is_active",
    "fieldtype": "Check",
-   "label": "Active",
-   "default": "1",
    "in_list_view": 1,
-   "columns": 2
+   "label": "Active"
   },
   {
+   "columns": 3,
+   "default": "Offset",
+   "description": "Offset = only shown in Offset calculator. Flexo = only shown in Flexo calculator. Both = shown in both (e.g. Delivery, Proof Board, Corrugated Boxes).",
    "fieldname": "pricing_type",
    "fieldtype": "Select",
+   "in_list_view": 1,
    "label": "Pricing Type",
    "options": "Offset\nFlexo\nBoth",
-   "default": "Offset",
-   "reqd": 1,
-   "in_list_view": 1,
-   "columns": 3,
-   "description": "Offset = only shown in Offset calculator. Flexo = only shown in Flexo calculator. Both = shown in both (e.g. Delivery, Proof Board, Corrugated Boxes)."
+   "reqd": 1
   },
   {
+   "default": "0",
+   "description": "Selecting this spec increases the effective No of Colors by this amount (e.g. Gold Color = 1). Drives the Flexo printing formula and plate count. Leave 0 for none.",
    "fieldname": "adds_colors",
    "fieldtype": "Int",
-   "label": "Adds Colors",
-   "default": "0",
-   "description": "Selecting this spec increases the effective No of Colors by this amount (e.g. Gold Color = 1). Drives the Flexo printing formula and plate count. Leave 0 for none."
+   "label": "Adds Colors"
   },
   {
+   "default": "0",
+   "description": "When ticked, this spec shows a foil picker (COLD/HOT + %) in the calculator and produces its own foil cost line. Set Parent Spec = Print to nest it under printing. Foils are no longer assigned on the machine.",
    "fieldname": "allow_foil_assignment",
    "fieldtype": "Check",
-   "default": "0",
-   "label": "Allow Foil Assignment (Flexo)",
-   "description": "When ticked, this spec shows a foil picker (COLD/HOT + %) in the calculator and produces its own foil cost line. Set Parent Spec = Print to nest it under printing. Foils are no longer assigned on the machine."
+   "label": "Allow Foil Assignment (Flexo)"
   },
   {
+   "collapsible": 1,
    "fieldname": "section_break_machine_cfg",
    "fieldtype": "Section Break",
-   "label": "Machine Configuration",
-   "collapsible": 1
+   "label": "Machine Configuration"
   },
   {
+   "default": "0",
    "fieldname": "has_machine",
    "fieldtype": "Check",
-   "label": "Has Machine",
-   "default": "0"
+   "label": "Has Machine"
   },
   {
    "fieldname": "column_break_mach1",
    "fieldtype": "Column Break"
   },
   {
+   "depends_on": "eval:doc.has_machine==1",
+   "description": "If this spec is also selected, skip the machine cost for the current spec.",
    "fieldname": "skip_machine_if_spec",
    "fieldtype": "Link",
    "label": "Skip Machine If Spec Selected",
-   "options": "Offset Spec",
-   "depends_on": "eval:doc.has_machine==1",
-   "description": "If this spec is also selected, skip the machine cost for the current spec."
+   "options": "Offset Spec"
   },
   {
+   "depends_on": "eval:doc.has_machine==1",
+   "description": "In the calculator a 'Skip machine cost' checkbox auto-ticks when this machine is running on any selected spec. Untick it to charge this spec's machine anyway.",
    "fieldname": "skip_machine_if_machine",
    "fieldtype": "Link",
    "label": "Skip Machine If This Machine Used",
-   "options": "Offset Machine",
-   "depends_on": "eval:doc.has_machine==1",
-   "description": "In the calculator a 'Skip machine cost' checkbox auto-ticks when this machine is running on any selected spec. Untick it to charge this spec's machine anyway."
+   "options": "Offset Machine"
   },
   {
+   "default": "0",
+   "depends_on": "eval:doc.has_machine==1",
+   "description": "If any selected spec is using a printing machine, the 'Skip machine cost' checkbox auto-ticks (inline with printing). Untick it to charge this spec's machine anyway.",
    "fieldname": "skip_machine_if_printing",
    "fieldtype": "Check",
-   "default": "0",
-   "label": "Skip Machine If Printing Runs",
+   "label": "Skip Machine If Printing Runs"
+  },
+  {
    "depends_on": "eval:doc.has_machine==1",
-   "description": "If any selected spec is using a printing machine, the 'Skip machine cost' checkbox auto-ticks (inline with printing). Untick it to charge this spec's machine anyway."
-  },
-  {
    "fieldname": "section_break_mach_units",
-   "fieldtype": "Section Break",
-   "depends_on": "eval:doc.has_machine==1"
+   "fieldtype": "Section Break"
   },
   {
+   "default": "Full sheet",
+   "depends_on": "eval:doc.has_machine==1",
    "fieldname": "units",
    "fieldtype": "Select",
    "label": "Machine Qty Units",
-   "options": "Full sheet\nCut sheet\nSqinch\nPcs\nImpressions",
-   "default": "Full sheet",
-   "depends_on": "eval:doc.has_machine==1"
+   "options": "Full sheet\nCut sheet\nSqinch\nPcs\nImpressions"
   },
   {
+   "depends_on": "eval:doc.has_machine==1",
    "fieldname": "section_break_mach_list",
-   "fieldtype": "Section Break",
-   "depends_on": "eval:doc.has_machine==1"
+   "fieldtype": "Section Break"
   },
   {
+   "depends_on": "eval:doc.has_machine==1",
    "fieldname": "machines",
    "fieldtype": "Table",
    "label": "Machines",
-   "options": "Offset Spec Machine",
-   "depends_on": "eval:doc.has_machine==1"
+   "options": "Offset Spec Machine"
   },
   {
    "fieldname": "section_break_facts",
@@ -195,74 +198,89 @@
    "options": "Offset Spec Cost Fact"
   },
   {
+   "collapsible": 1,
+   "description": "If inks are listed here, only those inks will appear in the Production Assignment dialog for this spec. Leave empty to show all inks.",
    "fieldname": "section_break_allowed_inks",
    "fieldtype": "Section Break",
-   "label": "Ink Filter",
-   "collapsible": 1,
-   "description": "If inks are listed here, only those inks will appear in the Production Assignment dialog for this spec. Leave empty to show all inks."
+   "label": "Ink Filter"
   },
   {
+   "description": "Leave empty to show all active inks. Populate to restrict ink selection for this spec.",
    "fieldname": "allowed_inks",
    "fieldtype": "Table",
    "label": "Allowed Inks",
-   "options": "Offset Spec Allowed Ink",
-   "description": "Leave empty to show all active inks. Populate to restrict ink selection for this spec."
+   "options": "Offset Spec Allowed Ink"
   },
   {
+   "collapsible": 1,
+   "description": "If foils are listed here, only those foils appear in the foil picker in the calculator for this spec. Leave empty to show all foils.",
+   "fieldname": "section_break_allowed_foils",
+   "fieldtype": "Section Break",
+   "label": "Foil Filter"
+  },
+  {
+   "description": "Leave empty to show all active foils. Populate to restrict which foils this spec offers (calculation is unchanged).",
+   "fieldname": "allowed_foils",
+   "fieldtype": "Table",
+   "label": "Allowed Foils",
+   "options": "Offset Spec Allowed Foil"
+  },
+  {
+   "collapsible": 1,
+   "description": "Controls how this specification appears in the BOM Builder.",
    "fieldname": "section_break_mfg",
    "fieldtype": "Section Break",
-   "label": "Manufacturing / BOM",
-   "collapsible": 1,
-   "description": "Controls how this specification appears in the BOM Builder."
+   "label": "Manufacturing / BOM"
   },
   {
+   "default": "1",
+   "description": "Uncheck to exclude this spec from BOM chain by default (e.g. Proof Board, samples).",
    "fieldname": "bom_include",
    "fieldtype": "Check",
-   "label": "Include in BOM Chain",
-   "default": "1",
-   "description": "Uncheck to exclude this spec from BOM chain by default (e.g. Proof Board, samples)."
+   "label": "Include in BOM Chain"
   },
   {
+   "default": "0",
+   "description": "Default order of this operation in the BOM Builder chain (lower runs first). Users can still drag to reorder and save.",
    "fieldname": "bom_sequence",
    "fieldtype": "Int",
-   "label": "BOM Operation Order",
-   "default": "0",
-   "description": "Default order of this operation in the BOM Builder chain (lower runs first). Users can still drag to reorder and save."
+   "label": "BOM Operation Order"
   },
   {
    "fieldname": "column_break_mfg",
    "fieldtype": "Column Break"
   },
   {
+   "description": "Default ERPNext Operation used in BOM. Can be overridden in BOM Builder.",
    "fieldname": "bom_operation",
    "fieldtype": "Link",
    "label": "ERPNext Operation",
-   "options": "Operation",
-   "description": "Default ERPNext Operation used in BOM. Can be overridden in BOM Builder."
+   "options": "Operation"
   },
   {
+   "description": "If set, QI will be required on the output SFG of this operation.",
    "fieldname": "bom_qi_template",
    "fieldtype": "Link",
    "label": "Quality Inspection Template",
-   "options": "Quality Inspection Template",
-   "description": "If set, QI will be required on the output SFG of this operation."
+   "options": "Quality Inspection Template"
   },
   {
+   "default": "0",
+   "description": "When ticked, this spec's Wastage Override % replaces the default Flexo material and foil wastage. If several selected specs tick this, the highest % is used.",
    "fieldname": "flexo_wastage_overwrite",
    "fieldtype": "Check",
-   "label": "Wastage Overwrite (Flexo)",
-   "description": "When ticked, this spec's Wastage Override % replaces the default Flexo material and foil wastage. If several selected specs tick this, the highest % is used."
+   "label": "Wastage Overwrite (Flexo)"
   },
   {
+   "depends_on": "eval:doc.flexo_wastage_overwrite",
    "fieldname": "flexo_wastage_pct",
    "fieldtype": "Percent",
    "label": "Wastage Override %",
-   "depends_on": "eval:doc.flexo_wastage_overwrite",
    "mandatory_depends_on": "eval:doc.flexo_wastage_overwrite"
   }
  ],
  "links": [],
- "modified": "2026-06-14 00:00:00.000000",
+ "modified": "2026-08-13 10:07:57.417635",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Offset Spec",
@@ -286,9 +304,11 @@
    "role": "Sales User"
   }
  ],
+ "row_format": "Dynamic",
  "search_fields": "spec_name,group",
  "sort_field": "spec_name",
  "sort_order": "ASC",
+ "states": [],
  "title_field": "spec_name",
  "track_changes": 1
 }
