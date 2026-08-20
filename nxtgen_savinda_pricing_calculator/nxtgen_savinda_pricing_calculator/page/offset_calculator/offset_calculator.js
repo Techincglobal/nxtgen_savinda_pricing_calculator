@@ -1946,8 +1946,8 @@ function oc_mount_app(el) {
           <div class="oc-kv"><span class="k">Cut Sheet Qty</span><span class="v">{{ fmtNum(calc.sheet.cut_sheet_qty) }}</span></div>
           <div class="oc-kv"><span class="k">Wastage <span class="oc-calc-tag">{{ isReqManual('wastage') ? 'manual' : 'auto' }}</span></span><span class="v">
             <input type="number" min="0" step="1" style="width:90px;text-align:right;padding:2px 6px;border:1px solid #d1d5db;border-radius:4px"
-                   :value="reqDisplay('wastage')" @input="setReq('wastage', $event.target.value)" @change="scheduleCalc" />
-            <a v-if="isReqManual('wastage')" href="#" @click.prevent="clearReq('wastage')" title="Reset to auto" style="margin-left:5px;color:#ef4444;font-weight:700;text-decoration:none">×</a>
+                   :value="reqDisplay('wastage')" @input="setReq('wastage', $event.target.value)" @change="scheduleCalc" :disabled="viewOnly" />
+            <a v-if="isReqManual('wastage') && !viewOnly" href="#" @click.prevent="clearReq('wastage')" title="Reset to auto" style="margin-left:5px;color:#ef4444;font-weight:700;text-decoration:none">×</a>
           </span></div>
           <div class="oc-kv"><span class="k">Req. Cut Sheets</span><span class="v">{{ fmtNum(calc.sheet.req_cut_sheets) }}</span></div>
           <div class="oc-kv"><span class="k">Full Sheet Qty</span><span class="v oc-v-blue">{{ fmtNum(calc.sheet.full_sheet_qty) }}</span></div>
@@ -1969,8 +1969,8 @@ function oc_mount_app(el) {
           <div class="oc-kv"><span class="k">Wastage %</span><span class="v">{{ (calc.sheet.wastage_pct * 100).toFixed(0) }}%</span></div>
           <div class="oc-kv"><span class="k">Wastage Area (m²) <span class="oc-calc-tag">{{ isReqManual('wastage_area') ? 'manual' : 'auto' }}</span></span><span class="v">
             <input type="number" min="0" step="0.0001" style="width:90px;text-align:right;padding:2px 6px;border:1px solid #d1d5db;border-radius:4px"
-                   :value="reqDisplay('wastage_area')" @input="setReq('wastage_area', $event.target.value)" @change="scheduleCalc" />
-            <a v-if="isReqManual('wastage_area')" href="#" @click.prevent="clearReq('wastage_area')" title="Reset to auto" style="margin-left:5px;color:#ef4444;font-weight:700;text-decoration:none">×</a>
+                   :value="reqDisplay('wastage_area')" @input="setReq('wastage_area', $event.target.value)" @change="scheduleCalc" :disabled="viewOnly" />
+            <a v-if="isReqManual('wastage_area') && !viewOnly" href="#" @click.prevent="clearReq('wastage_area')" title="Reset to auto" style="margin-left:5px;color:#ef4444;font-weight:700;text-decoration:none">×</a>
           </span></div>
           <div class="oc-kv"><span class="k">Total Reel Area (m²)</span><span class="v oc-v-blue">{{ fmtNum(calc.sheet.reel_area) }}</span></div>
         </div>
@@ -2231,7 +2231,10 @@ function oc_inject_styles() {
 .oc-collapse-chevron{font-size:11px;opacity:.6;margin-left:6px;transition:transform .15s}
 .oc-hint{font-size:11px;color:#6b7280;margin-top:3px;display:block}
 /* View-only mode */
-.oc-view-overlay{pointer-events:none;opacity:.82;user-select:none}
+/* View-only mode: keep the panel scrollable/viewable, but lock every editable control
+   (do NOT put pointer-events:none on the panel itself — that also blocks scrolling). */
+.oc-view-overlay{opacity:.92;user-select:none}
+.oc-view-overlay input,.oc-view-overlay select,.oc-view-overlay textarea,.oc-view-overlay button,.oc-view-overlay a{pointer-events:none!important}
 .oc-view-banner{background:#1a3a5c;color:#fff;padding:8px 14px;font-size:12px;font-weight:600;border-radius:4px;display:flex;align-items:center;gap:6px;margin-bottom:12px;letter-spacing:.02em}
 .oc-btn-print{background:#1a3a5c;color:#fff}.oc-btn-print:hover{filter:brightness(1.2)}
 .oc-breakdown-wrap{margin-top:4px;margin-bottom:8px}
