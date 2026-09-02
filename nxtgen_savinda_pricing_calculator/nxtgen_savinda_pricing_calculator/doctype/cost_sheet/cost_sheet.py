@@ -16,7 +16,20 @@ class CostSheet(Document):
 			self._copy_inquiry_child_tables()
 
 	def validate(self):
+		self._fill_row_dimensions()
 		self._calc_pricing_list_amounts()
+		self._sync_bom_remarks()
+
+	def _sync_bom_remarks(self):
+		"""Push each row's BOM Remark (entered on the costing form) onto its cost Item, so the
+		BOM Builder and Product Library pick it up when the FG's BOM / library are created."""
+		for row in (self.get("pricing_list") or []):
+			ci = row.get("item")
+			if not ci or not frappe.db.exists("cost Item", ci):
+				continue
+			remark = (row.get("bom_remark") or "").strip()
+			if remark != (frappe.db.get_value("cost Item", ci, "bom_remark") or ""):
+				frappe.db.set_value("cost Item", ci, "bom_remark", remark, update_modified=False)
 
 	def before_submit(self):
 		pass
@@ -121,6 +134,26 @@ class CostSheet(Document):
 			self.item_group    = opp["custom_item_group"]
 		if opp.get("custom_tiep")     and not self.tiep:
 			self.tiep          = opp["custom_tiep"]
+
+	# ── Backfill row dimensions from the Cost Item / Inquiry ───
+	def _fill_row_dimensions(self):
+		"""Keep the Inquiry's dimension on every row, so it can seed Carton Size.
+
+		Rows created before this field existed (and rows added by hand) have it
+		blank — fill those from the linked Cost Item, else the Inquiry header.
+		A dimension typed on the row is never overwritten.
+		"""
+		blank = [row for row in (self.pricing_list or []) if not (row.dimensions or "").strip()]
+		if not blank:
+			return
+
+		inquiry_dim = ""
+		if self.inquiry:
+			inquiry_dim = frappe.db.get_value("Opportunity", self.inquiry, "custom_dimensions") or ""
+
+		for row in blank:
+			item_dim = frappe.db.get_value("cost Item", row.item, "dimensions") if row.item else None
+			row.dimensions = (item_dim or inquiry_dim or "").strip()
 
 	# ── Calculate amounts in pricing_list child table ──────────
 	def _calc_pricing_list_amounts(self):

@@ -106,23 +106,25 @@ frappe.ui.form.on("Cost Sheet", {
 		// ── Submitted-only actions ─────────────────────────────
 		if (frm.doc.docstatus === 1) {
 			frm.add_custom_button(__("Create Quotation"), function () {
+				// A Cost Sheet carries only one live quotation — offer the existing one
+				// instead of quoting the same job twice at different prices.
 				frappe.call({
-					method: "frappe.client.insert",
-					args: {
-						doc: {
-							doctype: "Savinda Quotation",
-							cost_sheet: frm.doc.name,
-							inquiry: frm.doc.inquiry || "",
-						},
-					},
+					method: SQ_PATH + "get_live_quotation",
+					args: { cost_sheet: frm.doc.name },
+					freeze: true,
+					freeze_message: __("Checking for an existing quotation…"),
 					callback: function (r) {
-						if (r.message) {
-							frappe.show_alert({ message: "Quotation created — loading items…", indicator: "green" });
-							frappe.set_route("Form", "Savinda Quotation", r.message.name);
-						}
+						if (r.message) show_existing_quotation_dialog(r.message);
+						else create_quotation(frm);
 					},
 				});
 			});
+
+			// NPD SAMPLE — new-product sample (no Sales Order). Creates an NPD Request; on
+			// approval → Manufacture Material Request → Production Plan. Needs FG items created.
+			frm.add_custom_button(__("Create NPD Sample"), function () {
+				_cs_create_npd_sample(frm);
+			}, __("Manufacturing"));
 		}
 
 		frm.add_custom_button(__("Print / PDF"), function () {
@@ -672,6 +674,7 @@ function show_add_calc_popup(frm, cdt, cdn, item_name) {
 			var ci = r.message;
 
 			// Common fields
+			var default_carton_size = (cs_row_for_item && cs_row_for_item.dimensions) || ci.dimensions || "";
 			var fields = [
 				{
 					fieldtype: "HTML",
@@ -680,6 +683,14 @@ function show_add_calc_popup(frm, cdt, cdn, item_name) {
 						+ "Pricing Type: <b>" + pricingType + "</b>. "
 						+ "Fill in the specifications below. You can edit all cost details "
 						+ "in the calculator that opens next.</div>",
+				},
+				{
+					fieldtype: "Data", fieldname: "carton_size",
+					label: "Carton Size",
+					default: default_carton_size,
+					description: default_carton_size
+						? "From the Inquiry's Dimensions (L*W*H). Edit if this calculation packs differently."
+						: "No Dimensions recorded on the Inquiry — enter the carton size to print it on the costing summary.",
 				},
 				{
 					fieldtype: "Select", fieldname: "material_type",
@@ -950,6 +961,7 @@ function show_duplicate_item_popup(frm, cdt, cdn, item_name) {
 						item_name: m.new_cost_item_name,
 						qty: srow.qty,
 						unit_price: m.unit_cost,
+						dimensions: srow.dimensions,
 						product_code: srow.product_code,
 						order_number: srow.order_number,
 						packing_date: srow.packing_date,
@@ -1029,6 +1041,7 @@ function show_add_qty_popup(frm, cdt, cdn, item_name) {
 						item_name: m.new_cost_item_name,
 						qty: vals.new_qty,
 						unit_price: m.unit_cost,
+						dimensions: s.dimensions,
 						product_code: s.product_code,
 						order_number: s.order_number,
 						packing_date: s.packing_date,
@@ -1087,6 +1100,7 @@ function create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pric
 		material_rate: matType === "Custom" ? (parseFloat(vals.material_rate) || 0) : 0,
 		item_qty: vals.item_qty,
 		no_of_colors: vals.no_of_colors,
+		carton_size: vals.carton_size || "",
 	};
 
 	if (pricingType !== "Flexo") {
@@ -1111,6 +1125,7 @@ function create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pric
 		material_rate: matType === "Custom" ? (parseFloat(vals.material_rate) || 0) : 0,
 		no_of_colors: parseInt(vals.no_of_colors) || 0,
 		item_qty: parseFloat(vals.item_qty) || 0,
+		carton_size: vals.carton_size || "",
 	};
 	if (pricingType === "Flexo") {
 		cbForm.reel_width_mm = parseFloat(vals.reel_width_mm) || 0;
@@ -1386,7 +1401,7 @@ function show_page_popup(frm, opp, subject, pages, breakdowns) {
 		pages.forEach(function (page, i) {
 			if (d.get_value("sel_page_" + (page.idx || (i + 1)))) sel.add(page.idx || (i + 1));
 		});
-		render_preview(d, subject, pages, breakdowns, sel, total_bd_qty);
+		render_preview(d, opp, subject, pages, breakdowns, sel, total_bd_qty);
 	});
 }
 
@@ -1402,6 +1417,7 @@ function create_single(frm, opp, subject, breakdowns) {
 					cost_item_name: subject, subject: subject, page_type: "",
 					colour: cint_v(opp.custom_colour), material: "", item_qty: qty,
 					no_of_pages: 0, breakdown: "", is_selected: 0,
+					dimensions: _cs_dimensions(opp),
 				});
 			}
 		);
@@ -1475,6 +1491,7 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 					item_qty: total_qty, no_of_pages: 0,
 					breakdown: combined_desc, is_selected: 1,
 					breakdown_qtys_json: JSON.stringify(breakdown_qtys),
+					dimensions: _cs_dimensions(opp),
 				};
 				_apply_packing(comb_doc, comb_pk);
 				frappe.call({
@@ -1486,6 +1503,7 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 							row.item = r.message.name;
 							row.item_name = name;
 							row.qty = total_qty;
+							row.dimensions = _cs_dimensions(opp);
 							if (group_name_val) row.group_name = group_name_val;
 							_apply_packing(row, comb_pk);
 						}
@@ -1519,6 +1537,7 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 					colour: cint_v(opp.custom_colour), material: "",
 					item_qty: qty, no_of_pages: 0,
 					breakdown: bd_desc, is_selected: 1,
+					dimensions: _cs_dimensions(opp),
 				};
 				_apply_packing(bd_doc, bd_pk);
 				frappe.call({
@@ -1530,6 +1549,7 @@ function show_single_breakdown_popup(frm, opp, subject, breakdowns) {
 							row.item = r.message.name;
 							row.item_name = name;
 							row.qty = qty;
+							row.dimensions = _cs_dimensions(opp);
 							if (group_name_val) row.group_name = group_name_val;
 							_apply_packing(row, bd_pk);
 						}
@@ -1604,11 +1624,19 @@ function _apply_packing(target, pk) {
 	target.is_printed = pk.is_printed;
 }
 
-function build_items(subject, pages, breakdowns, selected, total_bd_qty) {
+// Dimensions recorded on the Inquiry: the page row's own value when it has one,
+// otherwise the Inquiry header's Dimensions (L*W*H). Carried onto every Cost Item
+// and Cost Sheet row so it is the default Carton Size for their calculations.
+function _cs_dimensions(opp, page) {
+	return String((page && page.dimensions) || (opp && opp.custom_dimensions) || "").trim();
+}
+
+function build_items(opp, subject, pages, breakdowns, selected, total_bd_qty) {
 	var items = [];
 	pages.forEach(function (page, i) {
 		var idx = page.idx || (i + 1), page_type = page.page_type || "Page";
 		var n_pages = flt_v(page.no_of_pages), colour = cint_v(page.colour), material = page.material || "";
+		var dimensions = _cs_dimensions(opp, page);
 		if (selected.has(idx)) {
 			breakdowns.forEach(function (bd) {
 				var bd_desc = (bd.description || "").trim();
@@ -1617,6 +1645,7 @@ function build_items(subject, pages, breakdowns, selected, total_bd_qty) {
 					cost_item_name: name, page_type: page_type, colour: colour,
 					material: material, item_qty: flt_v(bd.qty) * n_pages, no_of_pages: n_pages,
 					breakdown: bd_desc, bd_qty: flt_v(bd.qty), is_selected: 1,
+					dimensions: dimensions,
 					_packing: _cs_packing(bd),
 					_calc: "bd_qty(" + flt_v(bd.qty).toLocaleString() + ") × pages(" + n_pages + ")"
 				});
@@ -1628,6 +1657,7 @@ function build_items(subject, pages, breakdowns, selected, total_bd_qty) {
 				page_type: page_type, colour: colour, material: material,
 				item_qty: n_pages * total_bd_qty, no_of_pages: n_pages,
 				breakdown: "", bd_qty: total_bd_qty, is_selected: 0,
+				dimensions: dimensions,
 				_packing: _cs_packing(breakdowns[0]),
 				_calc: "pages(" + n_pages + ") × total_bd(" + total_bd_qty.toLocaleString() + ")"
 			});
@@ -1637,7 +1667,7 @@ function build_items(subject, pages, breakdowns, selected, total_bd_qty) {
 }
 
 function do_create_items(frm, opp, subject, pages, breakdowns, selected, total_bd_qty, group_name) {
-	var items = build_items(subject, pages, breakdowns, selected, total_bd_qty);
+	var items = build_items(opp, subject, pages, breakdowns, selected, total_bd_qty);
 	if (!items.length) { frappe.msgprint({ message: "No items.", indicator: "orange" }); return; }
 	frappe.show_alert({ message: "Creating " + items.length + " cost item(s)…", indicator: "blue" });
 
@@ -1661,6 +1691,7 @@ function do_create_items(frm, opp, subject, pages, breakdowns, selected, total_b
 			no_of_pages: ci.no_of_pages,
 			breakdown: ci.breakdown,
 			is_selected: ci.is_selected,
+			dimensions: ci.dimensions || "",
 		};
 		_apply_packing(ci_doc, ci._packing);
 		frappe.call({
@@ -1672,6 +1703,7 @@ function do_create_items(frm, opp, subject, pages, breakdowns, selected, total_b
 					row.item = r.message.name;
 					row.item_name = ci.cost_item_name;
 					row.qty = ci.item_qty;
+					row.dimensions = ci.dimensions || "";
 					if (group_name) row.group_name = group_name;
 					_apply_packing(row, ci._packing);
 				}
@@ -1693,6 +1725,7 @@ function insert_cost_item(frm, inquiry_name, data, cb) {
 			if (!r.message) return;
 			var row = frm.add_child("pricing_list");
 			row.item = r.message.name; row.item_name = data.cost_item_name; row.qty = data.item_qty || 0;
+			row.dimensions = data.dimensions || "";
 			frm.refresh_field("pricing_list"); frm.save();
 			frappe.show_alert({ message: "Created: " + data.cost_item_name, indicator: "green" });
 			if (typeof cb === "function") cb(r.message);
@@ -1700,8 +1733,8 @@ function insert_cost_item(frm, inquiry_name, data, cb) {
 	});
 }
 
-function render_preview(d, subject, pages, breakdowns, selected, total_bd_qty) {
-	var items = build_items(subject, pages, breakdowns, selected, total_bd_qty);
+function render_preview(d, opp, subject, pages, breakdowns, selected, total_bd_qty) {
+	var items = build_items(opp, subject, pages, breakdowns, selected, total_bd_qty);
 	if (!items.length) { d.$wrapper.find("#cs-preview").html(""); return; }
 	var rows = items.map(function (ci) {
 		var tag = ci.is_selected
@@ -1731,6 +1764,54 @@ function render_preview(d, subject, pages, breakdowns, selected, total_bd_qty) {
 //  HELPERS
 // ─────────────────────────────────────────────────────────────
 
+var SQ_PATH = "nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator"
+	+ ".doctype.savinda_quotation.savinda_quotation.";
+
+// An open (draft) or submitted quotation already exists for this Cost Sheet: send the user
+// there rather than letting a second one be created.
+function show_existing_quotation_dialog(existing) {
+	var d = new frappe.ui.Dialog({
+		title: __("Quotation Already Exists"),
+		fields: [{
+			fieldtype: "HTML",
+			options: "<div style='padding:10px 12px;background:#fff7ed;border:1px solid #fed7aa;"
+				+ "border-radius:5px;font-size:12.5px;color:#7c2d12'>"
+				+ "This Cost Sheet already has a live quotation "
+				+ "<b>" + frappe.utils.escape_html(existing.name) + "</b> ("
+				+ frappe.utils.escape_html(existing.state || "") + ").<br><br>"
+				+ "Open it and update the prices there. To quote this job afresh, cancel "
+				+ "that quotation first.</div>",
+		}],
+		primary_action_label: __("Open {0}", [existing.name]),
+		primary_action: function () {
+			d.hide();
+			frappe.set_route("Form", "Savinda Quotation", existing.name);
+		},
+		secondary_action_label: __("Cancel"),
+		secondary_action: function () { d.hide(); },
+	});
+	d.show();
+}
+
+function create_quotation(frm) {
+	frappe.call({
+		method: "frappe.client.insert",
+		args: {
+			doc: {
+				doctype: "Savinda Quotation",
+				cost_sheet: frm.doc.name,
+				inquiry: frm.doc.inquiry || "",
+			},
+		},
+		callback: function (r) {
+			if (r.message) {
+				frappe.show_alert({ message: "Quotation created — loading items…", indicator: "green" });
+				frappe.set_route("Form", "Savinda Quotation", r.message.name);
+			}
+		},
+	});
+}
+
 function get_operations_param(frm) {
 	var names = (frm.doc.operations || [])
 		.filter(function (r) { return r.operation; })
@@ -1753,3 +1834,33 @@ function cur_fmt(v) {
 function flt_v(v) { return parseFloat(v || 0) || 0; }
 function cint_v(v) { return parseInt(v || 0) || 0; }
 function round2(v) { return Math.round((flt_v(v) + Number.EPSILON) * 100) / 100; }
+
+// Create an NPD sample request (no Sales Order) from this Cost Sheet. Prompts sample qty +
+// required date, creates the NPD Request, and routes to it for approval.
+function _cs_create_npd_sample(frm) {
+	frappe.prompt(
+		[
+			{ fieldtype: "Int", fieldname: "sample_qty", label: __("Sample Qty"), reqd: 1, default: 1 },
+			{ fieldtype: "Date", fieldname: "required_date", label: __("Required Date"),
+			  default: frappe.datetime.add_days(frappe.datetime.get_today(), 7) },
+		],
+		function (v) {
+			frappe.call({
+				method: "nxtgen_savinda_pricing_calculator.api.production_plan.create_npd_request_from_cost_sheet",
+				args: { cost_sheet: frm.doc.name },
+				freeze: true, freeze_message: __("Creating NPD Sample Request…"),
+				callback: function (r) {
+					var npd = (r.message || {}).npd_request;
+					if (!npd) { return; }
+					frappe.db.set_value("NPD Request", npd, {
+						sample_qty: v.sample_qty || 1,
+						required_date: v.required_date || null,
+					}).then(function () {
+						frappe.set_route("Form", "NPD Request", npd);
+					});
+				},
+			});
+		},
+		__("Create NPD Sample"), __("Create")
+	);
+}

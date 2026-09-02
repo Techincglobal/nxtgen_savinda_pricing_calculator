@@ -141,6 +141,19 @@ frappe.ui.form.on("Savinda Quotation", {
 		}
 
 		// ── Manufacturing functions (enabled when Won) ─────────────────────
+		// Manufacturing prep for NPD — FG items + BOM building are available on any saved
+		// quotation (draft or submitted), like the Sales Order's BOM Builder, so BOMs can be
+		// built for an NPD sample before the quotation is Won.
+		if (!frm.is_new() && frm.doc.docstatus !== 2) {
+			frm.add_custom_button(__("Create / Link FG Items"), function () {
+				_show_create_fg_dialog(frm);
+			}, __("Manufacturing"));
+
+			frm.add_custom_button(__("BOM Builder"), function () {
+				window.location.href = "/app/bom-builder?quotation=" + encodeURIComponent(frm.doc.name);
+			}, __("Manufacturing"));
+		}
+
 		if (!frm.is_new() && frm.doc.status === "Won") {
 			// Lead/Prospect-based quotation has no Customer yet → offer to create one
 			if (!frm.doc.customer) {
@@ -149,21 +162,14 @@ frappe.ui.form.on("Savinda Quotation", {
 				}, __("Manufacturing"));
 			}
 
-			frm.add_custom_button(__("Create / Link FG Items"), function () {
-				_show_create_fg_dialog(frm);
-			}, __("Manufacturing"));
-
 			frm.add_custom_button(__("Create Sales Order"), function () {
 				_show_create_so_dialog(frm, "Sales Order");
 			}, __("Manufacturing"));
 
-			// NPD is created here (only) as an NPD-type Sales Order → NPD approval workflow.
-			frm.add_custom_button(__("Create NPD"), function () {
-				_show_create_so_dialog(frm, "NPD");
-			}, __("Manufacturing"));
-
-			frm.add_custom_button(__("BOM Builder"), function () {
-				window.location.href = "/app/bom-builder?quotation=" + encodeURIComponent(frm.doc.name);
+			// NPD SAMPLE — a New-Product-Development sample (no Sales Order). Creates an NPD
+			// Request; on approval it becomes a Manufacture Material Request → Production Plan.
+			frm.add_custom_button(__("Create NPD Sample"), function () {
+				_create_npd_sample(frm, { quotation: frm.doc.name });
 			}, __("Manufacturing"));
 		}
 	},
@@ -183,11 +189,23 @@ frappe.ui.form.on("Savinda Quotation", {
 		});
 	},
 
-	// When a real Customer is picked, mirror its name into customer_name
+	// When a real Customer is picked, mirror its name and set the quotation currency from the
+	// customer (like a standard Quotation) so the Sales Order created from it uses the right
+	// currency. Setting currency triggers the exchange-rate fetch + item re-pricing.
 	customer: function (frm) {
 		if (!frm.doc.customer) return;
 		frappe.db.get_value("Customer", frm.doc.customer, "customer_name", function (r) {
 			if (r && r.customer_name) frm.set_value("customer_name", r.customer_name);
+		});
+		if (frm.doc.docstatus !== 0) return;
+		frappe.call({
+			method: "nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.doctype.savinda_quotation.savinda_quotation.get_customer_currency",
+			args: { customer: frm.doc.customer },
+			callback: function (r) {
+				if (r.message && r.message !== frm.doc.currency) {
+					frm.set_value("currency", r.message);
+				}
+			},
 		});
 	},
 
@@ -385,7 +403,9 @@ function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
 					? (ci.calculations[0].calculation_breakdown || "") : "";
 				qrow.size = _format_size(ci);
 				qrow.material = ci.material || "";
-				qrow.finishing = ci.breakdown || "";
+				// Finishing ('XX Colors + finishings') + BOM remark are filled server-side in
+				// validate() from the cost item — leave blank here so they populate on save.
+				qrow.finishing = "";
 				qrow.finishing_variant = variant || 1;
 				qrow.qty = qty_override !== undefined ? qty_override : flt_v(cs_row.qty);
 				qrow.unit_cost = flt_v(cs_row.unit_price);
@@ -436,7 +456,7 @@ function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
 							cb_name: cb_name,
 							size: _format_size(ci),
 							material: ci.material || "",
-							finishing: ci.breakdown || "",
+							finishing: "",  // filled server-side in validate() from the cost item
 						};
 
 						function add_break_row(qb_idx) {
@@ -757,7 +777,6 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd) {
 	var suggested_desc = [row.size, row.material, row.finishing].filter(Boolean).join(" | ");
 	var pl_fields = pd.pl_fields || [];
 	var pl_defaults = pd.defaults || {};
-	console.log(pl_fields);
 	var fields = [
 		{
 			fieldtype: "HTML",
@@ -958,6 +977,39 @@ function _create_customer(frm) {
 	);
 }
 
+// Create an NPD sample request (no Sales Order) from a Quotation or Cost Sheet. Prompts for the
+// sample qty + required date, creates the NPD Request, and routes to it for approval.
+function _create_npd_sample(frm, opts) {
+	frappe.prompt(
+		[
+			{ fieldtype: "Int", fieldname: "sample_qty", label: __("Sample Qty"), reqd: 1, default: 1 },
+			{ fieldtype: "Date", fieldname: "required_date", label: __("Required Date"),
+			  default: frappe.datetime.add_days(frappe.datetime.get_today(), 7) },
+		],
+		function (v) {
+			var method = opts.quotation
+				? "nxtgen_savinda_pricing_calculator.api.production_plan.create_npd_request_from_quotation"
+				: "nxtgen_savinda_pricing_calculator.api.production_plan.create_npd_request_from_cost_sheet";
+			var args = opts.quotation ? { quotation: opts.quotation } : { cost_sheet: opts.cost_sheet };
+			frappe.call({
+				method: method, args: args,
+				freeze: true, freeze_message: __("Creating NPD Sample Request…"),
+				callback: function (r) {
+					var npd = (r.message || {}).npd_request;
+					if (!npd) { return; }
+					frappe.db.set_value("NPD Request", npd, {
+						sample_qty: v.sample_qty || 1,
+						required_date: v.required_date || null,
+					}).then(function () {
+						frappe.set_route("Form", "NPD Request", npd);
+					});
+				},
+			});
+		},
+		__("Create NPD Sample"), __("Create")
+	);
+}
+
 function _show_create_so_dialog(frm, order_type) {
 	order_type = order_type || "Sales Order";
 	// Fetch ALL FG items tied to this quotation's cost items (variants included)
@@ -1007,6 +1059,16 @@ function _render_so_dialog(frm, fg_list, order_type) {
 			{
 				fieldtype: "Date", fieldname: "delivery_date",
 				label: "Required Delivery Date", reqd: 1,
+			},
+			{ fieldtype: "Column Break" },
+			{
+				fieldtype: "Data", fieldname: "po_no",
+				label: "Customer's PO No", reqd: 1,
+				description: "The customer's purchase order reference (required on the Sales Order).",
+			},
+			{
+				fieldtype: "Date", fieldname: "po_date",
+				label: "Customer's PO Date",
 			},
 			{ fieldtype: "Section Break", label: "Finished Goods — tick the ones to book" + (is_npd ? " in the NPD order" : " in the Sales Order") },
 			{
@@ -1059,6 +1121,8 @@ function _render_so_dialog(frm, fg_list, order_type) {
 						custom_order_type: order_type,
 						transaction_date: frappe.datetime.get_today(),
 						delivery_date: vals.delivery_date,
+						po_no: vals.po_no || "",
+						po_date: vals.po_date || null,
 						currency: cur,
 						conversion_rate: crate,
 						ignore_pricing_rule: 1,

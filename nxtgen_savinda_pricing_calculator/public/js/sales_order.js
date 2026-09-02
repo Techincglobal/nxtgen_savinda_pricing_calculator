@@ -40,5 +40,9 @@ frappe.ui.form.on("Sales Order", {
 				}
 			};
 		});
+		frm.remove_custom_button('Quotation', 'Get items from');
+		// Delivery Notes are raised only from the Delivery Note's "Get from Packing" flow, so
+		// drop the direct "Create > Delivery Note" option on the Sales Order.
+		frm.remove_custom_button('Delivery Note', 'Create');
 	},
 });

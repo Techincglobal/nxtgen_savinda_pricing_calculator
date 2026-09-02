@@ -98,6 +98,26 @@ def get_available_packings(sales_order):
 	return out
 
 
+@frappe.whitelist()
+def dispatchable_sales_orders():
+	"""Sales Orders that have at least one packed-but-not-yet-delivered Packing — i.e. stock
+	ready to dispatch. Used to restrict the Sales Order picker on the Delivery Note 'Get from
+	Packing' popup so it only lists orders that actually have something to dispatch."""
+	pps = set()
+	for p in frappe.get_all("Packing", filters={"is_deliverd": 0}, fields=["job__npd_number"]):
+		if p.job__npd_number:
+			pps.add(p.job__npd_number)
+	if not pps:
+		return []
+	sos = set()
+	for r in frappe.get_all(
+		"Production Plan", filters={"name": ["in", list(pps)]}, fields=["custom_sales_order"]
+	):
+		if r.custom_sales_order:
+			sos.add(r.custom_sales_order)
+	return sorted(sos)
+
+
 _DN_ROW_SKIP = {
 	"name", "idx", "parent", "parentfield", "parenttype", "docstatus", "creation",
 	"modified", "modified_by", "owner", "doctype", "__islocal", "__unsaved", "__onload",

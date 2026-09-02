@@ -1,7 +1,42 @@
 # Copyright (c) 2026, Techincglobal.com and contributors
 import frappe
 from frappe.model.document import Document
-from frappe.utils import flt, today
+from frappe.utils import flt, get_link_to_form, today
+
+# ── One live quotation per Cost Sheet ───────────────────────────
+# A quotation in one of these statuses is finished, so the Cost Sheet may be quoted again.
+CLOSED_QUOTATION_STATUSES = ("Lost", "Cancelled")
+
+
+def find_live_quotation(cost_sheet, exclude=None):
+	"""The open (draft) or submitted quotation already raised for this Cost Sheet, if any.
+
+	Cancelled documents never count, nor do quotations marked Lost/Cancelled — those are
+	closed, so the Cost Sheet is free to be quoted again. Returns the OLDEST match, which
+	is the one the sales team has been working on.
+	"""
+	if not cost_sheet:
+		return None
+	for row in frappe.get_all(
+		"Savinda Quotation",
+		filters={"cost_sheet": cost_sheet, "docstatus": ["<", 2]},
+		fields=["name", "status", "docstatus", "workflow_state"],
+		order_by="creation asc",
+	):
+		if row.name == exclude or (row.status or "") in CLOSED_QUOTATION_STATUSES:
+			continue
+		row["state"] = row.workflow_state or row.status or (
+			"Submitted" if row.docstatus == 1 else "Draft"
+		)
+		return row
+	return None
+
+
+@frappe.whitelist()
+def get_live_quotation(cost_sheet):
+	"""Pre-check for the Cost Sheet's Create Quotation button: returns the quotation that
+	blocks a new one (or None), so the user can be offered the existing one instead."""
+	return find_live_quotation(cost_sheet)
 
 
 def _company_currency():
@@ -12,17 +47,66 @@ def _company_currency():
 	)
 
 
+def _customer_currency(customer):
+	"""The currency ERPNext would use for a sales transaction with this customer — so a Sales
+	Order created from the quotation carries the correct currency: Customer default currency →
+	the customer's default price-list currency → company currency."""
+	if customer:
+		cur = frappe.db.get_value("Customer", customer, "default_currency")
+		if cur:
+			return cur
+		pl = frappe.db.get_value("Customer", customer, "default_price_list")
+		if pl:
+			plc = frappe.db.get_value("Price List", pl, "currency")
+			if plc:
+				return plc
+	return _company_currency()
+
+
+@frappe.whitelist()
+def get_customer_currency(customer=None):
+	"""Resolve the selling currency for a customer (used by the client to set the quotation
+	currency when a customer is picked)."""
+	return _customer_currency(customer)
+
+
+def _finishing_label(cost_item):
+	"""'XX Colors + fin1 + fin2' for a cost item — from its Calculation Breakdown's colour
+	count + finishings list. Matches the finishing string the quotation print builds."""
+	from frappe.utils import cint
+	cb = frappe.db.get_value(
+		"Cost Item Calculation", {"parent": cost_item}, "calculation_breakdown", order_by="idx asc")
+	if not cb:
+		return ""
+	try:
+		from nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.utils.jinja import (
+			get_cb_finishings,
+		)
+		fins = get_cb_finishings(cb) or []
+	except Exception:
+		fins = []
+	colors = cint(frappe.db.get_value("Calculation Breakdown", cb, "no_of_colors")) \
+		or cint(frappe.db.get_value("cost Item", cost_item, "colour"))
+	c_str = ("%02d Colors" % colors) if colors else ""
+	if fins:
+		return c_str + (" + " if c_str else "") + " + ".join(fins)
+	return c_str
+
+
 class SavindaQuotation(Document):
 
 	def before_insert(self):
 		self._fetch_from_cost_sheet()
 		self._fetch_from_inquiry()
 		if not self.currency:
-			self.currency = _company_currency()
+			# Default to the customer's selling currency (matches a standard Quotation) so the
+			# Sales Order created from this quote does not fail on a currency mismatch.
+			self.currency = _customer_currency(self.customer)
 		if not self.conversion_rate:
 			self.conversion_rate = 1
 
 	def validate(self):
+		self._check_single_live_quotation()
 		if not self.date:
 			self.date = today()
 		self._validate_currency()
@@ -35,6 +119,41 @@ class SavindaQuotation(Document):
 		self._apply_common_material()
 		self._apply_lowest_profit_margin()
 		self._sync_item_currency()
+		self._fill_item_finishing_and_remark()
+
+	def _fill_item_finishing_and_remark(self):
+		"""Copy the cost item's BOM remark and finishing ('XX Colors + finishings') onto each
+		quotation item. Filled only when the field is empty, so manual edits are preserved."""
+		for row in (self.items or []):
+			ci = row.get("cost_item")
+			if not ci or not frappe.db.exists("cost Item", ci):
+				continue
+			if not (row.get("bom_remark") or "").strip():
+				row.bom_remark = frappe.db.get_value("cost Item", ci, "bom_remark") or ""
+			if not (row.get("finishing") or "").strip():
+				row.finishing = _finishing_label(ci)
+
+	def _check_single_live_quotation(self):
+		"""A Cost Sheet carries only ONE open or submitted quotation at a time, so the same
+		job can't be quoted twice at different prices. Amendments are exempt — they replace
+		the cancelled original rather than competing with it."""
+		if self.amended_from or not self.cost_sheet:
+			return
+		# Guard the moment a Cost Sheet gains a quotation. Documents that already exist stay
+		# editable — including the duplicates raised before this rule, which would otherwise
+		# become un-saveable.
+		if not (self.is_new() or self.has_value_changed("cost_sheet")):
+			return
+		existing = find_live_quotation(self.cost_sheet, exclude=self.name)
+		if not existing:
+			return
+		link = get_link_to_form("Savinda Quotation", existing.name)
+		frappe.throw(
+			f"Cost Sheet <b>{self.cost_sheet}</b> already has a quotation: "
+			f"{link} ({existing.state}).<br><br>"
+			"Open that quotation and update it, or cancel it, before creating a new one.",
+			title="Quotation Already Exists",
+		)
 
 	def _sync_item_currency(self):
 		"""Keep each item's base (LKR) and transaction-currency rates consistent.

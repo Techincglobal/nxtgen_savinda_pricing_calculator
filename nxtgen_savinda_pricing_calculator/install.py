@@ -61,7 +61,8 @@ def after_install():
 	_ensure_roles()
 	_ensure_workflow()
 	_ensure_quotation_workflow()
-	_ensure_sales_order_npd_workflow()
+	_ensure_npd_request_workflow()
+	_retire_sales_order_npd_workflow()
 	_seed_install_only_fixtures()
 	_sync_code_print_formats()
 
@@ -78,7 +79,8 @@ def after_migrate():
 	_ensure_roles()
 	_ensure_workflow()
 	_ensure_quotation_workflow()
-	_ensure_sales_order_npd_workflow()
+	_ensure_npd_request_workflow()
+	_retire_sales_order_npd_workflow()
 	_sync_code_print_formats()
 
 
@@ -427,6 +429,66 @@ def _ensure_sales_order_npd_workflow():
 			message=frappe.get_traceback(),
 		)
 
+NPD_REQUEST_WORKFLOW_NAME = "NPD Request Approval"
+
+
+def _ensure_npd_request_workflow():
+	"""Seed the NPD Request approval Workflow — ISOLATED on the NPD Request doctype (no native
+	ERPNext document is governed). Draft -> Pending NPD Approval -> Approved (submits) / Rejected.
+	Reconciled on every migrate."""
+	if not frappe.db.table_exists("Workflow"):
+		return
+	try:
+		states = [
+			("Draft",                "0", "CS Team",      ""),
+			("Pending NPD Approval", "0", "CS Team",      "Warning"),
+			("Approved",             "1", "NPD Approver", "Success"),
+			("Rejected",             "0", "CS Team",      "Danger"),
+		]
+		for state, _ds, _role, style in states:
+			if not frappe.db.exists("Workflow State", state):
+				frappe.get_doc({"doctype": "Workflow State", "workflow_state_name": state, "style": style}).insert(ignore_permissions=True)
+		for action in ["Send for NPD Approval", "Approve NPD", "Reject NPD", "Reopen"]:
+			if not frappe.db.exists("Workflow Action Master", action):
+				frappe.get_doc({"doctype": "Workflow Action Master", "workflow_action_name": action}).insert(ignore_permissions=True)
+		transitions = [
+			("Draft",                "Send for NPD Approval", "Pending NPD Approval", "CS Team"),
+			("Pending NPD Approval", "Approve NPD",           "Approved",             "NPD Approver"),
+			("Pending NPD Approval", "Reject NPD",            "Rejected",             "NPD Approver"),
+			("Rejected",             "Reopen",                "Draft",                "CS Team"),
+		]
+		wf = (frappe.get_doc("Workflow", NPD_REQUEST_WORKFLOW_NAME)
+		      if frappe.db.exists("Workflow", NPD_REQUEST_WORKFLOW_NAME) else frappe.new_doc("Workflow"))
+		wf.workflow_name = NPD_REQUEST_WORKFLOW_NAME
+		wf.document_type = "NPD Request"
+		wf.workflow_state_field = "workflow_state"
+		wf.is_active = 1
+		wf.send_email_alert = 0
+		wf.override_status = 0
+		wf.set("states", [])
+		wf.set("transitions", [])
+		for state, ds, role, _style in states:
+			wf.append("states", {"state": state, "doc_status": ds, "allow_edit": role})
+		for frm_state, action, to_state, role in transitions:
+			wf.append("transitions", {"state": frm_state, "action": action, "next_state": to_state, "allowed": role, "allow_self_approval": 1})
+			wf.append("transitions", {"state": frm_state, "action": action, "next_state": to_state, "allowed": "System Manager", "allow_self_approval": 1})
+		wf.save(ignore_permissions=True)
+		frappe.db.commit()
+	except Exception:
+		frappe.log_error(title="pricing_calculator: ensure NPD Request workflow failed", message=frappe.get_traceback())
+
+
+def _retire_sales_order_npd_workflow():
+	"""Deactivate the superseded Sales Order NPD approval workflow so Sales Orders return to the
+	normal one-click submit (NPD is now handled by the NPD Request sample flow)."""
+	try:
+		if frappe.db.exists("Workflow", SO_NPD_WORKFLOW_NAME):
+			if frappe.db.get_value("Workflow", SO_NPD_WORKFLOW_NAME, "is_active"):
+				frappe.db.set_value("Workflow", SO_NPD_WORKFLOW_NAME, "is_active", 0)
+				frappe.db.commit()
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "pricing_calculator: retire SO NPD workflow failed")
+
 
 def _ensure_custom_fields():
 	"""Custom fields this app adds to standard doctypes (idempotent)."""
@@ -668,6 +730,28 @@ def _ensure_custom_fields():
 				},
 			],
 			# Job Ticket header/print + workflow data on the Production Plan.
+			# BOM: costing/planning variables copied from the Calculation Breakdown at BOM-build time,
+			# so the Production Plan can compute sheet counts without re-resolving the calculation.
+			"BOM": [
+				{"fieldname": "custom_calc_section", "label": "Calculation Details", "fieldtype": "Section Break", "insert_after": "items", "collapsible": 1, "description": "Costing/planning variables from the Calculation Breakdown (No. of Ups, Colors, Cuts, sheet sizes) — used to compute sheet counts in the Production Plan."},
+				{"fieldname": "custom_calculation_breakdown", "label": "Calculation Breakdown", "fieldtype": "Link", "options": "Calculation Breakdown", "insert_after": "custom_calc_section", "read_only": 1, "allow_on_submit": 1},
+				{"fieldname": "custom_pricing_type", "label": "Pricing Type", "fieldtype": "Data", "insert_after": "custom_calculation_breakdown", "read_only": 1, "allow_on_submit": 1},
+				{"fieldname": "custom_no_of_colors", "label": "No. of Colors", "fieldtype": "Int", "insert_after": "custom_pricing_type", "read_only": 1, "allow_on_submit": 1},
+				{"fieldname": "custom_no_of_ups", "label": "No. of Ups", "fieldtype": "Int", "insert_after": "custom_no_of_colors", "read_only": 1, "allow_on_submit": 1},
+				{"fieldname": "custom_calc_col1", "fieldtype": "Column Break", "insert_after": "custom_no_of_ups"},
+				{"fieldname": "custom_no_of_cuts", "label": "No. of Cuts", "fieldtype": "Int", "insert_after": "custom_calc_col1", "read_only": 1, "allow_on_submit": 1},
+				{"fieldname": "custom_cut_sheet_ups", "label": "Cut Sheet Ups", "fieldtype": "Int", "insert_after": "custom_no_of_cuts", "read_only": 1, "allow_on_submit": 1},
+				{"fieldname": "custom_base_item_qty", "label": "Base Qty (costed)", "fieldtype": "Float", "insert_after": "custom_cut_sheet_ups", "read_only": 1, "allow_on_submit": 1},
+				{"fieldname": "custom_calc_col2", "fieldtype": "Column Break", "insert_after": "custom_base_item_qty"},
+				{"fieldname": "custom_full_sheet_size", "label": "Full Sheet Size", "fieldtype": "Data", "insert_after": "custom_calc_col2", "read_only": 1, "allow_on_submit": 1, "depends_on": "eval:doc.custom_pricing_type!='Flexo'"},
+				{"fieldname": "custom_cut_sheet_size", "label": "Cut Sheet Size", "fieldtype": "Data", "insert_after": "custom_full_sheet_size", "read_only": 1, "allow_on_submit": 1, "depends_on": "eval:doc.custom_pricing_type!='Flexo'"},
+				{"fieldname": "custom_carton_size", "label": "Product / Carton Size", "fieldtype": "Data", "insert_after": "custom_cut_sheet_size", "read_only": 1, "allow_on_submit": 1},
+				{"fieldname": "custom_reel_width_mm", "label": "Reel Width (mm)", "fieldtype": "Float", "insert_after": "custom_carton_size", "read_only": 1, "allow_on_submit": 1, "depends_on": "eval:doc.custom_pricing_type=='Flexo'"},
+				{"fieldname": "custom_reel_length_m", "label": "Reel Length (m)", "fieldtype": "Float", "insert_after": "custom_reel_width_mm", "read_only": 1, "allow_on_submit": 1, "depends_on": "eval:doc.custom_pricing_type=='Flexo'"},
+				# BOM remark entered on the costing form (Cost Sheet item) and copied here + to the
+				# Product Library, so it prints on the Job Ticket / planning list.
+				{"fieldname": "custom_bom_remark", "label": "BOM Remark", "fieldtype": "Small Text", "insert_after": "custom_reel_length_m", "allow_on_submit": 1},
+			],
 			"Production Plan": [
 				{"fieldname": "custom_ticket_section", "label": "Job Ticket", "fieldtype": "Section Break", "insert_after": "naming_series"},
 				{"fieldname": "custom_ticket_type", "label": "Ticket Type", "fieldtype": "Select", "options": "Job\nNPD", "insert_after": "custom_ticket_section", "in_standard_filter": 1},
@@ -685,7 +769,10 @@ def _ensure_custom_fields():
 				{"fieldname": "custom_po_no", "label": "PO No", "fieldtype": "Data", "insert_after": "custom_job_title"},
 				{"fieldname": "custom_req_date", "label": "Required Date", "fieldtype": "Date", "insert_after": "custom_po_no"},
 				{"fieldname": "custom_quote_no", "label": "Quote No", "fieldtype": "Data", "insert_after": "custom_req_date"},
-				{"fieldname": "custom_ticket_sec2", "label": "Specifications", "fieldtype": "Section Break", "insert_after": "custom_quote_no"},
+				# Planning list attributes (user-set): New / Repeat job, and the callout flag.
+				{"fieldname": "custom_repeat_or_new", "label": "Repeat / New", "fieldtype": "Select", "options": "\nNew\nRepeat\nRepeat w/c", "insert_after": "custom_quote_no", "in_standard_filter": 1, "allow_on_submit": 1},
+				{"fieldname": "custom_is_callout", "label": "Callout", "fieldtype": "Check", "insert_after": "custom_repeat_or_new", "allow_on_submit": 1},
+				{"fieldname": "custom_ticket_sec2", "label": "Specifications", "fieldtype": "Section Break", "insert_after": "custom_is_callout"},
 				{"fieldname": "custom_job_board", "label": "Job Board", "fieldtype": "Data", "insert_after": "custom_ticket_sec2"},
 				{"fieldname": "custom_material", "label": "Material", "fieldtype": "Data", "insert_after": "custom_job_board"},
 				{"fieldname": "custom_colors", "label": "Colors", "fieldtype": "Int", "insert_after": "custom_material"},
@@ -715,7 +802,9 @@ def _ensure_custom_fields():
 				{"fieldname": "custom_reject_remark", "label": "Reject Remark", "fieldtype": "Small Text", "insert_after": "custom_artwork_remarks", "hidden": 1, "no_copy": 1, "allow_on_submit": 1},
 				{"fieldname": "custom_created_by", "label": "Created By", "fieldtype": "Data", "insert_after": "custom_artwork_remarks", "read_only": 1, "allow_on_submit": 1},
 				{"fieldname": "custom_created_on", "label": "Created On", "fieldtype": "Datetime", "insert_after": "custom_created_by", "read_only": 1, "allow_on_submit": 1},
-				{"fieldname": "custom_artwork_by", "label": "Artwork Approved By", "fieldtype": "Data", "insert_after": "custom_created_on", "read_only": 1, "allow_on_submit": 1},
+				# Stamped when CS releases the job to planning (Draft -> BOM Validation).
+				{"fieldname": "custom_cs_released_on", "label": "CS Released On", "fieldtype": "Datetime", "insert_after": "custom_created_on", "read_only": 1, "allow_on_submit": 1},
+				{"fieldname": "custom_artwork_by", "label": "Artwork Approved By", "fieldtype": "Data", "insert_after": "custom_cs_released_on", "read_only": 1, "allow_on_submit": 1},
 				{"fieldname": "custom_artwork_on", "label": "Artwork Approved On", "fieldtype": "Datetime", "insert_after": "custom_artwork_by", "read_only": 1, "allow_on_submit": 1},
 				{"fieldname": "custom_appr_col", "fieldtype": "Column Break", "insert_after": "custom_artwork_on"},
 				{"fieldname": "custom_checked_by", "label": "Checked By (Supply Chain)", "fieldtype": "Data", "insert_after": "custom_appr_col", "read_only": 1, "allow_on_submit": 1},
@@ -751,6 +840,14 @@ def _ensure_custom_fields():
 				{"fieldname": "custom_material_width", "label": "Across Material Width", "fieldtype": "Data", "insert_after": "custom_across_gaps"},
 				{"fieldname": "custom_ups_per_reel", "label": "Ups per Reel", "fieldtype": "Int", "insert_after": "custom_material_width"},
 				{"fieldname": "custom_labels_per_reel", "label": "Labels per Reel", "fieldtype": "Int", "insert_after": "custom_ups_per_reel"},
+				# Planning-list line fields: colours drive Pass Count = ceil(colours/machine capacity).
+				{"fieldname": "custom_no_of_colors", "label": "No. of Colors", "fieldtype": "Int", "insert_after": "custom_labels_per_reel"},
+				{"fieldname": "custom_pass_count", "label": "Pass Count", "fieldtype": "Int", "insert_after": "custom_no_of_colors"},
+				{"fieldname": "custom_finishings", "label": "Finishings", "fieldtype": "Small Text", "insert_after": "custom_pass_count"},
+				# Extra base-material sheets allowed on top of Full Sheets when issuing/re-issuing to
+				# production. WIP transfer limit for the base material = Full Sheets + Re-Issue Count.
+				# allow_on_submit so it can be raised during production (Full Sheets stays locked).
+				{"fieldname": "custom_reissue_count", "label": "Re-Issue Count", "fieldtype": "Float", "insert_after": "custom_finishings", "allow_on_submit": 1, "description": "Extra base-material sheets that may be issued/re-issued beyond Full Sheets. Material Transfer for Manufacture limit = Full Sheets + Re-Issue Count."},
 			],
 		}, ignore_validate=True)
 		frappe.db.commit()
