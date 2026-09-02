@@ -31,6 +31,7 @@
   "order_number",
   "column_break_oiag",
   "product_code",
+  "dimensions",
   "packing_date",
   "column_break_tirb",
   "batch_no",
@@ -38,7 +39,8 @@
   "section_break_byhw",
   "sscl",
   "column_break_fpia",
-  "vat"
+  "vat",
+  "bom_remark"
  ],
  "fields": [
   {
@@ -207,6 +209,12 @@
    "read_only": 1
   },
   {
+   "description": "Planning/BOM remark for this product. Copied to the BOM and Product Library.",
+   "fieldname": "bom_remark",
+   "fieldtype": "Small Text",
+   "label": "BOM Remark"
+  },
+  {
    "fieldname": "section_break_qauz",
    "fieldtype": "Section Break",
    "label": "Calculations"
@@ -226,6 +234,12 @@
   {
    "fieldname": "column_break_uxne",
    "fieldtype": "Column Break"
+  },
+  {
+   "description": "Product dimensions recorded on the Inquiry. Used as the default Carton Size when a calculation is created.",
+   "fieldname": "dimensions",
+   "fieldtype": "Data",
+   "label": "Dimensions (L*W*H)"
   }
  ],
  "grid_page_length": 50,

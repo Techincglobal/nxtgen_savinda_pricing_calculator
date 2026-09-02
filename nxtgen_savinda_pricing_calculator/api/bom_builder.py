@@ -7,6 +7,52 @@ import copy
 import re
 import frappe
 from frappe.utils import flt, cint
+from nxtgen_savinda_pricing_calculator.api import job_ticket as jt_api
+
+
+def _bom_calc_field_values(fg_item):
+	"""Costing/planning variables (from the FG's Calculation Breakdown) to stamp on the BOM's
+	Calculation Details section — used to compute sheet counts in the Production Plan."""
+	cb = _find_cb_for_fg(fg_item)
+	if not cb:
+		return {}
+	d = jt_api._cb_fields(cb)
+	no_ups = cint(d.get("no_of_ups"))
+	no_cuts = max(cint(d.get("no_of_cuts")) or 1, 1)
+	# BOM remark entered on the costing form (Cost Sheet -> cost Item). Only stamped when set,
+	# so re-applying never wipes a remark the BOM team edited directly on the BOM.
+	vals = {}
+	ci_name = frappe.db.get_value("Item", fg_item, "custom_cost_item")
+	if ci_name:
+		remark = frappe.db.get_value("cost Item", ci_name, "bom_remark")
+		if remark:
+			vals["custom_bom_remark"] = remark
+	vals.update({
+		"custom_calculation_breakdown": cb,
+		"custom_pricing_type": d.get("pricing_type") or "Offset",
+		"custom_no_of_colors": cint(d.get("no_of_colors")),
+		"custom_no_of_ups": no_ups,
+		"custom_no_of_cuts": no_cuts,
+		"custom_cut_sheet_ups": max(no_ups // no_cuts, 1) if no_ups else 0,
+		"custom_base_item_qty": flt(d.get("item_qty")),
+		"custom_full_sheet_size": jt_api._size_str(d.get("full_sheet_l"), d.get("full_sheet_w")),
+		"custom_cut_sheet_size": jt_api._size_str(d.get("cut_sheet_l"), d.get("cut_sheetw")),
+		"custom_carton_size": d.get("carton_size") or "",
+		"custom_reel_width_mm": flt(d.get("_reel_width")),
+		"custom_reel_length_m": flt(d.get("_reel_length")),
+	})
+	return vals
+
+
+def _apply_bom_calc_fields(bom_name, fg_item):
+	"""Stamp the calc/planning fields onto an FG BOM (best-effort; never blocks BOM creation)."""
+	try:
+		vals = _bom_calc_field_values(fg_item)
+		if vals:
+			frappe.db.set_value("BOM", bom_name, vals, update_modified=False)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "apply BOM calc fields failed")
+
 
 
 # ─────────────────────────────────────────────────────────────
@@ -67,20 +113,33 @@ def get_bom_context(source_type, source_name):
 	elif source_type == "Savinda Quotation":
 		sq = frappe.get_doc("Savinda Quotation", source_name)
 		customer = sq.customer_name or ""
-		seen = {}
+		seen = set()
 		for row in sq.items:
-			if not row.finish_good or row.finish_good in seen:
-				continue
-			seen[row.finish_good] = True
-			iname = frappe.db.get_value("Item", row.finish_good, "item_name") or row.finish_good
-			fg_items.append({
-				"item_code":             row.finish_good,
-				"item_name":             iname,
-				"qty":                   flt(row.qty),
-				"calculation_breakdown": row.calculation_breakdown or "",
-				"cost_item":             (frappe.db.get_value("Item", row.finish_good, "custom_cost_item")
-				                          or getattr(row, "cost_item", "") or ""),
-			})
+			# FG(s) for this line: the direct finish_good link when set, otherwise the FG
+			# item(s) created for the line's cost item (via Item.custom_cost_item) — same as
+			# the Cost Sheet path, so NPD BOMs can be built before finish_good is stamped back.
+			pairs = []  # (fg_item, calculation_breakdown, cost_item)
+			if row.finish_good:
+				pairs.append((row.finish_good, row.calculation_breakdown or "",
+				              getattr(row, "cost_item", "") or ""))
+			elif getattr(row, "cost_item", ""):
+				cb = frappe.db.get_value(
+					"Cost Item Calculation", {"parent": row.cost_item},
+					"calculation_breakdown", order_by="idx asc") or (row.calculation_breakdown or "")
+				for it in frappe.get_all("Item", filters={"custom_cost_item": row.cost_item}, pluck="name"):
+					pairs.append((it, cb, row.cost_item))
+			for fg, cb, ci in pairs:
+				if not fg or fg in seen:
+					continue
+				seen.add(fg)
+				iname = frappe.db.get_value("Item", fg, "item_name") or fg
+				fg_items.append({
+					"item_code":             fg,
+					"item_name":             iname,
+					"qty":                   flt(row.qty),
+					"calculation_breakdown": cb or _find_cb_for_fg(fg),
+					"cost_item":             (frappe.db.get_value("Item", fg, "custom_cost_item") or ci or ""),
+				})
 
 	return {
 		"fg_items":    fg_items,
@@ -828,6 +887,9 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 	# ── Step 3: final FG BOM — ONLY if no op was marked "Output = FG" ─────
 	if fg_idx is not None:
 		fg_bom_name = next((b["bom_name"] for b in created_boms if b.get("is_fg")), None)
+		for _b in created_boms:
+			if _b.get("is_fg") and _b.get("bom_name"):
+				_apply_bom_calc_fields(_b["bom_name"], _b.get("item"))
 		return {"created_boms": created_boms, "fg_bom": fg_bom_name}
 
 	last_op      = active_ops[-1]
@@ -862,6 +924,9 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 	frappe.db.commit()
 	created_boms.append({"bom_name": fg_bom.name, "item": fg_item, "reused": False, "is_fg": True})
 
+	for _b in created_boms:
+		if _b.get("is_fg") and _b.get("bom_name"):
+			_apply_bom_calc_fields(_b["bom_name"], _b.get("item"))
 	return {"created_boms": created_boms, "fg_bom": fg_bom.name}
 
 
@@ -1085,6 +1150,7 @@ def create_bom(fg_item, mfg_qty, operations, raw_materials, is_default=0, submit
 	if cint(submit):
 		bom.submit()
 	frappe.db.commit()
+	_apply_bom_calc_fields(bom.name, fg_item)
 	return {"bom_name": bom.name, "item": fg_item}
 
 
@@ -1280,22 +1346,81 @@ def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, 
 			fg_boms.append(bn)
 
 	frappe.db.commit()
+	for _b in created:
+		if _b.get("is_fg") and _b.get("bom_name"):
+			_apply_bom_calc_fields(_b["bom_name"], _b.get("item"))
 	return {"created_boms": created, "fg_boms": fg_boms}
+
+
+def _active_submitted_bom(item_code):
+	"""An existing active, submitted BOM for a component item — so a parent can link a sub-BOM
+	that was already submitted in an earlier build/session."""
+	return (frappe.db.get_value("BOM", {"item": item_code, "docstatus": 1, "is_active": 1, "is_default": 1}, "name")
+	        or frappe.db.get_value("BOM", {"item": item_code, "docstatus": 1, "is_active": 1}, "name"))
+
+
+def _topo_order_boms(names, docs):
+	"""Order BOM names children(leaf)-first by dependency: a BOM depends on the BOMs in the set
+	whose `item` appears as one of its component item_codes (its sub-assemblies). Guarantees a
+	parent is submitted only after the sub-BOMs it consumes — independent of the input order.
+	Anything unresolved (cycles) is appended in the given order."""
+	producer = {}
+	for n in names:
+		producer.setdefault(docs[n].item, n)
+	remaining = {n: set() for n in names}
+	for n in names:
+		for it in docs[n].items:
+			p = producer.get(it.item_code)
+			if p and p != n:
+				remaining[n].add(p)
+	order, seen = [], set()
+	ready = [n for n in names if not remaining[n]]
+	while ready:
+		ready.sort(key=lambda x: names.index(x))  # stable within the ready set
+		n = ready.pop(0)
+		if n in seen:
+			continue
+		seen.add(n)
+		order.append(n)
+		for m in names:
+			if n in remaining[m]:
+				remaining[m].discard(n)
+				if not remaining[m] and m not in seen and m not in ready:
+					ready.append(m)
+	for n in names:
+		if n not in seen:
+			order.append(n)
+	return order
 
 
 @frappe.whitelist()
 def submit_boms(bom_names):
-	"""Submit a set of DRAFT BOMs BOTTOM-UP and auto-link the chain: before submitting each BOM,
-	point its sub-assembly item rows (bom_no) at the child BOMs already submitted in this pass.
-	`bom_names` must be in creation order (leaf -> FG). Already-submitted BOMs are skipped."""
+	"""Submit a set of DRAFT BOMs and auto-link the multi-level chain. The BOMs are ordered
+	children(leaf)-first BY DEPENDENCY here (not by the order passed in), so each parent's
+	sub-assembly rows (bom_no) are pointed at the child BOMs already submitted in this pass —
+	the chain links reliably no matter what order the caller supplies."""
 	if isinstance(bom_names, str):
 		bom_names = json.loads(bom_names or "[]")
-	item_to_bom = {}   # item_code -> submitted BOM (children submitted first)
+	names = []
+	seen_n = set()
+	for n in (bom_names or []):
+		if n and n not in seen_n and frappe.db.exists("BOM", n):
+			seen_n.add(n)
+			names.append(n)
+	if not names:
+		return {"submitted": [], "failed": []}
+
+	docs = {n: frappe.get_doc("BOM", n) for n in names}
+	order = _topo_order_boms(names, docs)
+
+	item_to_bom = {}   # component item_code -> submitted BOM (children submitted first)
+	for n in names:    # seed with any already-submitted BOMs in the set
+		if docs[n].docstatus == 1:
+			item_to_bom.setdefault(docs[n].item, docs[n].name)
+
 	submitted, failed = [], []
-	for name in (bom_names or []):
-		if not name or not frappe.db.exists("BOM", name):
-			continue
-		bom = frappe.get_doc("BOM", name)
+	for name in order:
+		bom = docs[name]
 		if bom.docstatus == 1:
 			item_to_bom[bom.item] = bom.name
 			continue
@@ -1304,9 +1429,11 @@ def submit_boms(bom_names):
 		try:
 			changed = False
 			for it in bom.items:
-				if not it.bom_no and it.item_code in item_to_bom:
-					it.bom_no = item_to_bom[it.item_code]
-					changed = True
+				if not it.bom_no:
+					child = item_to_bom.get(it.item_code) or _active_submitted_bom(it.item_code)
+					if child:
+						it.bom_no = child
+						changed = True
 			if changed:
 				bom.save(ignore_permissions=True)
 			bom.submit()
@@ -1318,3 +1445,52 @@ def submit_boms(bom_names):
 			frappe.log_error(frappe.get_traceback(), "submit_boms failed: %s" % name)
 			failed.append({"bom": name, "error": str(e)})
 	return {"submitted": submitted, "failed": failed}
+
+
+def _gather_chain_boms(fg_item):
+	"""Every active BOM in an FG's sub-assembly tree (the FG BOM + its SFG sub-BOMs), found by
+	walking each BOM's component item_codes to whichever items have their own BOM. Returns the
+	names (draft + submitted) so the whole chain can be submitted/linked together."""
+	fg_bom = frappe.db.get_value(
+		"BOM", {"item": fg_item, "docstatus": ["<", 2], "is_active": 1}, "name",
+		order_by="docstatus asc, creation desc")
+	if not fg_bom:
+		return []
+	found, stack, seen = [], [fg_bom], set()
+	while stack:
+		bn = stack.pop()
+		if bn in seen or not frappe.db.exists("BOM", bn):
+			continue
+		seen.add(bn)
+		found.append(bn)
+		bom = frappe.get_doc("BOM", bn)
+		for it in bom.items:
+			# A component that has its own active BOM is a sub-assembly — follow it.
+			child = frappe.db.get_value(
+				"BOM", {"item": it.item_code, "docstatus": ["<", 2], "is_active": 1}, "name",
+				order_by="docstatus asc, creation desc")
+			if child and child not in seen:
+				stack.append(child)
+	return found
+
+
+@frappe.whitelist()
+def submit_fg_chain(fg_item):
+	"""Submit + link the full BOM chain for one FG (its FG BOM + all SFG sub-BOMs), including
+	chains built in an earlier session (when the post-build 'Submit BOMs' button is gone).
+	Collects the whole sub-assembly tree and submits it children-first."""
+	names = _gather_chain_boms(fg_item)
+	if not names:
+		return {"submitted": [], "failed": [], "message": "No BOM chain found for %s." % fg_item}
+	res = submit_boms(json.dumps(names))
+	res["fg_item"] = fg_item
+	return res
+
+
+@frappe.whitelist()
+def has_draft_chain(fg_item):
+	"""True when the FG has any draft BOM in its chain — drives the 'Submit BOM Chain' button."""
+	for bn in _gather_chain_boms(fg_item):
+		if frappe.db.get_value("BOM", bn, "docstatus") == 0:
+			return True
+	return False

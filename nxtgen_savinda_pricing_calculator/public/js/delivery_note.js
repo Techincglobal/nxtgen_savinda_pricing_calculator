@@ -1,10 +1,19 @@
 // Copyright (c) 2026, Techincglobal.com and contributors
-// Delivery Note — pull available (undelivered) Packing records for a Sales Order and set
-// the delivered quantities from the selected packings.
+// Delivery Note — packing is the ONLY item source: fetch items from the packing list (undelivered
+// Packing records for a Sales Order that has stock to dispatch), then save. The standard
+// "Get Items From" options and manual row entry are removed.
+
+var PK = "nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.doctype.packing.packing.";
 
 frappe.ui.form.on("Delivery Note", {
 	refresh(frm) {
 		if (frm.doc.docstatus === 0) {
+			// Packing is the only way to add items — drop the standard get-items options and
+			// block manual rows so nothing can be added except via "Get from Packing".
+			frm.remove_custom_button("Sales Order", "Get Items From");
+			frm.remove_custom_button("Sales Invoice", "Get Items From");
+			frm.set_df_property("items", "cannot_add_rows", 1);
+
 			frm.add_custom_button(__("Get from Packing"), function () {
 				_packing_popup(frm);
 			}, __("Get Items From"));
@@ -21,14 +30,25 @@ function _default_so(frm) {
 	return so;
 }
 
+// Load the dispatchable Sales Orders first, then open the dialog with the picker restricted
+// to just those orders (only orders with undelivered packings — i.e. something to dispatch).
 function _packing_popup(frm) {
-	var PK = "nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.doctype.packing.packing.";
+	frappe.call({
+		method: PK + "dispatchable_sales_orders",
+		callback: function (r) { _open_packing_dialog(frm, r.message || []); },
+	});
+}
+
+function _open_packing_dialog(frm, so_list) {
 	var d = new frappe.ui.Dialog({
 		title: __("Get Items from Packing"),
 		size: "large",
 		fields: [
 			{ fieldtype: "Link", options: "Sales Order", fieldname: "sales_order",
-				label: __("Sales Order"), reqd: 1, default: _default_so(frm) },
+				label: __("Sales Order (with stock to dispatch)"), reqd: 1, default: _default_so(frm),
+				get_query: function () {
+					return { filters: { name: ["in", (so_list && so_list.length) ? so_list : ["__none__"]] } };
+				} },
 			{ fieldtype: "Button", fieldname: "load", label: __("Load Available Packings") },
 			{ fieldtype: "HTML", fieldname: "list" },
 		],

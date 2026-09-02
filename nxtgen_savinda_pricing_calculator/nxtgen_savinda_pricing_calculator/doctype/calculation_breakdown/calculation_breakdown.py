@@ -12,6 +12,7 @@ class CalculationBreakdown(Document):
 
 	def validate(self):
 		self._resolve_price_list()
+		self._default_carton_size()
 		self._calc_sheet_requirements()
 		self._calc_cost_fact_amounts()
 		self._calc_pricing_summary()
@@ -27,6 +28,24 @@ class CalculationBreakdown(Document):
 		default_pl = frappe.db.get_single_value("Selling Settings", "selling_price_list")
 		if default_pl:
 			self.price_list = default_pl
+
+	# ── 1b. Carton size ─────────────────────────────────────────
+	def _default_carton_size(self):
+		"""Fall back to the Inquiry's dimensions — Offset and Flexo alike.
+
+		`ref` holds the Inquiry: its name when the breakdown came from a Cost
+		Sheet, or the subject when it was typed into the calculator by hand.
+		"""
+		if (self.carton_size or "").strip() or not (self.ref or "").strip():
+			return
+
+		ref = self.ref.strip()
+		if frappe.db.exists("Opportunity", ref):
+			dimensions = frappe.db.get_value("Opportunity", ref, "custom_dimensions")
+		else:
+			dimensions = frappe.db.get_value("Opportunity", {"custom_subject": ref}, "custom_dimensions")
+		if dimensions:
+			self.carton_size = dimensions.strip()
 
 	# ── 2. Sheet requirements ───────────────────────────────────
 	def _calc_sheet_requirements(self):

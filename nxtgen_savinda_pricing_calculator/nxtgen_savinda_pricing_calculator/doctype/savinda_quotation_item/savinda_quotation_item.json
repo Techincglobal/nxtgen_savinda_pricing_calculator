@@ -16,6 +16,7 @@
   "material",
   "column_break_2",
   "finishing",
+  "bom_remark",
   "section_break_pricing",
   "qty",
   "unit_cost",
@@ -109,6 +110,12 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Finishing"
+  },
+  {
+   "description": "BOM remark copied from the cost item (internal planning note).",
+   "fieldname": "bom_remark",
+   "fieldtype": "Small Text",
+   "label": "BOM Remark"
   },
   {
    "fieldname": "section_break_pricing",

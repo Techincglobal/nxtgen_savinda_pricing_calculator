@@ -12,6 +12,7 @@
   "pricing_type",
   "section_break_bltt",
   "items",
+  "allow_multiple_blocks",
   "table_acwl",
   "section_break_vfbs",
   "qty_formula",
@@ -48,6 +49,13 @@
    "fieldtype": "Table",
    "label": "Items",
    "options": "Cost Fact Item"
+  },
+  {
+   "default": "0",
+   "description": "Let the user add multiple blocks in the calculator (a repeatable table of the attributes below). Each block produces its own cost line, e.g. 'Embossing Block (7 x 9) * 2'. The Qty/Rate formulas are evaluated once per block.",
+   "fieldname": "allow_multiple_blocks",
+   "fieldtype": "Check",
+   "label": "Allow Multiple Blocks"
   },
   {
    "fieldname": "table_acwl",

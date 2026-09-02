@@ -13,16 +13,25 @@ nxtgen_pl.fields = function (pl_fields, is_flexo, prefix, line) {
 	prefix = prefix || "";
 	line = line || {};
 	var scope = is_flexo ? "Flexo" : "Offset";
-	var out = [];
-	(pl_fields || []).forEach(function (f) {
-		if (f.only && f.only !== scope) return;
-		out.push({
-			fieldtype: f.fieldtype,
-			fieldname: prefix + "pl_" + f.fieldname,
-			label: __(f.label),
-			options: f.options || undefined,
-			default: line["pl_" + f.fieldname],
+	// Fields visible for this pricing type (drop the ones scoped to the other type).
+	var defs = (pl_fields || [])
+		.filter(function (f) { return !f.only || f.only === scope; })
+		.map(function (f) {
+			return {
+				fieldtype: f.fieldtype,
+				fieldname: prefix + "pl_" + f.fieldname,
+				label: __(f.label),
+				options: f.options || undefined,
+				default: line["pl_" + f.fieldname],
+			};
 		});
+	// Lay them out as a compact 3–4 column grid (Column Breaks) instead of one tall column.
+	var cols = defs.length > 12 ? 4 : (defs.length > 4 ? 3 : 1);
+	var per_col = Math.ceil(defs.length / cols) || 1;
+	var out = [];
+	defs.forEach(function (def, i) {
+		if (i > 0 && i % per_col === 0) { out.push({ fieldtype: "Column Break" }); }
+		out.push(def);
 	});
 	return out;
 };

@@ -30,6 +30,7 @@ function bb_mount_app(el) {
 		createBomChain:  'nxtgen_savinda_pricing_calculator.api.bom_builder.create_bom_chain',
 		createMultiBom:  'nxtgen_savinda_pricing_calculator.api.bom_builder.create_multi_bom',
 		submitBoms:      'nxtgen_savinda_pricing_calculator.api.bom_builder.submit_boms',
+		submitFgChain:   'nxtgen_savinda_pricing_calculator.api.bom_builder.submit_fg_chain',
 		searchCB:        'nxtgen_savinda_pricing_calculator.api.bom_builder.search_cb_for_fg',
 		saveBomConfig:   'nxtgen_savinda_pricing_calculator.api.bom_builder.save_bom_config',
 		loadBomConfig:   'nxtgen_savinda_pricing_calculator.api.bom_builder.load_bom_config',
@@ -615,6 +616,38 @@ function bb_mount_app(el) {
 			},
 
 			// ── Create BOM chain ──
+			// Submit + link the full draft BOM chain for the selected FG (children-first). Use
+			// this to finish a chain built in an earlier session (post-build popup is gone).
+			submitChain() {
+				var self = this;
+				if (!self.selectedFG) return;
+				frappe.confirm(
+					'Submit and link the full BOM chain (FG + all SFG sub-BOMs) for <b>' + self.selectedFG + '</b>?',
+					function () {
+						self.saving = true;
+						frappe.call({
+							method: API.submitFgChain,
+							args: { fg_item: self.selectedFG },
+							freeze: true, freeze_message: 'Submitting BOM chain…',
+							callback: function (r) {
+								self.saving = false;
+								var m = r.message || {};
+								if (m.message && !(m.submitted || []).length) {
+									frappe.msgprint({ title: 'Submit BOM Chain', message: m.message, indicator: 'orange' });
+									return;
+								}
+								var msg = '✔ Submitted <b>' + (m.submitted || []).length + '</b> BOM(s) and linked the chain.';
+								if ((m.failed || []).length) {
+									msg += '<br>⚠ Failed: ' + m.failed.map(function (f) { return f.bom; }).join(', ');
+								}
+								frappe.msgprint({ title: 'Submit BOM Chain', message: msg, indicator: (m.failed || []).length ? 'orange' : 'green' });
+							},
+							error: function () { self.saving = false; },
+						});
+					}
+				);
+			},
+
 			createBOM() {
 				var self = this;
 				if (!self.canCreate) return;
@@ -1148,6 +1181,11 @@ function bb_mount_app(el) {
           ⎘ Create Variant
         </button>
       </div>
+      <button class="bb-btn" style="margin-top:8px;width:100%;background:#059669;color:#fff;padding:10px 16px;border:none;border-radius:5px;cursor:pointer;font-size:13px"
+        v-if="selectedFG" @click="submitChain" :disabled="saving"
+        title="Submit and link the full draft BOM chain (FG + all SFG sub-BOMs) for this FG — use this if you built the chain earlier and it is still in Draft / not linked">
+        ✔ Submit BOM Chain for {{ selectedFG }}
+      </button>
     </div>
 
   </div>

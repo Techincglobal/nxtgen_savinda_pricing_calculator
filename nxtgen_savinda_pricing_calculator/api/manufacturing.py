@@ -8,6 +8,118 @@ import frappe
 from frappe.utils import cint, flt
 
 
+def _fmt_sheets(v):
+	v = flt(v)
+	return ("%.0f" % v) if v == int(v) else ("%.2f" % v)
+
+
+def validate_base_material_transfer_cap(doc, method=None):
+	"""Cap base-material WIP transfers at the plan's Full Sheets (+ Re-Issue Count buffer).
+
+	Deliberately narrow so it NEVER touches normal stock entries: only a
+	'Material Transfer for Manufacture' whose Work Order links back to a Production Plan is
+	checked, and only the base-material line(s) — inks and every other material are ignored.
+	Skipped when the FG line has no Full-Sheet cap (e.g. Flexo). The limit is cumulative across
+	ALL manufacture transfers for the Work Order (first issue + every re-issue combined)."""
+	if (doc.get("purpose") or doc.get("stock_entry_type")) != "Material Transfer for Manufacture":
+		return
+	wo_name = doc.get("work_order")
+	if not wo_name:
+		return
+	wo = frappe.db.get_value(
+		"Work Order", wo_name,
+		["production_plan", "production_plan_item", "production_item", "bom_no"], as_dict=True)
+	if not wo or not wo.get("production_plan"):
+		return  # not tied to a Production Plan -> leave the entry alone
+
+	# Full Sheets (cap) + Re-Issue buffer from the exact Production Plan FG line.
+	ppi = wo.get("production_plan_item")
+	if ppi and frappe.db.exists("Production Plan Item", ppi):
+		row = frappe.db.get_value("Production Plan Item", ppi,
+			["custom_full_sheets", "custom_reissue_count"], as_dict=True) or {}
+	else:
+		row = frappe.db.get_value("Production Plan Item",
+			{"parent": wo.production_plan, "item_code": wo.get("production_item")},
+			["custom_full_sheets", "custom_reissue_count"], as_dict=True) or {}
+	fs = flt(row.get("custom_full_sheets"))
+	reissue = flt(row.get("custom_reissue_count"))
+	if fs <= 0:
+		return  # no full-sheet cap on this line -> do not constrain (e.g. Flexo)
+	cap = fs + reissue
+
+	# Base material for this FG = the board on the FG BOM's Calculation Breakdown.
+	base_item = None
+	if wo.get("bom_no"):
+		cbn = frappe.db.get_value("BOM", wo.bom_no, "custom_calculation_breakdown")
+		if cbn:
+			base_item = frappe.db.get_value("Calculation Breakdown", cbn, "base_material")
+	if not base_item:
+		return  # base material unknown -> nothing to check (inks / others are never checked)
+
+	# Base-material qty in THIS entry (stock qty).
+	this_qty = sum(flt(d.get("transfer_qty")) for d in (doc.get("items") or [])
+	               if d.get("item_code") == base_item)
+	if this_qty <= 0:
+		return
+
+	# Base material already transferred for this WO via other submitted manufacture transfers.
+	prior = frappe.db.sql(
+		"""
+		select coalesce(sum(sed.transfer_qty), 0)
+		from `tabStock Entry Detail` sed
+		inner join `tabStock Entry` se on se.name = sed.parent
+		where se.docstatus = 1
+		  and se.work_order = %s
+		  and se.purpose = 'Material Transfer for Manufacture'
+		  and sed.item_code = %s
+		  and se.name != %s
+		""",
+		(wo_name, base_item, doc.name or ""),
+	)[0][0] or 0
+	total = flt(prior) + this_qty
+
+	if total > cap + 0.001:
+		base_name = frappe.db.get_value("Item", base_item, "item_name") or base_item
+		frappe.throw(
+			("Base material <b>{0}</b> transfer exceeds the plan limit for Work Order <b>{1}</b>."
+			 "<br><br>Full Sheets: <b>{2}</b> + Re-Issue Count: <b>{3}</b> = Limit: <b>{4}</b><br>"
+			 "Already transferred: <b>{5}</b> &nbsp;|&nbsp; this entry: <b>{6}</b> "
+			 "&nbsp;|&nbsp; total: <b>{7}</b>.<br><br>Raise the <b>Re-Issue Count</b> on the "
+			 "Production Plan FG line if more base material must be issued.").format(
+				base_name, wo_name, _fmt_sheets(fs), _fmt_sheets(reissue), _fmt_sheets(cap),
+				_fmt_sheets(prior), _fmt_sheets(this_qty), _fmt_sheets(total)),
+			title="Base Material Transfer Limit")
+
+
+def _sync_pl_finishings_from_cost_item(pl_name, cost_item):
+	"""Refresh an existing Product Library's finishings from the finishings saved on the cost
+	item's Calculation Breakdown (the finishing multi-select). Best-effort; only replaces when
+	the calculation has finishings, so it never wipes hand-added ones."""
+	try:
+		if not pl_name:
+			return
+		cb_name = None
+		if cost_item and frappe.db.exists("cost Item", cost_item):
+			cb_name = frappe.db.get_value(
+				"Cost Item Calculation", {"parent": cost_item},
+				"calculation_breakdown", order_by="idx asc")
+		if not cb_name:
+			cb_name = frappe.db.get_value("Product Library", pl_name, "calculation_breakdown")
+		from nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.utils.jinja import (
+			get_cb_finishings,
+		)
+		fins = get_cb_finishings(cb_name)
+		if not fins:
+			return
+		pl = frappe.get_doc("Product Library", pl_name)
+		pl.set("finishings", [{"process_name": f} for f in fins])
+		pl.flags.ignore_permissions = True
+		pl.save(ignore_permissions=True)
+	except Exception:
+		frappe.log_error(title="pricing_calculator: sync PL finishings failed",
+		                 message=frappe.get_traceback())
+
+
 def _upsert_product_library(fg_item_code, cost_item=None, customer_ref=None, overrides=None):
 	"""Create a Product Library record for a new FG, pre-filled from the (final) cost Item
 	and its Calculation Breakdown. `overrides` (a dict keyed by Product Library fieldname)
@@ -16,7 +128,15 @@ def _upsert_product_library(fg_item_code, cost_item=None, customer_ref=None, ove
 	try:
 		if not fg_item_code or not frappe.db.exists("DocType", "Product Library"):
 			return
-		if frappe.db.exists("Product Library", {"fg_item": fg_item_code}):
+		_existing_pl = frappe.db.get_value("Product Library", {"fg_item": fg_item_code}, "name")
+		if _existing_pl:
+			# PL already exists — keep the reviewed fields, but refresh the finishings from the
+			# finishings saved in the cost item's calculation, and the BOM remark from the cost item.
+			_sync_pl_finishings_from_cost_item(_existing_pl, cost_item)
+			if cost_item and frappe.db.exists("cost Item", cost_item):
+				_rmk = frappe.db.get_value("cost Item", cost_item, "bom_remark")
+				if _rmk:
+					frappe.db.set_value("Product Library", _existing_pl, "bom_remark", _rmk)
 			return
 
 		item = frappe.db.get_value(
@@ -28,7 +148,7 @@ def _upsert_product_library(fg_item_code, cost_item=None, customer_ref=None, ove
 		if cost_item and frappe.db.exists("cost Item", cost_item):
 			ci = frappe.db.get_value(
 				"cost Item", cost_item,
-				["customer_ref", "colour", "inquiry", "cut_sheet_l", "cut_sheet_w"],
+				["customer_ref", "colour", "inquiry", "cut_sheet_l", "cut_sheet_w", "bom_remark"],
 				as_dict=True,
 			) or {}
 			cb_name = frappe.db.get_value(
@@ -77,6 +197,7 @@ def _upsert_product_library(fg_item_code, cost_item=None, customer_ref=None, ove
 			                               cb.get("cut_sheetw") or ci.get("cut_sheet_w")),
 			"width_mm":              w,
 			"length_mm":             l,
+			"bom_remark":            ci.get("bom_remark") or "",
 		}
 		# Copy the cost-spec linked finishings (Finishing-group specs on the CB) so the
 		# Product Library lists the same finishings quoted for the item.

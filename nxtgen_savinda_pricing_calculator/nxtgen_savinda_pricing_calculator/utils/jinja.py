@@ -3,8 +3,9 @@ Custom Jinja methods registered via hooks.py jinja.methods.
 Available in all Frappe Jinja contexts (print formats, email templates, etc.)
 """
 import json
+import math
 import frappe
-from frappe.utils import flt, format_date, getdate
+from frappe.utils import cint, flt, format_date, getdate
 
 
 def get_cb_finishings(calculation_breakdown):
@@ -92,6 +93,9 @@ def get_cb_print_data(doc_name):
 
 	# ── Row descriptions ──────────────────────────────────────────────────────
 	def row_desc(row):
+		# Multi-block rows carry their own label, e.g. "Embossing Block (7 x 9) * 2".
+		if row.get("display_name"):
+			return row["display_name"]
 		cf  = row.get("cost_fact", "")
 		sin = row.get("selected_item_name", "")
 		sn  = row.get("spec_name", "")
@@ -207,6 +211,60 @@ def _num(v):
 		return float(v or 0)
 	except Exception:
 		return 0.0
+
+
+def _fg_bom_calc(fg_item, bom_no=None):
+	"""FG BOM calculation fields (ups/cuts/colors/sizes) — from bom_no or the FG's active BOM."""
+	if not fg_item:
+		return {}
+	if not bom_no:
+		bom_no = (frappe.db.get_value("BOM", {"item": fg_item, "is_active": 1, "is_default": 1}, "name")
+		          or frappe.db.get_value("BOM", {"item": fg_item, "is_active": 1}, "name"))
+	if not bom_no or not frappe.db.exists("BOM", bom_no):
+		return {}
+	return frappe.db.get_value("BOM", bom_no, [
+		"custom_calculation_breakdown", "custom_pricing_type", "custom_no_of_colors",
+		"custom_no_of_ups", "custom_no_of_cuts", "custom_cut_sheet_ups", "custom_base_item_qty",
+		"custom_full_sheet_size", "custom_cut_sheet_size", "custom_carton_size",
+		"custom_reel_width_mm", "custom_reel_length_m", "custom_bom_remark"], as_dict=True) or {}
+
+
+def _fg_pl(fg_item):
+	"""FG Product Library fields (product details for the Job Card)."""
+	if not fg_item:
+		return {}
+	pl_name = (frappe.db.get_value("Item", fg_item, "custom_product_library")
+	           or frappe.db.get_value("Product Library", {"fg_item": fg_item}, "name"))
+	if not pl_name:
+		return {}
+	return frappe.db.get_value("Product Library", pl_name, [
+		"customer_product_code", "product_size", "full_sheet_size", "cut_sheet_size",
+		"no_of_colors", "no_of_ups", "printing_machine", "artwork_no", "artwork_version",
+		"flexo_type", "width_mm", "length_mm", "core_size", "pcs_per_roll", "winding_direction",
+		"proof_standard", "category", "department", "bom_remark"], as_dict=True) or {}
+
+
+def _job_costing_cfg():
+	try:
+		from nxtgen_savinda_pricing_calculator.api.offset_calculator import _get_config
+		return _get_config()
+	except Exception:
+		return {"offset_wastage_pct": 0.05, "offset_wastage_min": 500}
+
+
+def _sheet_counts_from_bom(bomc, qty, cfg):
+	"""Offset sheet figures for a production qty, from the BOM ups/cuts drivers."""
+	no_ups = cint(bomc.get("custom_no_of_ups"))
+	no_cuts = max(cint(bomc.get("custom_no_of_cuts")) or 1, 1)
+	cut_ups = cint(bomc.get("custom_cut_sheet_ups")) or (max(no_ups // no_cuts, 1) if no_ups else 0)
+	qty = flt(qty)
+	if not cut_ups or not qty:
+		return {"cut_sheets": 0, "wastage": 0, "full_sheets": 0, "ups": no_ups, "cuts": no_cuts}
+	cut_qty = math.ceil(qty / cut_ups)
+	waste = max(math.ceil(cut_qty * flt(cfg.get("offset_wastage_pct"))), cint(cfg.get("offset_wastage_min")))
+	req = cut_qty + waste
+	return {"cut_sheets": cut_qty, "wastage": waste, "full_sheets": math.ceil(req / no_cuts),
+	        "ups": no_ups, "cuts": no_cuts}
 
 
 def get_ticket_print_data(production_plan_name):
@@ -338,6 +396,60 @@ def get_ticket_print_data(production_plan_name):
 					"wastage_qty": 0,
 				})
 
+	# ── Source ALL dependency values from the BOM + Product Library (self-contained; independent
+	# of the quotation/costing). Sheet counts are RECOMPUTED from the BOM ups/cuts for the plan
+	# qty; each field falls back to the value already set above when the BOM/PL has none.
+	_cfg = _job_costing_cfg()
+	try:
+		from nxtgen_savinda_pricing_calculator.api import job_ticket as _jt
+	except Exception:
+		_jt = None
+	_bom_by_fg = {}
+	for _r in (doc.get("po_items") or []):
+		if _r.get("item_code") and _r.item_code not in _bom_by_fg:
+			_bom_by_fg[_r.item_code] = _r.get("bom_no")
+	for l in lines:
+		_fg = l.get("item_code")
+		bomc = _fg_bom_calc(_fg, _bom_by_fg.get(_fg))
+		plv = _fg_pl(_fg)
+		l["bom_no"] = _bom_by_fg.get(_fg) or ""
+		if plv.get("customer_product_code"):
+			l["product_code"] = plv["customer_product_code"]
+		if plv.get("product_size") or bomc.get("custom_carton_size"):
+			l["size"] = plv.get("product_size") or bomc.get("custom_carton_size")
+		if bomc.get("custom_full_sheet_size") or plv.get("full_sheet_size"):
+			l["full_sheet_size"] = bomc.get("custom_full_sheet_size") or plv.get("full_sheet_size")
+		if bomc.get("custom_cut_sheet_size") or plv.get("cut_sheet_size"):
+			l["cut_sheet_size"] = bomc.get("custom_cut_sheet_size") or plv.get("cut_sheet_size")
+		l["no_of_colors"] = cint(bomc.get("custom_no_of_colors") or plv.get("no_of_colors") or l.get("no_of_colors") or 0)
+		if bomc.get("custom_no_of_ups") or bomc.get("custom_cut_sheet_ups"):
+			_sh = _sheet_counts_from_bom(bomc, l.get("qty"), _cfg)
+			l["ups"], l["cuts"] = _sh["ups"], _sh["cuts"]
+			l["cut_sheets"] = _num(_sh["cut_sheets"]); l["wastage"] = _num(_sh["wastage"]); l["full_sheets"] = _num(_sh["full_sheets"])
+		if flt(bomc.get("custom_reel_width_mm")):
+			l["reel_width"] = _num(flt(bomc["custom_reel_width_mm"]))
+		if flt(bomc.get("custom_reel_length_m")):
+			l["reel_length"] = _num(flt(bomc["custom_reel_length_m"]))
+		# ── Planning-list derived fields ─────────────────────────────────────────
+		# impressions == cut-sheet count; finishings from the FG's Product Library;
+		# pass count = ceil(colours / machine colour capacity); BOM remark from BOM/PL.
+		l["impressions"] = _num(l.get("cut_sheets"))
+		_machine = plv.get("printing_machine") or ""
+		if _jt:
+			try:
+				l["pass_count"] = _jt.pass_count(l.get("no_of_colors"), _machine)
+			except Exception:
+				l["pass_count"] = 0
+			try:
+				l["finishings"] = _jt.pl_finishings_text(_fg)
+			except Exception:
+				l["finishings"] = ""
+		else:
+			l["pass_count"] = 0
+			l["finishings"] = ""
+		l["bom_remark"] = bomc.get("custom_bom_remark") or plv.get("bom_remark") or ""
+		l["product_type"] = plv.get("category") or plv.get("department") or ""
+
 	# ── Header context — resolve the first item's Product Library / CB, and the SO ──
 	so_no = doc.get("custom_sales_order") or ""
 	first = ticket_rows[0] if ticket_rows else None
@@ -400,6 +512,10 @@ def get_ticket_print_data(production_plan_name):
 		"printing_machine": doc.get("custom_printing_machine") or pl.get("printing_machine") or "",
 		"finishings": doc.get("custom_finishings") or "",
 		"remarks": doc.get("custom_remarks") or "",
+		"repeat_or_new": doc.get("custom_repeat_or_new") or "",
+		"is_callout": 1 if doc.get("custom_is_callout") else 0,
+		"cs_released_on": doc.get("custom_cs_released_on"),
+		"product_type": "",
 		"npd_request": doc.get("custom_npd_request") or "",
 		"job_date": doc.get("posting_date") or format_date(doc.creation),
 		"so_no": so_no,
@@ -413,6 +529,27 @@ def get_ticket_print_data(production_plan_name):
 		"core_size": pl.get("core_size") or "",
 		"winding_direction": pl.get("winding_direction") or "",
 	}
+
+	# Header dependency values from the first FG's BOM + Product Library (independent of costing).
+	_hfg = lines[0]["item_code"] if lines else ""
+	if _hfg:
+		_hb = _fg_bom_calc(_hfg, _bom_by_fg.get(_hfg)); _hp = _fg_pl(_hfg)
+		header["colors"] = header["colors"] or cint(_hb.get("custom_no_of_colors") or _hp.get("no_of_colors") or 0)
+		header["art_no"] = header["art_no"] or _hp.get("artwork_no") or ""
+		header["art_version"] = header["art_version"] or _hp.get("artwork_version") or ""
+		header["printing_machine"] = header["printing_machine"] or _hp.get("printing_machine") or ""
+		header["ctn_size"] = header["ctn_size"] or _hp.get("product_size") or _hb.get("custom_carton_size") or ""
+		header["reel_or_sheet"] = header["reel_or_sheet"] or _hp.get("flexo_type") or ("Reel" if is_flexo else "Sheet")
+		header["pcs_per_roll"] = header["pcs_per_roll"] or _hp.get("pcs_per_roll") or 0
+		header["ups"] = header["ups"] or cint(_hb.get("custom_no_of_ups") or _hp.get("no_of_ups") or 0)
+		header["core_size"] = header["core_size"] or _hp.get("core_size") or ""
+		header["winding_direction"] = header["winding_direction"] or _hp.get("winding_direction") or ""
+		header["product_type"] = header["product_type"] or _hp.get("category") or _hp.get("department") or ""
+		if not header["finishings"] and _jt:
+			try:
+				header["finishings"] = _jt.pl_finishings_text(_hfg) or ""
+			except Exception:
+				pass
 
 	return {
 		"doc": doc,

@@ -41,7 +41,10 @@
   "across_gaps",
   "material_width",
   "ups_per_reel",
-  "labels_per_reel"
+  "labels_per_reel",
+  "no_of_colors",
+  "pass_count",
+  "finishings"
  ],
  "fields": [
   {"fieldname": "description", "fieldtype": "Data", "label": "Description", "in_list_view": 1, "columns": 3},
@@ -82,7 +85,10 @@
   {"fieldname": "across_gaps", "fieldtype": "Int", "label": "Across Gaps"},
   {"fieldname": "material_width", "fieldtype": "Data", "label": "Across Material Width"},
   {"fieldname": "ups_per_reel", "fieldtype": "Int", "label": "Ups per Reel"},
-  {"fieldname": "labels_per_reel", "fieldtype": "Int", "label": "Labels per Reel"}
+  {"fieldname": "labels_per_reel", "fieldtype": "Int", "label": "Labels per Reel"},
+  {"fieldname": "no_of_colors", "fieldtype": "Int", "label": "No. of Colors"},
+  {"fieldname": "pass_count", "fieldtype": "Int", "label": "Pass Count"},
+  {"fieldname": "finishings", "fieldtype": "Small Text", "label": "Finishings"}
  ],
  "links": [],
  "modified": "2026-07-17 00:00:00.000000",

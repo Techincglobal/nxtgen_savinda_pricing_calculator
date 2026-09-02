@@ -45,6 +45,7 @@
   "winding_direction",
   "tolerance",
   "remark",
+  "bom_remark",
   "section_production",
   "cold_foil",
   "hot_foil",
@@ -260,6 +261,11 @@
    "fieldname": "remark",
    "fieldtype": "Small Text",
    "label": "Remark"
+  },
+  {
+   "fieldname": "bom_remark",
+   "fieldtype": "Small Text",
+   "label": "BOM Remark"
   },
   {
    "fieldname": "section_production",

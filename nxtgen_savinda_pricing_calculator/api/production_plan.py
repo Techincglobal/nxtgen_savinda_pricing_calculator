@@ -14,7 +14,7 @@ Reuses the source populators / context helpers from api.job_ticket.
 import json
 
 import frappe
-from frappe.utils import cint, flt, now, now_datetime, today
+from frappe.utils import add_days, cint, flt, now, now_datetime, today
 
 from nxtgen_savinda_pricing_calculator.api import job_ticket as jt_api
 
@@ -359,18 +359,23 @@ def _pl_defaults_from_cost_item(ci):
 	"""pl_* defaults derived from a cost Item and its Calculation Breakdown, for the
 	quotation FG popup. Fields we can't derive are left blank for the user to fill."""
 	ci_doc = frappe.db.get_value(
-		"cost Item", ci, ["cost_item_name", "colour"], as_dict=True) or {}
+		"cost Item", ci, ["cost_item_name", "colour", "dimensions"], as_dict=True) or {}
 	cb = frappe.db.get_value(
 		"Cost Item Calculation", {"parent": ci}, "calculation_breakdown", order_by="idx asc")
 	cbd = jt_api._cb_fields(cb) if cb else {}
 	pricing = (cbd.get("pricing_type") or "Offset")
 	is_flexo = pricing == "Flexo"
+	# Product size is taken from the cost Item's dimensions (falls back to the breakdown's
+	# carton size) so the FG popup pre-fills it from the costing.
+	product_size = (ci_doc.get("dimensions") or "").strip() \
+		or (frappe.db.get_value("Calculation Breakdown", cb, "carton_size") if cb else "") or ""
 	return {
 		"item_name": ci_doc.get("cost_item_name") or ci,
 		"pricing": pricing, "is_flexo": is_flexo,
 		"department": _dept_for_pricing(pricing),
 		"pl_department": pricing,
 		"pl_flexo_type": "Reel" if is_flexo else "",
+		"pl_product_size": product_size,
 		"pl_no_of_colors": cint(cbd.get("no_of_colors") or ci_doc.get("colour") or 0),
 		"pl_no_of_ups": cint(cbd.get("no_of_ups") or 0),
 		"pl_full_sheet_size": jt_api._size_str(cbd.get("full_sheet_l"), cbd.get("full_sheet_w")),
@@ -482,17 +487,6 @@ def create_production_plan_from_source(source_type, source_name):
 	ticket_type, pricing_type, header, lines = _gather_ticket(source_type, source_name)
 	if not lines:
 		frappe.throw("No items found on the selected " + str(source_type) + ".")
-
-	# An NPD-type Sales Order is a Job Ticket of type NPD and must be Approved first.
-	if source_type == "Sales Order":
-		so_meta = frappe.db.get_value(
-			"Sales Order", source_name, ["custom_order_type", "workflow_state"], as_dict=True) or {}
-		if so_meta.get("custom_order_type") == "NPD":
-			ticket_type = "NPD"
-			if so_meta.get("workflow_state") != "Approved":
-				frappe.throw(
-					"NPD Sales Order <b>{0}</b> must be Approved (NPD approval) before a "
-					"Production Plan can be created.".format(source_name))
 
 	for tl in lines:
 		pp.append("custom_ticket_items", tl)
@@ -776,6 +770,34 @@ def on_production_plan_before_save(doc, method=None):
 		_populate_pp_ticket_fields(doc, force=False)
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "production_plan auto-populate failed")
+	try:
+		_stamp_planning_line_fields(doc)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "production_plan stamp planning line fields failed")
+
+
+def _stamp_planning_line_fields(doc):
+	"""Store per-line planning-list fields on each Job Ticket line (draft only):
+	No. of Colors, Pass Count = ceil(colours / machine colour capacity), and the Finishings list
+	from the FG's Product Library. Computed values also fall back into get_ticket_print_data."""
+	if doc.docstatus != 0:
+		return
+	for tl in (doc.get("custom_ticket_items") or []):
+		fg = tl.get("fg_item")
+		if not fg:
+			continue
+		pl_name = jt_api._pl_name_for_fg(fg)
+		machine = frappe.db.get_value("Product Library", pl_name, "printing_machine") if pl_name else ""
+		colors = 0
+		if tl.get("bom_no") and frappe.db.exists("BOM", tl.bom_no):
+			colors = cint(frappe.db.get_value("BOM", tl.bom_no, "custom_no_of_colors"))
+		if not colors and pl_name:
+			colors = cint(frappe.db.get_value("Product Library", pl_name, "no_of_colors"))
+		tl.no_of_colors = colors
+		tl.pass_count = jt_api.pass_count(colors, machine)
+		fins = jt_api.pl_finishings_text(fg)
+		if fins:
+			tl.finishings = fins
 
 
 @frappe.whitelist()
@@ -1089,6 +1111,10 @@ def on_production_plan_update(doc, method=None):
 		notify_role("BOM Team", "Production Plan created: " + name, _msg(doc, "was created — please validate / create the BOM."), doc)
 		notify_role("Supply Chain", "Production Plan created: " + name, _msg(doc, "was created — stock validation follows BOM validation."), doc)
 	elif new_state == "BOM Validation":
+		# CS Team released the job to planning (Draft -> BOM Validation): stamp the release time
+		# once (keep the first release timestamp on any later re-entry).
+		if not doc.get("custom_cs_released_on"):
+			_stamp(name, {"custom_cs_released_on": now()})
 		notify_role("BOM Team", "BOM validation needed: " + name, _msg(doc, "needs BOM validation — create/confirm BOMs (Open BOM Builder / Sync BOMs), then Confirm BOM."), doc)
 	elif new_state == "Pre-Print Validation":
 		# BOM confirmed by the BOM team → stamp and hand off to the Pre-Print team.
@@ -1146,3 +1172,136 @@ def _fetch_artwork_quotation(doc):
 			_stamp(doc.name, vals)
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "fetch artwork/quotation failed")
+
+
+# ── NPD sample flow: NPD Request -> Material Request (Manufacture) -> Production Plan ──
+
+def _npd_warehouse(item_code=None):
+	"""Target warehouse for a manufactured sample: the item's default warehouse, else any
+	non-group warehouse."""
+	if item_code:
+		wh = frappe.db.get_value("Item Default", {"parent": item_code}, "default_warehouse")
+		if wh:
+			return wh
+	return frappe.db.get_value("Warehouse", {"is_group": 0, "disabled": 0}, "name")
+
+
+def _npd_sample_fg_items(npd):
+	"""FG items to manufacture for an NPD sample (qty = sample_qty), resolved from the linked
+	Cost Sheet's cost items (the FG items created for them, incl. variants)."""
+	qty = cint(npd.get("sample_qty")) or 1
+	cost_items = []
+	if npd.get("cost_sheet") and frappe.db.exists("Cost Sheet", npd.cost_sheet):
+		cs = frappe.get_doc("Cost Sheet", npd.cost_sheet)
+		cost_items = [r.item for r in (cs.get("pricing_list") or []) if r.item]
+	out, seen = [], set()
+	for ci in cost_items:
+		for it in frappe.get_all("Item", filters={"custom_cost_item": ci, "disabled": 0}, pluck="name"):
+			if it not in seen:
+				seen.add(it)
+				out.append({"item_code": it, "qty": qty})
+	return out
+
+
+def _create_npd_material_request(npd):
+	"""Create + submit a Manufacture Material Request for the NPD sample FG items; link it back
+	on the NPD Request. Idempotent (reuses an existing linked Material Request)."""
+	if npd.get("material_request") and frappe.db.exists("Material Request", npd.material_request):
+		return npd.material_request
+	fgs = _npd_sample_fg_items(npd)
+	if not fgs:
+		frappe.throw("No Finished-Good items found for this NPD sample. Create the FG items on the "
+		             "Cost Sheet / Quotation first.")
+	sched = npd.get("required_date") or add_days(today(), 7)
+	mr = frappe.new_doc("Material Request")
+	mr.material_request_type = "Manufacture"
+	mr.company = jt_api._default_company()
+	mr.transaction_date = today()
+	mr.schedule_date = sched
+	for fg in fgs:
+		mr.append("items", {
+			"item_code":     fg["item_code"],
+			"qty":           fg["qty"],
+			"schedule_date": sched,
+			"warehouse":     _npd_warehouse(fg["item_code"]),
+			"uom":           frappe.db.get_value("Item", fg["item_code"], "stock_uom") or "Nos",
+		})
+	mr.insert(ignore_permissions=True)
+	mr.submit()
+	frappe.db.set_value("NPD Request", npd.name, "material_request", mr.name)
+	frappe.db.commit()
+	return mr.name
+
+
+def on_npd_request_update(doc, method=None):
+	"""When an NPD Request reaches Approved (workflow), auto-create its Manufacture Material
+	Request for the sample FG items."""
+	if doc.get("workflow_state") != "Approved":
+		return
+	before = doc.get_doc_before_save()
+	if before and before.get("workflow_state") == "Approved":
+		return
+	if doc.get("material_request") and frappe.db.exists("Material Request", doc.material_request):
+		return
+	mr = _create_npd_material_request(doc)
+	frappe.msgprint("Material Request <b>{0}</b> (Manufacture) created for the NPD sample. "
+	                "Use 'Create Production Plan' next.".format(mr), indicator="green", alert=True)
+
+
+@frappe.whitelist()
+def create_plan_from_npd_mr(npd_request):
+	"""Create a DRAFT Production Plan natively from the NPD Request's Material Request
+	(get_items_from = Material Request) so the standard Work Order pipeline runs for the sample."""
+	npd = frappe.get_doc("NPD Request", npd_request)
+	if not npd.get("material_request") or not frappe.db.exists("Material Request", npd.material_request):
+		frappe.throw("No Material Request yet — approve the NPD Request first.")
+	if npd.get("production_plan") and frappe.db.exists("Production Plan", npd.production_plan):
+		return {"production_plan": npd.production_plan, "existing": True}
+	mr = frappe.get_doc("Material Request", npd.material_request)
+	pp = frappe.new_doc("Production Plan")
+	pp.company = jt_api._default_company()
+	pp.posting_date = today()
+	pp.get_items_from = "Material Request"
+	pp.append("material_requests", {"material_request": mr.name, "material_request_date": mr.transaction_date})
+	try:
+		pp.get_items()
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "create_plan_from_npd_mr: get_items failed")
+	pp.custom_ticket_type = "NPD"
+	pp.custom_pricing_type = "Flexo" if (npd.get("pricing_type") == "Flexo") else "Offset"
+	pp.custom_customer = npd.get("customer") or ""
+	pp.custom_customer_name = npd.get("customer_name") or ""
+	pp.custom_job_title = npd.get("job_title") or npd.name
+	if pp.meta.get_field("custom_npd_request"):
+		pp.custom_npd_request = npd.name
+	pp.custom_created_by = _fullname()
+	pp.custom_created_on = now()
+	pp.workflow_state = "Draft"
+	needs_bom = not (pp.get("po_items") or [])
+	pp.custom_needs_bom = 1 if needs_bom else 0
+	pp.custom_bom_confirmed = 0 if needs_bom else 1
+	pp.insert(ignore_permissions=True)
+	frappe.db.set_value("NPD Request", npd.name, "production_plan", pp.name)
+	frappe.db.commit()
+	return {"production_plan": pp.name, "needs_bom": needs_bom}
+
+
+@frappe.whitelist()
+def create_npd_request_from_quotation(quotation):
+	"""Start an NPD sample request from a Savinda Quotation (uses its linked Cost Sheet for the
+	FG items). Returns the new NPD Request name."""
+	q = frappe.db.get_value("Savinda Quotation", quotation,
+	    ["cost_sheet", "inquiry", "customer", "customer_name"], as_dict=True)
+	if not q:
+		frappe.throw("Quotation not found.")
+	doc = frappe.new_doc("NPD Request")
+	if q.get("cost_sheet"):
+		_npd_from_cost_sheet(doc, q.cost_sheet)
+	if q.get("customer"):
+		doc.customer = q.customer
+	if q.get("customer_name"):
+		doc.customer_name = q.customer_name
+	doc.quote_no = quotation
+	doc.workflow_state = "Draft"
+	doc.insert(ignore_permissions=True)
+	return {"npd_request": doc.name}

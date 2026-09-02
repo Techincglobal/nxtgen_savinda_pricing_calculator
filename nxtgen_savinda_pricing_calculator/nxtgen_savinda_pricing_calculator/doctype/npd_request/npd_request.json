@@ -13,6 +13,9 @@
   "column_break_top",
   "npd_date",
   "production_plan",
+  "workflow_state",
+  "material_request",
+  "required_date",
   "status",
   "section_sources",
   "inquiry",
@@ -105,6 +108,30 @@
    "label": "Production Plan",
    "options": "Production Plan",
    "read_only": 1
+  },
+  {
+   "fieldname": "workflow_state",
+   "fieldtype": "Link",
+   "label": "Workflow State",
+   "options": "Workflow State",
+   "read_only": 1,
+   "allow_on_submit": 1,
+   "no_copy": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "material_request",
+   "fieldtype": "Link",
+   "label": "Material Request",
+   "options": "Material Request",
+   "read_only": 1,
+   "allow_on_submit": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "required_date",
+   "fieldtype": "Date",
+   "label": "Required Date (Sample)"
   },
   {
    "fieldname": "status",

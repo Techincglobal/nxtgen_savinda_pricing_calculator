@@ -292,12 +292,18 @@ function oc_mount_app(el) {
 						var hasItems = cf.master && cf.master.items && cf.master.items.length > 0;
 						var rate = parseFloat(cfst.rate || 0);
 						if (!rate && !hasItems) rate = parseFloat(self.form.material_rate || 0);
-						return {
+						var out = {
 							cost_fact: cf.cost_fact, is_primary: cf.is_primary,
 							selected_item: cfst.selected_item || '',
 							attribute_values: cfst.attr_values || {},
 							rate: rate, req_qty: parseFloat(cfst.req_qty || 0),
 						};
+						// Multi-block cost facts send their repeatable block rows; the engine
+						// emits one cost line per block.
+						if (cf.master && cf.master.allow_multiple_blocks) {
+							out.blocks = Array.isArray(cfst.blocks) ? cfst.blocks : [];
+						}
+						return out;
 					});
 					return {
 						spec_name: spec.spec_name,
@@ -499,7 +505,7 @@ function oc_mount_app(el) {
 						var items = (cf.master && cf.master.items) || [];
 						var sel = items.length === 1 ? items[0].item : '';
 						var rate = (items.length === 1 && items[0].is_fix_rate) ? (items[0].rate || 0) : 0;
-						self.machineSpecState[cf.cost_fact] = { selected_item: sel, attr_values: self._defaultAttrValues(cf), rate: rate, req_qty: 0 };
+						self.machineSpecState[cf.cost_fact] = { selected_item: sel, attr_values: self._defaultAttrValues(cf), rate: rate, req_qty: 0, blocks: [] };
 					});
 				}
 				this.scheduleCalc();
@@ -611,7 +617,7 @@ function oc_mount_app(el) {
 					var items = (cf.master && cf.master.items) || [];
 					var sel = items.length === 1 ? items[0].item : '';
 					var rate = (items.length === 1 && items[0].is_fix_rate) ? (items[0].rate || 0) : 0;
-					state[cf.cost_fact] = { selected_item: sel, attr_values: self._defaultAttrValues(cf), rate: rate, req_qty: 0 };
+					state[cf.cost_fact] = { selected_item: sel, attr_values: self._defaultAttrValues(cf), rate: rate, req_qty: 0, blocks: [] };
 					if (sel && !(items[0] && items[0].is_fix_rate)) self.fetchItemRate(specName, cf.cost_fact, sel);
 				});
 				// Machine state fields
@@ -736,6 +742,54 @@ function oc_mount_app(el) {
 				var isNumeric = attrType === 'Number' || attrType === 'Float' || attrType === 'Percentage';
 				st.attr_values[attrName] = isNumeric ? (parseFloat(value) || 0) : value;
 				this.scheduleCalc();
+			},
+
+			// ── Multi-block cost facts (repeatable Length/Width/Qty rows) ──
+			_ensureCfState(sn, cf) {
+				if (!this.specState[sn]) this.specState[sn] = {};
+				if (!this.specState[sn][cf]) this.specState[sn][cf] = { selected_item: '', attr_values: {}, rate: 0, req_qty: 0, blocks: [] };
+				if (!Array.isArray(this.specState[sn][cf].blocks)) this.specState[sn][cf].blocks = [];
+				return this.specState[sn][cf];
+			},
+			getBlocks(sn, cf) {
+				var st = (this.specState[sn] || {})[cf];
+				return (st && Array.isArray(st.blocks)) ? st.blocks : [];
+			},
+			addBlock(sn, cf) {
+				this._ensureCfState(sn, cf).blocks.push({});
+				this.scheduleCalc();
+			},
+			removeBlock(sn, cf, idx) {
+				this._ensureCfState(sn, cf).blocks.splice(idx, 1);
+				this.scheduleCalc();
+			},
+			setBlockAttr(sn, cf, idx, attrName, value, attrType) {
+				var st = this._ensureCfState(sn, cf);
+				if (!st.blocks[idx]) st.blocks[idx] = {};
+				var isNumeric = attrType === 'Number' || attrType === 'Float' || attrType === 'Percentage';
+				st.blocks[idx][attrName] = isNumeric ? (parseFloat(value) || 0) : value;
+				this.scheduleCalc();
+			},
+			_blockDimKeys(cf) {
+				var attrs = (cf.master && cf.master.attributes) || [];
+				var lKey = null, wKey = null;
+				attrs.forEach(function (a) {
+					var h = (a.attribute_name + ' ' + (a.lable || '')).toLowerCase();
+					if (/length/.test(h) && !lKey) lKey = a.attribute_name;
+					if (/width/.test(h) && !wKey) wKey = a.attribute_name;
+				});
+				return { lKey: lKey, wKey: wKey };
+			},
+			blockHasArea(cf) { var k = this._blockDimKeys(cf); return !!(k.lKey && k.wKey); },
+			blockArea(cf, blk) {
+				var k = this._blockDimKeys(cf);
+				if (!(k.lKey && k.wKey)) return 0;
+				return (parseFloat(blk[k.lKey]) || 0) * (parseFloat(blk[k.wKey]) || 0);
+			},
+			blockUnitRate(cf) {
+				var items = (cf.master && cf.master.items) || [];
+				if (items.length === 1 && items[0].is_fix_rate) return items[0].rate || 0;
+				return 0;
 			},
 
 			onMachineAttrChange(costFact, attrName, value, attrType) {
@@ -994,7 +1048,7 @@ function oc_mount_app(el) {
 							};
 							// Back-fill rates into specState
 							(r.message.cost_rows || []).forEach(function (row) {
-								if (row.is_auto) return;
+								if (row.is_auto || row.is_block) return;  // block rows own their per-row values
 								var st = (self.specState[row.spec_name] || {})[row.cost_fact];
 								if (st) { if (row.rate) st.rate = row.rate; if (row.req_qty) st.req_qty = row.req_qty; }
 							});
@@ -1190,6 +1244,7 @@ function oc_mount_app(el) {
 									attr_values: cf.attribute_values || {},
 									rate: parseFloat(cf.rate || 0),
 									req_qty: parseFloat(cf.req_qty || 0),
+									blocks: Array.isArray(cf.blocks) ? cf.blocks : [],
 									// Only included cost facts are saved, so restore them as ticked
 									// (matters for manual-select cost facts).
 									_included: true,
@@ -1860,14 +1915,43 @@ function oc_mount_app(el) {
                   <span class="oc-cf-item">{{ cf.master.items[0].item_name || cf.master.items[0].item }}</span>
                   <span v-if="cf.master.items[0].is_fix_rate" class="oc-cf-rate">Fixed LKR {{ cf.master.items[0].rate.toLocaleString() }}</span>
                 </div>
-                <!-- Attribute inputs -->
-                <div v-if="cf.is_primary && cf.master && cf.master.attributes && cf.master.attributes.length" class="oc-attrs">
+                <!-- Attribute inputs (single row) -->
+                <div v-if="cf.is_primary && cf.master && !cf.master.allow_multiple_blocks && cf.master.attributes && cf.master.attributes.length" class="oc-attrs">
                   <div v-for="attr in cf.master.attributes" :key="attr.attribute_name" class="oc-attr-field">
                     <label class="oc-attr-lbl">{{ attr.lable || attr.attribute_name }}{{ attr.type==='Percentage' ? ' (%)' : '' }}</label>
                     <input :type="(attr.type==='Number'||attr.type==='Float'||attr.type==='Percentage')?'number':'text'" min="0" class="oc-inp"
                       :value="getAttrValue(spec.spec_name, cf.cost_fact, attr.attribute_name)"
                       @input="onAttrChange(spec.spec_name, cf.cost_fact, attr.attribute_name, $event.target.value, attr.type)" />
                   </div>
+                </div>
+                <!-- Multi-block attribute table — repeatable rows, one cost line each -->
+                <div v-if="cf.is_primary && cf.master && cf.master.allow_multiple_blocks && cf.master.attributes && cf.master.attributes.length" class="oc-blocks">
+                  <table class="oc-blk-tbl">
+                    <thead>
+                      <tr>
+                        <th v-for="attr in cf.master.attributes" :key="attr.attribute_name">{{ attr.lable || attr.attribute_name }}</th>
+                        <th v-if="blockHasArea(cf)">Area</th>
+                        <th>Unit Price</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(blk, bi) in getBlocks(spec.spec_name, cf.cost_fact)" :key="bi">
+                        <td v-for="attr in cf.master.attributes" :key="attr.attribute_name">
+                          <input :type="(attr.type==='Number'||attr.type==='Float'||attr.type==='Percentage')?'number':'text'" min="0" class="oc-inp oc-blk-inp"
+                            :value="blk[attr.attribute_name]"
+                            @input="setBlockAttr(spec.spec_name, cf.cost_fact, bi, attr.attribute_name, $event.target.value, attr.type)" :disabled="viewOnly" />
+                        </td>
+                        <td v-if="blockHasArea(cf)" class="oc-blk-c">{{ fmtNum(blockArea(cf, blk)) }}</td>
+                        <td class="oc-blk-c">{{ blockUnitRate(cf) ? fmtNum(blockUnitRate(cf)) : '—' }}</td>
+                        <td class="oc-blk-c"><a v-if="!viewOnly" href="#" class="oc-blk-x" @click.prevent="removeBlock(spec.spec_name, cf.cost_fact, bi)" title="Remove">×</a></td>
+                      </tr>
+                      <tr v-if="!getBlocks(spec.spec_name, cf.cost_fact).length">
+                        <td :colspan="cf.master.attributes.length + (blockHasArea(cf) ? 3 : 2)" class="oc-blk-empty">No blocks yet — click “Add Block”.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <button v-if="!viewOnly" type="button" class="oc-blk-add" @click="addBlock(spec.spec_name, cf.cost_fact)">+ Add Block</button>
                 </div>
                 <div v-if="cf.master && !cf.master.items.length && !cf.master.attributes.length && cf.master.calculation" class="oc-cf-info">ℹ️ {{ cf.master.calculation }}</div>
                 </template>
@@ -1999,9 +2083,9 @@ function oc_mount_app(el) {
                   <td colspan="7">{{ grp.group }} Costs</td>
                   <td class="r mono">{{ fmtCur(grp.subtotal) }}</td>
                 </tr>
-                <tr v-for="row in grp.rows" :key="grp.group + '-' + row.spec_name + '-' + row.cost_fact" :class="row.is_auto ? 'oc-auto-row' : ''">
+                <tr v-for="(row, ri) in grp.rows" :key="grp.group + '-' + ri + '-' + row.spec_name + '-' + row.cost_fact" :class="row.is_auto ? 'oc-auto-row' : ''">
                   <td>{{ row.spec_name }}<span v-if="row.is_auto" class="oc-auto-tag">auto</span></td>
-                  <td>{{ row.cost_fact }}</td>
+                  <td>{{ row.display_name || row.cost_fact }}</td>
                   <td class="oc-grp">{{ row.cost_group }}</td>
                   <td>
                     <span v-if="row.selected_item_name && row.selected_item_name !== row.selected_item">
@@ -2175,6 +2259,18 @@ function oc_inject_styles() {
 .oc-attrs{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;padding:8px 10px;background:#f0f4ff;border-radius:4px;border-left:3px solid #2c7be5}
 .oc-attr-field{display:flex;flex-direction:column;min-width:80px;flex:1}
 .oc-attr-lbl{font-size:11px;font-weight:600;color:#6b7280;margin-bottom:3px}
+/* Multi-block attribute table */
+.oc-blocks{margin-top:8px;padding:8px 10px;background:#f0f4ff;border-radius:4px;border-left:3px solid #2c7be5}
+.oc-blk-tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+.oc-blk-tbl th{text-align:left;font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.03em;padding:2px 6px 5px;border-bottom:1px solid #d7e0f5;white-space:nowrap}
+.oc-blk-tbl td{padding:3px 6px;vertical-align:middle}
+.oc-blk-inp{padding:4px 6px!important;font-size:12px!important;min-width:60px}
+.oc-blk-c{color:#334155;font-weight:600;text-align:right;white-space:nowrap}
+.oc-blk-x{color:#ef4444;font-weight:700;text-decoration:none;font-size:15px;padding:0 4px}
+.oc-blk-x:hover{color:#b91c1c}
+.oc-blk-empty{color:#94a3b8;font-style:italic;padding:8px 6px}
+.oc-blk-add{margin-top:8px;background:#2c7be5;color:#fff;border:none;border-radius:4px;padding:5px 14px;font-size:12px;font-weight:600;cursor:pointer}
+.oc-blk-add:hover{background:#1a68d1}
 /* Machine section inside spec detail */
 .oc-machine-sec{background:#fff8e1;border:1px solid #ffe082;border-radius:5px;padding:8px 10px;margin-bottom:10px}
 .oc-skip-row{display:flex;align-items:center;gap:7px;margin-top:7px;padding-top:7px;border-top:1px dashed #e6d08a;font-size:11.5px;color:#6b5900;cursor:pointer}

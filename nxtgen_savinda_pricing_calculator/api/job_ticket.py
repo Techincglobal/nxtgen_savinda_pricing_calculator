@@ -7,6 +7,7 @@ raw-material requirement is generated later inside the Production Plan (Get Raw 
 + the app's existing "Add Wastage" button). No material explosion happens here.
 """
 import json
+import math
 
 import frappe
 from frappe.utils import cint, flt
@@ -126,6 +127,49 @@ def _finishings_text(pl):
 		fields=["process_name"], order_by="idx asc",
 	)
 	return ", ".join([r.process_name for r in rows if r.process_name])
+
+
+def _pl_name_for_fg(fg_item):
+	"""Resolve the Product Library record for an FG Item (via Item link, then fg_item back-ref)."""
+	if not fg_item:
+		return None
+	return (frappe.db.get_value("Item", fg_item, "custom_product_library")
+	        or frappe.db.get_value("Product Library", {"fg_item": fg_item}, "name"))
+
+
+def pl_finishings_text(fg_item):
+	"""Finishings stored on the FG's Product Library, comma-joined (planning-list column)."""
+	pl_name = _pl_name_for_fg(fg_item)
+	if not pl_name:
+		return ""
+	rows = frappe.get_all(
+		"Product Library Finishing", filters={"parent": pl_name},
+		fields=["process_name"], order_by="idx asc",
+	)
+	return ", ".join([r.process_name for r in rows if r.process_name])
+
+
+def machine_color_capacity(machine_name):
+	"""Colour capacity of a printing machine (from the Offset Machine master), matched by name.
+	Returns 0 when the machine is unknown or has no capacity set."""
+	if not machine_name:
+		return 0
+	cap = frappe.db.get_value("Offset Machine", machine_name, "color_capacity")
+	if cap is None:
+		row = frappe.db.sql(
+			"select color_capacity from `tabOffset Machine` where lower(machine_name)=lower(%s) limit 1",
+			(machine_name,))
+		cap = row[0][0] if row else 0
+	return cint(cap)
+
+
+def pass_count(no_of_colors, machine_name):
+	"""Print passes = ceil(colours / machine colour capacity). 0 when colours/capacity unknown."""
+	colors = cint(no_of_colors)
+	cap = machine_color_capacity(machine_name)
+	if not colors or not cap:
+		return 0
+	return int(math.ceil(colors / float(cap)))
 
 
 # ── row / header builders ────────────────────────────────────────────────────

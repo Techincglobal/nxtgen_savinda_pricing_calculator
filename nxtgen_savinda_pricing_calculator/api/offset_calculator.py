@@ -764,6 +764,10 @@ def load_costing(name):
             fin_rows = [r.finishing for r in (doc.get("finishing") or []) if r.finishing]
             if fin_rows or "finishing" not in state:
                 state["finishing"] = fin_rows
+            # Carton size can be filled in on the doc (from the Inquiry's dimensions) after
+            # the state was stored — show that value rather than an empty box.
+            if doc.carton_size and not (state.get("form") or {}).get("carton_size"):
+                state.setdefault("form", {})["carton_size"] = doc.carton_size
             return state
         except Exception:
             pass
@@ -810,6 +814,7 @@ def _get_cf_data(name):
             "qty_formula":  (getattr(doc, "qty_formula",  None) or "").strip(),
             "rate_formula": (getattr(doc, "rate_formula", None) or "").strip(),
             "min_qty":      flt(doc.min_qty),
+            "allow_multiple_blocks": cint(getattr(doc, "allow_multiple_blocks", 0)),
             "uom":      getattr(doc, "uom", "") or "",
             "items": [
                 {
@@ -1455,17 +1460,17 @@ def _process_spec(spec, form, sheet, item_qty, no_of_colors, material_rate,
                 extra_ctx[k] = v
 
     for cf_row in spec.get("cost_facts", []):
-        row, mt, pp, pr = _build_row(
+        for row, mt, pp, pr in _build_rows_for_cf(
             cf_row, spec.get("spec_name", ""), form, sheet,
             item_qty, no_of_colors, material_rate,
             full_sheet_qty, cut_sheet_qty, cut_sheet_area, price_list,
             reel_area=reel_area, reel_length=reel_length, ups=ups,
             extra_ctx=extra_ctx,
-        )
-        row["section"] = section
-        row["is_auto"] = is_auto
-        all_rows.append(row)
-        mat += mt; prep += pp; prod += pr
+        ):
+            row["section"] = section
+            row["is_auto"] = is_auto
+            all_rows.append(row)
+            mat += mt; prep += pp; prod += pr
 
     # Machine cost block (machine_assignment already resolved above for foil ctx)
     if spec.get("has_machine") and machine_assignment.get("machine"):
@@ -1714,6 +1719,101 @@ def _build_row(cf_row, spec_name, form, sheet, item_qty, no_of_colors,
     }, (amount if grp=="material" else 0), (amount if grp=="preparation" else 0), (amount if grp not in ("material","preparation") else 0)
 
 
+def _block_base_name(name):
+    """Cost-fact name without the trailing 'N*' multi-block marker, e.g.
+    'Embossing Block N*' -> 'Embossing Block'."""
+    import re
+    return re.sub(r"\s*N\s*\*\s*$", "", name or "").strip() or (name or "")
+
+
+def _fmt_dim(v):
+    """Render a block dimension/qty without a trailing '.0' (7.0 -> '7', 4.5 -> '4.5')."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return str(v or "")
+    return str(int(f)) if f == int(f) else ("%g" % f)
+
+
+def _pick_attr(attr, defs, *needles):
+    """Value of the first attribute whose name/label contains any of the needles."""
+    for d in defs:
+        key = (d.get("attribute_name") or "")
+        lbl = (d.get("lable") or "")
+        hay = (key + " " + lbl).lower()
+        if any(n in hay for n in needles) and key in attr:
+            return attr.get(key)
+    return None
+
+
+def _block_label(base, attr, defs):
+    """Human label for one block: '{base} ({length} x {width}) * {qty}'. Falls back
+    gracefully when the block has no length/width or no quantity attribute."""
+    length = _pick_attr(attr, defs, "length")
+    width  = _pick_attr(attr, defs, "width")
+    qty    = _pick_attr(attr, defs, "quantity", "qty")
+    label = base
+    if length not in (None, "") or width not in (None, ""):
+        label += " (%s x %s)" % (_fmt_dim(length), _fmt_dim(width))
+    if qty not in (None, "") and _fmt_dim(qty) not in ("", "0"):
+        label += " * %s" % _fmt_dim(qty)
+    return label
+
+
+def _cf_unit_rate(cf, cf_row, price_list):
+    """Per-unit rate for a block's UNIT PRICE column — the selected item's fixed/price-list
+    rate, else the rate typed on the cost-fact row."""
+    sel = cf_row.get("selected_item", "")
+    item_row = next((i for i in cf.get("items", []) if i["item"] == sel), None)
+    if item_row:
+        return flt(item_row["rate"]) if item_row.get("is_fix_rate") else _get_item_rate(sel, price_list)
+    return flt(cf_row.get("rate", 0))
+
+
+def _build_rows_for_cf(cf_row, spec_name, form, sheet, item_qty, no_of_colors,
+                       material_rate, full_sheet_qty, cut_sheet_qty, cut_sheet_area,
+                       price_list='Standard Selling', reel_area=0, reel_length=0, ups=0,
+                       extra_ctx=None):
+    """Yield (row, mat, prep, prod) for a cost fact. A multi-block cost fact yields one row
+    per block (the Qty/Rate formulas run once per block with that block's attribute values);
+    every other cost fact yields exactly one row — unchanged behaviour."""
+    cf = _get_cf_data(cf_row.get("cost_fact", ""))
+    blocks = cf_row.get("blocks")
+    if cf.get("allow_multiple_blocks") and isinstance(blocks, list) and blocks:
+        base_label = _block_base_name(cf.get("name") or cf_row.get("cost_fact", ""))
+        attr_defs = cf.get("attributes", [])
+        for blk in blocks:
+            blk = blk or {}
+            if not any(flt(v) for v in blk.values()):
+                continue  # skip empty blocks (e.g. a freshly-added, not-yet-filled row)
+            sub = dict(cf_row)
+            sub["attribute_values"] = blk
+            sub["req_qty"] = 0  # force per-block recompute from the qty formula
+            row, mt, pp, pr = _build_row(
+                sub, spec_name, form, sheet, item_qty, no_of_colors, material_rate,
+                full_sheet_qty, cut_sheet_qty, cut_sheet_area, price_list,
+                reel_area=reel_area, reel_length=reel_length, ups=ups, extra_ctx=extra_ctx)
+            row["display_name"] = _block_label(base_label, blk, attr_defs)
+            row["is_block"] = 1
+            # For area-based blocks, show AREA as the qty and the per-unit (fix/item) rate as
+            # the unit price — matching the block table (the amount keeps the formula result,
+            # which already folds in the block quantity, shown as "* N" in the label).
+            _len = _pick_attr(blk, attr_defs, "length")
+            _wid = _pick_attr(blk, attr_defs, "width")
+            if _len not in (None, "") and _wid not in (None, ""):
+                _area = flt(_len) * flt(_wid)
+                _unit = _cf_unit_rate(cf, cf_row, price_list)
+                if _area and _unit:
+                    row["req_qty"] = round(_area, 4)
+                    row["rate"] = round(_unit, 4)
+            yield row, mt, pp, pr
+        return
+    yield _build_row(
+        cf_row, spec_name, form, sheet, item_qty, no_of_colors, material_rate,
+        full_sheet_qty, cut_sheet_qty, cut_sheet_area, price_list,
+        reel_area=reel_area, reel_length=reel_length, ups=ups, extra_ctx=extra_ctx)
+
+
 @frappe.whitelist()
 def sync_cost_item_unit_cost(calculation_breakdown):
     """
@@ -1756,6 +1856,16 @@ def sync_cost_item_unit_cost(calculation_breakdown):
             updated += 1
         except Exception as e:
             frappe.log_error(title="sync_cost_item_unit_cost error", message=str(e))
+
+    # Refresh finishings on any Product Library linked to these cost items' FGs, so the
+    # finishings saved on the calculation are stored in the FG's Product Library.
+    try:
+        from nxtgen_savinda_pricing_calculator.api.manufacturing import _sync_pl_finishings_from_cost_item
+        for ci_name in parents:
+            for pl in frappe.get_all("Product Library", filters={"cost_item": ci_name}, pluck="name"):
+                _sync_pl_finishings_from_cost_item(pl, ci_name)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "sync PL finishings on calc save failed")
 
     for ci_name in parents:
         try:
