@@ -744,19 +744,25 @@ function _show_create_fg_dialog(frm) {
 	// Item Group is fetched from the linked Inquiry (falls back to Finished Goods)
 	if (frm.doc.inquiry) {
 		frappe.db.get_value("Opportunity", frm.doc.inquiry, "custom_item_group", function (r) {
-			_create_fg_for_item(frm, pending, 0, (r && r.custom_item_group) || "Finished Goods");
+			_create_fg_for_item(frm, pending, 0, (r && r.custom_item_group) || "Finished Goods", []);
 		});
 	} else {
-		_create_fg_for_item(frm, pending, 0, "Finished Goods");
+		_create_fg_for_item(frm, pending, 0, "Finished Goods", []);
 	}
 }
 
-function _create_fg_for_item(frm, pending_rows, idx, ig_default) {
+function _create_fg_for_item(frm, pending_rows, idx, ig_default, created) {
 	ig_default = ig_default || "Finished Goods";
+	created = created || [];
 	if (idx >= pending_rows.length) {
 		frm.save(null, function () {
 			frappe.show_alert({ message: "All FG items created and linked.", indicator: "green" });
 			frm.refresh();
+			// After the FGs are created, open the qty-pricing popup to review/edit the tiers
+			// and write the Pricing Rules used when the Sales Order is created.
+			if (created.length && window.nxtgen_pricing) {
+				nxtgen_pricing.showForFGs(frm, created, function () {});
+			}
 		});
 		return;
 	}
@@ -767,12 +773,13 @@ function _create_fg_for_item(frm, pending_rows, idx, ig_default) {
 		method: "nxtgen_savinda_pricing_calculator.api.production_plan.get_cost_item_fg_defaults",
 		args: { cost_item: row.cost_item || "", quotation: frm.doc.name },
 		callback: function (r) {
-			_build_fg_dialog(frm, pending_rows, idx, ig_default, row, r.message || {});
+			_build_fg_dialog(frm, pending_rows, idx, ig_default, row, r.message || {}, created);
 		},
 	});
 }
 
-function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd) {
+function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) {
+	created = created || [];
 	var suggested_name = (row.item_name || "FG").substring(0, 60);
 	var suggested_desc = [row.size, row.material, row.finishing].filter(Boolean).join(" | ");
 	var pl_fields = pd.pl_fields || [];
@@ -858,7 +865,7 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd) {
 		secondary_action_label: "Skip",
 		secondary_action: function () {
 			d.hide();
-			_create_fg_for_item(frm, pending_rows, idx + 1, ig_default);
+			_create_fg_for_item(frm, pending_rows, idx + 1, ig_default, created);
 		},
 		primary_action: function (vals) {
 			d.hide();
@@ -866,7 +873,8 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd) {
 			if (vals.existing_item) {
 				// Link existing item
 				_link_fg_to_rows(frm, row.cost_item || row.item_name, vals.existing_item);
-				_create_fg_for_item(frm, pending_rows, idx + 1, ig_default);
+				created.push({ item_code: vals.existing_item, item_name: row.item_name, cost_item: row.cost_item || "" });
+				_create_fg_for_item(frm, pending_rows, idx + 1, ig_default, created);
 				return;
 			}
 
@@ -910,7 +918,11 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd) {
 						if (items.length) {
 							_link_fg_to_rows(frm, row.cost_item || row.item_name, items[0].item_code);
 						}
-						_create_fg_for_item(frm, pending_rows, idx + 1, ig_default);
+						// Each variant is its own sellable FG → price every variant.
+						items.forEach(function (it) {
+							created.push({ item_code: it.item_code, item_name: it.item_name || it.item_code, cost_item: row.cost_item || "" });
+						});
+						_create_fg_for_item(frm, pending_rows, idx + 1, ig_default, created);
 					},
 				});
 				return;
@@ -934,7 +946,8 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd) {
 					if (!r.message) return;
 					frappe.show_alert({ message: "Created: " + r.message.item_code, indicator: "green" });
 					_link_fg_to_rows(frm, row.cost_item || row.item_name, r.message.item_code);
-					_create_fg_for_item(frm, pending_rows, idx + 1, ig_default);
+					created.push({ item_code: r.message.item_code, item_name: vals.item_name_field, cost_item: row.cost_item || "" });
+					_create_fg_for_item(frm, pending_rows, idx + 1, ig_default, created);
 				},
 			});
 		},
@@ -1102,7 +1115,7 @@ function _render_so_dialog(frm, fg_list, order_type) {
 					item_code: x.item_code,
 					item_name: x.item_name,
 					qty: flt_v(x.qty) || 1,
-					rate: flt_v(x.rate) / crate,
+					// No rate here — the qty Pricing Rules price each line automatically (see below).
 					delivery_date: vals.delivery_date,
 					custom_packing_type: pk.custom_packing_type || "",
 					custom_winding_direction: pk.custom_winding_direction || "",
@@ -1125,7 +1138,9 @@ function _render_so_dialog(frm, fg_list, order_type) {
 						po_date: vals.po_date || null,
 						currency: cur,
 						conversion_rate: crate,
-						ignore_pricing_rule: 1,
+						// Let ERPNext apply the qty Pricing Rules (auto-created on FG creation)
+						// so each line is priced by quantity — not copied from the quotation.
+						ignore_pricing_rule: 0,
 						items: so_items,
 						status: "Draft",
 					},
