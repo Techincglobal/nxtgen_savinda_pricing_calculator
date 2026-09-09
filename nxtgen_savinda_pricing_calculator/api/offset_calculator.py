@@ -141,7 +141,7 @@ def _get_unit_qty(units, form, sheet):
 
 def _calc_spec_machine_cost(spec_name, m_data, machine_assignment, form, sheet,
                              item_qty, no_of_colors, units, machine_count_map,
-                             reel_area=0):
+                             reel_area=0, global_extra_ctx=None):
     """Calculate machine cost for one spec.
     Returns (list_of_rows, total_cost).
     Flexo printing machines return two rows: Printing Setup + Printing Run (Excel formula).
@@ -167,10 +167,18 @@ def _calc_spec_machine_cost(spec_name, m_data, machine_assignment, form, sheet,
     cold_foil_count = sum(1 for f in foils_list if (f.get("foil_group") or "").upper() == "COLD")
     hot_foil_count  = sum(1 for f in foils_list if (f.get("foil_group") or "").upper() == "HOT")
     foil_count      = cold_foil_count + hot_foil_count
+    # Flexo foils are almost always assigned on a dedicated foil spec (not on this printing
+    # machine), so fold in the GLOBAL foil counts (computed across ALL selected specs). Without
+    # this the printing run divisor never sees the foils and stays at 750.
+    if global_extra_ctx:
+        cold_foil_count = max(cold_foil_count, cint(global_extra_ctx.get("cold_foil_count", 0)))
+        hot_foil_count  = max(hot_foil_count,  cint(global_extra_ctx.get("hot_foil_count", 0)))
+        foil_count      = max(foil_count,      cint(global_extra_ctx.get("foil_count", 0)))
 
     # ── Flexo printing machine: Excel formula (Setup + Run as separate rows) ──────────────
     if pricing_t == "Flexo" and is_printing and not qty_formula:
-        run_div    = 600 if cold_foil_count > 0 else 750
+        # Any foil selected (in any spec) slows the run → divisor 600; otherwise 750.
+        run_div    = 600 if foil_count > 0 else 750
         setup_hrs  = no_of_colors / 3.0
         run_hrs    = (reel_area / run_div) if (run_div and reel_area) else 0.0
         setup_cost = round(setup_hrs * cost_ph, 2)
@@ -1493,7 +1501,7 @@ def _process_spec(spec, form, sheet, item_qty, no_of_colors, material_rate,
                     spec.get("spec_name", ""), m_data, machine_assignment,
                     form, sheet, item_qty, no_of_colors,
                     spec.get("units", "Full sheet"), machine_count_map or {},
-                    reel_area=reel_area,
+                    reel_area=reel_area, global_extra_ctx=global_extra_ctx,
                 )
                 for mr in machine_rows:
                     mr["section"] = section

@@ -495,6 +495,14 @@ def _ensure_custom_fields():
 	try:
 		from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 		create_custom_fields({
+			# Traceability for the qty-tier Pricing Rules auto-generated on FG creation, so they
+			# can be found / refreshed / cleaned up without touching hand-made rules.
+			"Pricing Rule": [
+				{"fieldname": "custom_auto_section", "label": "Auto-Pricing (Savinda)", "fieldtype": "Section Break", "insert_after": "naming_series", "collapsible": 1},
+				{"fieldname": "custom_auto_generated", "label": "Auto-generated (qty pricing)", "fieldtype": "Check", "insert_after": "custom_auto_section", "read_only": 1},
+				{"fieldname": "custom_source_fg", "label": "Source FG Item", "fieldtype": "Link", "options": "Item", "insert_after": "custom_auto_generated", "read_only": 1},
+				{"fieldname": "custom_cost_item", "label": "Source Cost Item", "fieldtype": "Link", "options": "cost Item", "insert_after": "custom_source_fg", "read_only": 1},
+			],
 			"Item": [
 				{
 					"fieldname":    "customer_ref",
