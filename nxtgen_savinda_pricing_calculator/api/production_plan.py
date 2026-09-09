@@ -764,6 +764,25 @@ def _populate_pp_ticket_fields(pp, force=False):
 	return True
 
 
+def validate_ticket_item_exp_dates(doc, method=None):
+	"""On submit, require an Exp Date on every Job Ticket item row. Scoped to our plans
+	(custom_ticket_type set) so standard Production Plans are untouched."""
+	if not doc.get("custom_ticket_type"):
+		return
+	missing = []
+	for r in (doc.get("custom_ticket_items") or []):
+		if not r.get("fg_item"):
+			continue
+		if not r.get("exp_date"):
+			missing.append(r.get("description") or frappe.db.get_value("Item", r.fg_item, "item_name")
+			               or r.fg_item or ("Row %s" % r.idx))
+	if missing:
+		frappe.throw(
+			"Set the <b>Exp Date</b> on all Job Ticket items before submitting.<br>Missing on: "
+			+ ", ".join("<b>%s</b>" % frappe.utils.escape_html(m) for m in missing),
+			title="Exp Date Required")
+
+
 def on_production_plan_before_save(doc, method=None):
 	"""Auto-fetch Job Ticket header + item list as soon as a source (SO / NPD) is set."""
 	try:
