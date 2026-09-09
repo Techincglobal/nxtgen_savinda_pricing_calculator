@@ -69,6 +69,7 @@ jinja = {
 doc_events = {
 	"Production Plan": {
 		"before_save": "nxtgen_savinda_pricing_calculator.api.production_plan.on_production_plan_before_save",
+		"before_submit": "nxtgen_savinda_pricing_calculator.api.production_plan.validate_ticket_item_exp_dates",
 		"on_update": "nxtgen_savinda_pricing_calculator.api.production_plan.on_production_plan_update",
 	},
 	"NPD Request": {
