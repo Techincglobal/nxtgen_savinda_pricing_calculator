@@ -2160,7 +2160,7 @@ function oc_inject_styles() {
 .oc-ph-split{justify-content:space-between}
 .oc-pt{font-weight:700;font-size:13px;color:var(--text-color,#1f272e)}
 .oc-badge{font-size:10px;font-weight:700;background:#2c7be5;color:#fff;border-radius:4px;padding:2px 7px;letter-spacing:.05em}
-.oc-pb{padding:12px 14px;overflow-y:auto;flex:1;min-height:0}
+.oc-pb{padding:12px 14px;overflow-y:auto;overflow-x:hidden;flex:1;min-height:0}
 .oc-field{margin-bottom:10px}
 .oc-lbl{display:block;font-size:10.5px;font-weight:700;color:var(--text-muted,#6b7280);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em}
 .oc-lbl-blue{color:#2c7be5}
@@ -2260,11 +2260,13 @@ function oc_inject_styles() {
 .oc-attr-field{display:flex;flex-direction:column;min-width:80px;flex:1}
 .oc-attr-lbl{font-size:11px;font-weight:600;color:#6b7280;margin-bottom:3px}
 /* Multi-block attribute table */
-.oc-blocks{margin-top:8px;padding:8px 10px;background:#f0f4ff;border-radius:4px;border-left:3px solid #2c7be5}
+/* min-width:0 + overflow-x:auto keep the block table INSIDE its own box so it scrolls
+   locally instead of pushing the whole left panel sideways (the flex min-width:auto trap). */
+.oc-blocks{margin-top:8px;padding:8px 10px;background:#f0f4ff;border-radius:4px;border-left:3px solid #2c7be5;overflow-x:auto;max-width:100%;min-width:0}
 .oc-blk-tbl{width:100%;border-collapse:collapse;font-size:11.5px}
 .oc-blk-tbl th{text-align:left;font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.03em;padding:2px 6px 5px;border-bottom:1px solid #d7e0f5;white-space:nowrap}
 .oc-blk-tbl td{padding:3px 6px;vertical-align:middle}
-.oc-blk-inp{padding:4px 6px!important;font-size:12px!important;min-width:60px}
+.oc-blk-inp{padding:4px 5px!important;font-size:12px!important;min-width:42px;width:100%;box-sizing:border-box}
 .oc-blk-c{color:#334155;font-weight:600;text-align:right;white-space:nowrap}
 .oc-blk-x{color:#ef4444;font-weight:700;text-decoration:none;font-size:15px;padding:0 4px}
 .oc-blk-x:hover{color:#b91c1c}
