@@ -16,6 +16,15 @@ frappe.pages['offset-calculator'].on_page_load = function (wrapper) {
 	page.main[0].appendChild(mountEl);
 	oc_inject_styles();
 	oc_mount_app(mountEl);
+
+	// Usability: stop the mouse wheel from changing a focused number input. Scrolling over a
+	// focused number field blurs it (value stays put) and lets the page scroll normally.
+	wrapper.addEventListener('wheel', function (e) {
+		var a = document.activeElement;
+		if (a && a.tagName === 'INPUT' && a.type === 'number' && a === e.target) {
+			a.blur();
+		}
+	}, { passive: true });
 };
 
 frappe.pages['offset-calculator'].on_page_show = function (wrapper) {
@@ -38,6 +47,9 @@ function oc_mount_app(el) {
 		getOffsetInks: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.get_offset_inks',
 		getFlexoFoils: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.get_flexo_foils',
 		getFinishings: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.get_finishings',
+		getSwitcher: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.get_calc_switcher',
+		createVariant: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.create_variant_for_switcher',
+		deleteVariant: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.delete_calc_variant',
 	};
 
 	function debounce(fn, ms) {
@@ -74,6 +86,11 @@ function oc_mount_app(el) {
 				savedDocName: '',
 				_draftReady: false,  // gates autosave until the initial load settles
 				costSheetRef: '',  // Cost Sheet to return to when clicking Back
+				// Calculation switcher panel — sibling qty breaks + finishing variants of this item
+				switcher: { qty_breaks: [], finishing_variants: [], item_name: '', cost_item: '' },
+				switcherTab: 'qty',
+				switcherLoading: false,
+				switcherOpen: true,
 				viewOnly: false,   // Set to true via ?view_only=1 — disables editing
 				sheetExpanded: true,  // Offset: Sheet Requirements collapsible
 				flexoExpanded: true,  // Flexo: Reel Requirements collapsible
@@ -1086,6 +1103,7 @@ function oc_mount_app(el) {
 							self.savedDocName = r.message.doc_name;
 							// Persisted to DB now — drop the local draft so it can't shadow the saved copy
 							self.clearDraft();
+							self.loadSwitcher();
 							frappe.show_alert({ message: 'Saved: ' + self.savedDocName, indicator: 'green' });
 							// Notify parent Cost Item to sync unit_cost from this CB
 							self.notifyCostItemRefresh(self.savedDocName);
@@ -1127,6 +1145,112 @@ function oc_mount_app(el) {
 				}
 			},
 
+			// ── Calculation switcher: qty breaks + finishing variants of the current item ──
+			loadSwitcher() {
+				var self = this;
+				if (!self.savedDocName) { return; }
+				self.switcherLoading = true;
+				frappe.call({
+					method: API.getSwitcher,
+					args: { cost_sheet: self.costSheetRef || '', calculation_breakdown: self.savedDocName },
+					callback: function (r) {
+						self.switcherLoading = false;
+						var m = r.message || {};
+						self.switcher = {
+							qty_breaks: m.qty_breaks || [],
+							finishing_variants: m.finishing_variants || [],
+							item_name: m.item_name || '',
+							cost_item: m.cost_item || '',
+						};
+					},
+					error: function () { self.switcherLoading = false; },
+				});
+			},
+			hasSwitcher() {
+				var s = this.switcher || {};
+				return (s.qty_breaks && s.qty_breaks.length) || (s.finishing_variants && s.finishing_variants.length);
+			},
+			switcherGo(cb) {
+				if (!cb || cb === this.savedDocName) { return; }
+				var url = '/app/offset-calculator?ref=' + encodeURIComponent(cb)
+					+ (this.costSheetRef ? '&cost_sheet=' + encodeURIComponent(this.costSheetRef) : '')
+					+ '&pricing_type=' + encodeURIComponent(this.form.pricing_type || 'Offset');
+				var nav = function () { window.location.href = url; };
+				// Warn if there is unsaved work (draft dirty vs last save).
+				if (this.isDirty && this.isDirty()) {
+					frappe.confirm('You have unsaved changes. Leave and switch calculation?', nav);
+				} else {
+					nav();
+				}
+			},
+			switcherDelete(row) {
+				var self = this;
+				if (!row || !row.cost_item) { return; }
+				if (row.is_current) {
+					frappe.msgprint('You cannot delete the calculation you are currently viewing. Open another one first.');
+					return;
+				}
+				frappe.confirm(
+					'Delete <b>' + frappe.utils.escape_html(row.name || row.cost_item) + '</b> and its cost breakdown? This cannot be undone.',
+					function () {
+						frappe.call({
+							method: API.deleteVariant,
+							args: { cost_item: row.cost_item, cost_sheet: self.costSheetRef || '' },
+							freeze: true, freeze_message: 'Deleting…',
+							callback: function (r) {
+								var m = r.message || {};
+								if (m.error) { frappe.msgprint({ message: m.error, indicator: 'red' }); return; }
+								frappe.show_alert({ message: 'Deleted.', indicator: 'orange' });
+								self.loadSwitcher();
+							},
+						});
+					}
+				);
+			},
+			switcherAdd() {
+				var self = this;
+				if (!self.switcher.cost_item) { frappe.msgprint('Save this calculation first.'); return; }
+				var d = new frappe.ui.Dialog({
+					title: 'Add / Duplicate Calculation',
+					fields: [
+						{ fieldtype: 'Select', fieldname: 'kind', label: 'Create', reqd: 1,
+							options: 'New Qty Break\nNew Finishing Variant', default: 'New Qty Break' },
+						{ fieldtype: 'Float', fieldname: 'new_qty', label: 'Order Qty', reqd: 1,
+							depends_on: "eval:doc.kind=='New Qty Break'",
+							description: 'Duplicates this calculation, recomputed at the new quantity.' },
+						{ fieldtype: 'Data', fieldname: 'new_name', label: 'Variant Name (optional)',
+							depends_on: "eval:doc.kind=='New Finishing Variant'",
+							description: 'A copy you can edit specs/finishing on. Blank = "… (Copy)".' },
+					],
+					primary_action_label: 'Create & Open',
+					primary_action: function (v) {
+						var isQty = v.kind === 'New Qty Break';
+						if (isQty && !(parseFloat(v.new_qty) > 0)) { frappe.msgprint('Enter a quantity.'); return; }
+						d.hide();
+						frappe.call({
+							method: API.createVariant,
+							args: {
+								source_cost_item: self.switcher.cost_item,
+								cost_sheet: self.costSheetRef || '',
+								kind: isQty ? 'qty' : 'finishing',
+								new_qty: isQty ? v.new_qty : null,
+								new_name: isQty ? null : (v.new_name || null),
+							},
+							freeze: true, freeze_message: 'Creating…',
+							callback: function (r) {
+								var m = r.message || {};
+								if (m.error || !m.new_cb) {
+									frappe.msgprint({ message: m.error || 'Could not create — no breakdown returned.', indicator: 'red' });
+									return;
+								}
+								self.switcherGo(m.new_cb);
+							},
+						});
+					},
+				});
+				d.show();
+			},
+
 			// After saving CB, call our whitelisted API to sync unit_cost on linked Cost Items
 			notifyCostItemRefresh(cbName) {
 				if (!cbName) return;
@@ -1154,6 +1278,7 @@ function oc_mount_app(el) {
 						if (!r.message) return;
 						var d = r.message;
 						self.savedDocName = d.doc_name || '';
+						self.loadSwitcher();
 						if (d.form) {
 							Object.assign(self.form, d.form);
 							// Restore manual ad-hoc cost lines
@@ -1443,6 +1568,9 @@ function oc_mount_app(el) {
 		},
 
 		watch: {
+			// Load the calculation switcher whenever the doc name settles — covers the first
+			// DB load, a draft restore, and a fresh save (the panel used to appear only after save).
+			savedDocName: function (v) { if (v) this.loadSwitcher(); },
 			'form.ref': function (newRef) {
 				// Auto-fetch inquiry breakdowns ONLY in standalone calculator mode.
 				// When launched from a Cost Sheet, splits are controlled entirely by the
@@ -2019,6 +2147,59 @@ function oc_mount_app(el) {
         👁 VIEW ONLY — {{ savedDocName }}
       </div>
 
+      <!-- Calculation switcher — qty breaks + finishing variants of the current item -->
+      <div v-if="savedDocName && hasSwitcher()" class="oc-switcher">
+        <div class="oc-sw-head">
+          <span class="oc-sw-title" @click="switcherOpen = !switcherOpen">
+            {{ switcherOpen ? '▾' : '▸' }} Calculations<span v-if="switcher.item_name"> — {{ switcher.item_name }}</span>
+          </span>
+          <button v-if="!viewOnly" class="oc-sw-add" @click="switcherAdd">＋ Add / Duplicate</button>
+        </div>
+        <div v-show="switcherOpen">
+          <div class="oc-sw-tabs">
+            <button class="oc-sw-tab" :class="{active: switcherTab==='qty'}" @click="switcherTab='qty'">Qty Breaks ({{ switcher.qty_breaks.length }})</button>
+            <button class="oc-sw-tab" :class="{active: switcherTab==='fin'}" @click="switcherTab='fin'">Finishing Variants ({{ switcher.finishing_variants.length }})</button>
+          </div>
+          <div v-if="switcherTab==='qty'" class="oc-sw-scroll">
+            <table class="oc-sw-tbl">
+              <thead><tr><th>Order Qty</th><th class="r">Unit Cost</th><th class="r">Margin%</th><th class="r">Quoted</th><th class="r">Final</th><th></th></tr></thead>
+              <tbody>
+                <tr v-if="!switcher.qty_breaks.length"><td colspan="6" class="oc-sw-empty">No qty breaks.</td></tr>
+                <tr v-for="row in switcher.qty_breaks" :key="row.cb" :class="{cur: row.is_current}">
+                  <td>{{ fmtNum(row.order_qty) }}</td>
+                  <td class="r">{{ fmtCur(row.unit_cost) }}</td>
+                  <td class="r">{{ row.profit_margin }}</td>
+                  <td class="r">{{ fmtCur(row.quoted_price) }}</td>
+                  <td class="r">{{ fmtCur(row.final_price) }}</td>
+                  <td class="r nowrap">
+                    <button v-if="!row.is_current" class="oc-sw-view" @click="switcherGo(row.cb)">View</button>
+                    <span v-else class="oc-sw-badge">current</span>
+                    <a v-if="!viewOnly && !row.is_current" href="#" class="oc-sw-x" @click.prevent="switcherDelete(row)" title="Delete">×</a>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="oc-sw-scroll">
+            <table class="oc-sw-tbl">
+              <thead><tr><th>Variant</th><th class="r">Unit Cost</th><th></th></tr></thead>
+              <tbody>
+                <tr v-if="!switcher.finishing_variants.length"><td colspan="3" class="oc-sw-empty">No finishing variants.</td></tr>
+                <tr v-for="row in switcher.finishing_variants" :key="row.cb" :class="{cur: row.is_current}">
+                  <td>{{ row.name }}</td>
+                  <td class="r">{{ fmtCur(row.unit_cost) }}</td>
+                  <td class="r nowrap">
+                    <button v-if="!row.is_current" class="oc-sw-view" @click="switcherGo(row.cb)">View</button>
+                    <span v-else class="oc-sw-badge">current</span>
+                    <a v-if="!viewOnly && !row.is_current" href="#" class="oc-sw-x" @click.prevent="switcherDelete(row)" title="Delete">×</a>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <!-- Offset: Sheet requirements -->
       <div v-if="calc.sheet && calc.sheet.full_sheet_qty" class="oc-result-card">
         <div class="oc-rc-title oc-rc-toggle" @click="sheetExpanded = !sheetExpanded">
@@ -2160,7 +2341,7 @@ function oc_inject_styles() {
 .oc-ph-split{justify-content:space-between}
 .oc-pt{font-weight:700;font-size:13px;color:var(--text-color,#1f272e)}
 .oc-badge{font-size:10px;font-weight:700;background:#2c7be5;color:#fff;border-radius:4px;padding:2px 7px;letter-spacing:.05em}
-.oc-pb{padding:12px 14px;overflow-y:auto;flex:1;min-height:0}
+.oc-pb{padding:12px 14px;overflow-y:auto;overflow-x:hidden;flex:1;min-height:0}
 .oc-field{margin-bottom:10px}
 .oc-lbl{display:block;font-size:10.5px;font-weight:700;color:var(--text-muted,#6b7280);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em}
 .oc-lbl-blue{color:#2c7be5}
@@ -2260,17 +2441,41 @@ function oc_inject_styles() {
 .oc-attr-field{display:flex;flex-direction:column;min-width:80px;flex:1}
 .oc-attr-lbl{font-size:11px;font-weight:600;color:#6b7280;margin-bottom:3px}
 /* Multi-block attribute table */
-.oc-blocks{margin-top:8px;padding:8px 10px;background:#f0f4ff;border-radius:4px;border-left:3px solid #2c7be5}
+/* min-width:0 + overflow-x:auto keep the block table INSIDE its own box so it scrolls
+   locally instead of pushing the whole left panel sideways (the flex min-width:auto trap). */
+.oc-blocks{margin-top:8px;padding:8px 10px;background:#f0f4ff;border-radius:4px;border-left:3px solid #2c7be5;overflow-x:auto;max-width:100%;min-width:0}
 .oc-blk-tbl{width:100%;border-collapse:collapse;font-size:11.5px}
 .oc-blk-tbl th{text-align:left;font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.03em;padding:2px 6px 5px;border-bottom:1px solid #d7e0f5;white-space:nowrap}
 .oc-blk-tbl td{padding:3px 6px;vertical-align:middle}
-.oc-blk-inp{padding:4px 6px!important;font-size:12px!important;min-width:60px}
+.oc-blk-inp{padding:4px 5px!important;font-size:12px!important;min-width:42px;width:100%;box-sizing:border-box}
 .oc-blk-c{color:#334155;font-weight:600;text-align:right;white-space:nowrap}
 .oc-blk-x{color:#ef4444;font-weight:700;text-decoration:none;font-size:15px;padding:0 4px}
 .oc-blk-x:hover{color:#b91c1c}
 .oc-blk-empty{color:#94a3b8;font-style:italic;padding:8px 6px}
 .oc-blk-add{margin-top:8px;background:#2c7be5;color:#fff;border:none;border-radius:4px;padding:5px 14px;font-size:12px;font-weight:600;cursor:pointer}
 .oc-blk-add:hover{background:#1a68d1}
+/* Calculation switcher panel */
+.oc-switcher{margin-bottom:12px;border:1px solid #d9e2f3;border-radius:6px;background:#f8fbff;overflow:hidden}
+.oc-sw-head{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:#eef4ff;border-bottom:1px solid #d9e2f3}
+.oc-sw-title{font-size:12px;font-weight:700;color:#1a3a5c;cursor:pointer;user-select:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%}
+.oc-sw-add{background:#2c7be5;color:#fff;border:none;border-radius:4px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap}
+.oc-sw-add:hover{background:#1a68d1}
+.oc-sw-tabs{display:flex;gap:4px;padding:6px 8px 0}
+.oc-sw-tab{background:transparent;border:none;border-bottom:2px solid transparent;padding:4px 10px;font-size:11.5px;font-weight:600;color:#6b7280;cursor:pointer}
+.oc-sw-tab.active{color:#1a3a5c;border-bottom-color:#2c7be5}
+.oc-sw-scroll{overflow-x:auto;padding:4px 8px 8px}
+.oc-sw-tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+.oc-sw-tbl th{text-align:left;font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.03em;padding:3px 6px;border-bottom:1px solid #e0eaff;white-space:nowrap}
+.oc-sw-tbl td{padding:4px 6px;border-bottom:1px solid #f0f4fb;white-space:nowrap}
+.oc-sw-tbl td.r,.oc-sw-tbl th.r{text-align:right}
+.oc-sw-tbl td.nowrap{white-space:nowrap}
+.oc-sw-tbl tr.cur{background:#e8f2ff}
+.oc-sw-view{background:#2c7be5;color:#fff;border:none;border-radius:3px;padding:2px 9px;font-size:10.5px;font-weight:600;cursor:pointer}
+.oc-sw-view:hover{background:#1a68d1}
+.oc-sw-badge{display:inline-block;font-size:9px;font-weight:700;background:#28a745;color:#fff;border-radius:3px;padding:1px 6px;text-transform:uppercase}
+.oc-sw-x{color:#ef4444;font-weight:700;text-decoration:none;font-size:15px;padding:0 5px;margin-left:4px}
+.oc-sw-x:hover{color:#b91c1c}
+.oc-sw-empty{color:#94a3b8;font-style:italic;padding:8px 6px;text-align:center}
 /* Machine section inside spec detail */
 .oc-machine-sec{background:#fff8e1;border:1px solid #ffe082;border-radius:5px;padding:8px 10px;margin-bottom:10px}
 .oc-skip-row{display:flex;align-items:center;gap:7px;margin-top:7px;padding-top:7px;border-top:1px dashed #e6d08a;font-size:11.5px;color:#6b5900;cursor:pointer}
