@@ -2191,3 +2191,148 @@ def add_qty_variant(source_cost_item, new_qty):
         return {"error": "New quantity must be greater than 0"}
     src_name = frappe.db.get_value("cost Item", source_cost_item, "cost_item_name")
     return duplicate_cost_item(source_cost_item, new_name=src_name, new_qty=new_qty)
+
+
+# ─────────────────────────────────────────────────────────────
+#  CALCULATION SWITCHER — sibling qty-breaks + finishing variants for the calculator panel
+# ─────────────────────────────────────────────────────────────
+
+def _base_item_name(nm):
+    """Product base name: the cost-item name with trailing '(Copy)' markers stripped, so a
+    duplicated finishing variant groups with its original."""
+    import re
+    return re.sub(r"(\s*\(copy\))+\s*$", "", (nm or ""), flags=re.I).strip()
+
+
+def _switcher_price_row(cb, order_qty):
+    """Qty-break display figures for one CB at its stored qty."""
+    d = frappe.db.get_value(
+        "Calculation Breakdown", cb, ["unit_cost", "selling_price", "profit_margin"], as_dict=True) or {}
+    uc = flt(d.get("unit_cost"))
+    q = flt(order_qty) or 1
+    quoted_unit = round(flt(d.get("selling_price")) / q, 4) if q else 0.0
+    return {
+        "unit_cost":     round(uc, 4),
+        "total_cost":    round(uc * q, 2),
+        "profit_margin": flt(d.get("profit_margin")),
+        "quoted_price":  quoted_unit,
+        "final_price":   quoted_unit,
+    }
+
+
+@frappe.whitelist()
+def get_calc_switcher(cost_sheet=None, calculation_breakdown=None):
+    """Sibling calculations for the calculator's switcher panel.
+
+    - qty_breaks         : cost Items with the SAME name as the current item (quantity variants).
+    - finishing_variants : cost Items with the SAME base product name but a DIFFERENT name
+                           (finishing / spec copies made via Duplicate Item).
+    Scoped to the given cost sheet when provided, else to items sharing the base name."""
+    out = {"cost_item": "", "item_name": "", "current_cb": calculation_breakdown,
+           "qty_breaks": [], "finishing_variants": []}
+    if not calculation_breakdown:
+        return out
+    ci = frappe.db.get_value(
+        "Cost Item Calculation", {"calculation_breakdown": calculation_breakdown}, "parent")
+    if not ci:
+        return out
+    cur = frappe.db.get_value("cost Item", ci, ["cost_item_name", "item_qty"], as_dict=True) or {}
+    out["cost_item"] = ci
+    out["item_name"] = cur.get("cost_item_name") or ci
+    cur_name = cur.get("cost_item_name") or ""
+    cur_base = _base_item_name(cur_name)
+
+    if cost_sheet and frappe.db.exists("Cost Sheet", cost_sheet):
+        names = [r.item for r in frappe.get_all(
+            "Cost Sheet Items", filters={"parent": cost_sheet}, fields=["item"], order_by="idx asc") if r.item]
+    else:
+        names = frappe.get_all("cost Item", filters={"cost_item_name": ["like", "%" + cur_base + "%"]}, pluck="name")
+
+    seen = set()
+    for c in names:
+        if c in seen or not frappe.db.exists("cost Item", c):
+            continue
+        seen.add(c)
+        d = frappe.db.get_value("cost Item", c, ["cost_item_name", "item_qty"], as_dict=True) or {}
+        cb = frappe.db.get_value(
+            "Cost Item Calculation", {"parent": c}, "calculation_breakdown", order_by="idx asc")
+        if not cb:
+            continue
+        row = {"cost_item": c, "cb": cb, "name": d.get("cost_item_name") or c,
+               "order_qty": flt(d.get("item_qty")), "is_current": (c == ci)}
+        row.update(_switcher_price_row(cb, d.get("item_qty")))
+        nm = d.get("cost_item_name") or ""
+        if nm == cur_name:
+            out["qty_breaks"].append(row)
+        elif _base_item_name(nm) == cur_base:
+            out["finishing_variants"].append(row)
+    out["qty_breaks"].sort(key=lambda r: r["order_qty"])
+    return out
+
+
+@frappe.whitelist()
+def create_variant_for_switcher(source_cost_item, cost_sheet=None, kind="qty", new_qty=None, new_name=None):
+    """Create a qty break (kind='qty') or finishing variant (kind='finishing') of a cost item,
+    add it to the cost sheet (draft only), and return the new CB so the calculator reloads to it."""
+    if not source_cost_item or not frappe.db.exists("cost Item", source_cost_item):
+        return {"error": "Source cost item not found"}
+    if kind == "qty":
+        res = add_qty_variant(source_cost_item, new_qty)
+    else:
+        res = duplicate_cost_item(source_cost_item, new_name=new_name or None, new_qty=None)
+    if not res or res.get("error"):
+        return res or {"error": "Failed to create variant"}
+    new_ci = res.get("new_cost_item")
+
+    if cost_sheet and frappe.db.exists("Cost Sheet", cost_sheet):
+        cs = frappe.get_doc("Cost Sheet", cost_sheet)
+        if cs.docstatus == 0:
+            src_row = next((r for r in (cs.get("pricing_list") or []) if r.item == source_cost_item), None)
+            ci = frappe.db.get_value(
+                "cost Item", new_ci, ["cost_item_name", "item_qty", "unit_cost"], as_dict=True) or {}
+            new_row = {"item": new_ci, "item_name": ci.get("cost_item_name"),
+                       "qty": ci.get("item_qty"), "unit_price": ci.get("unit_cost")}
+            if src_row:
+                for f in ("dimensions", "product_code", "order_number", "packing_date", "batch_no",
+                          "expiry_date", "packing_type", "winding_direction", "pcs_per_role", "up",
+                          "sscl", "vat", "profit_margin"):
+                    v = src_row.get(f)
+                    if v not in (None, ""):
+                        new_row[f] = v
+            cs.append("pricing_list", new_row)
+            # Skip link validation so a pre-existing stale link elsewhere on the sheet (e.g. an
+            # old sales_person) can't block adding the variant row.
+            cs.flags.ignore_links = True
+            cs.save(ignore_permissions=True)
+            frappe.db.commit()
+    return {"new_cost_item": new_ci, "new_cb": (res.get("new_cbs") or [None])[0], "cost_sheet": cost_sheet}
+
+
+@frappe.whitelist()
+def delete_calc_variant(cost_item, cost_sheet=None):
+    """Delete a qty/finishing variant from the switcher: drop its row from the cost sheet and
+    delete the cost item + its calculation breakdown(s). Draft documents only."""
+    if not cost_item or not frappe.db.exists("cost Item", cost_item):
+        return {"error": "Cost item not found"}
+    if cint(frappe.db.get_value("cost Item", cost_item, "docstatus")) == 1:
+        return {"error": "Cost item is submitted — cannot delete."}
+    if cost_sheet and frappe.db.exists("Cost Sheet", cost_sheet):
+        cs = frappe.get_doc("Cost Sheet", cost_sheet)
+        if cs.docstatus != 0:
+            return {"error": "Cost sheet is submitted — cannot delete variants."}
+        cs.set("pricing_list", [r for r in (cs.get("pricing_list") or []) if r.item != cost_item])
+        cs.flags.ignore_links = True
+        cs.save(ignore_permissions=True)
+    cbs = frappe.get_all("Cost Item Calculation", filters={"parent": cost_item}, pluck="calculation_breakdown")
+    frappe.delete_doc("cost Item", cost_item, ignore_permissions=True, force=1)
+    for cb in cbs:
+        if cb and frappe.db.exists("Calculation Breakdown", cb):
+            try:
+                d = frappe.get_doc("Calculation Breakdown", cb)
+                if d.docstatus == 1:
+                    d.cancel()
+                frappe.delete_doc("Calculation Breakdown", cb, ignore_permissions=True, force=1)
+            except Exception:
+                frappe.db.rollback()
+    frappe.db.commit()
+    return {"deleted": cost_item}
