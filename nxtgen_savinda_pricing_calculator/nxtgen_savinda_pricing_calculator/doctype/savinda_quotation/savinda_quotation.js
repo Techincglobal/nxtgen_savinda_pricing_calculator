@@ -723,13 +723,17 @@ function flt_v(v) { return parseFloat(v || 0) || 0; }
 
 function _show_create_fg_dialog(frm) {
 	// Build unique-per-cost_item list (skip rows that already have finish_good)
-	var seen = {}, pending = [], already_done = 0;
+	var seen = {}, pending = [], existing_fgs = [];
 	(frm.doc.items || []).forEach(function (row) {
 		var key = row.cost_item || row.item_name;
 		if (!seen[key]) {
 			seen[key] = true;
 			if (row.finish_good) {
-				already_done++;
+				existing_fgs.push({
+					item_code: row.finish_good,
+					item_name: row.item_name || row.finish_good,
+					cost_item: row.cost_item || "",
+				});
 			} else {
 				pending.push(row);
 			}
@@ -737,7 +741,13 @@ function _show_create_fg_dialog(frm) {
 	});
 
 	if (!pending.length) {
-		frappe.msgprint({ title: "FG Items", message: "All items already have FG items linked (" + already_done + " linked).", indicator: "green" });
+		// Re-open the rule editor for existing FGs. This is how a user adds a short
+		// dated override later without rebuilding or changing the finished good.
+		if (existing_fgs.length && window.nxtgen_pricing) {
+			nxtgen_pricing.showForFGs(frm, existing_fgs, function () {});
+			return;
+		}
+		frappe.msgprint({ title: "FG Items", message: "No finished goods are linked to this quotation yet.", indicator: "orange" });
 		return;
 	}
 

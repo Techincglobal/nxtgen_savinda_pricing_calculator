@@ -67,6 +67,11 @@ jinja = {
 }
 
 doc_events = {
+	"Sales Order": {
+		# Costing-created finished goods may only use an active qty Pricing Rule. A missing,
+		# expired, or out-of-range rule results in a zero rate instead of a fallback Item Price.
+		"validate": "nxtgen_savinda_pricing_calculator.api.pricing_rule.enforce_sales_order_pricing",
+	},
 	"Production Plan": {
 		"before_save": "nxtgen_savinda_pricing_calculator.api.production_plan.on_production_plan_before_save",
 		"before_submit": "nxtgen_savinda_pricing_calculator.api.production_plan.validate_ticket_item_exp_dates",
@@ -308,4 +313,3 @@ after_migrate = "nxtgen_savinda_pricing_calculator.install.after_migrate"
 # ------------
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
-
