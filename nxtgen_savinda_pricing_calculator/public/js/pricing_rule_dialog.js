@@ -55,8 +55,19 @@ nxtgen_pricing.showForFGs = function (frm, fg_items, on_done) {
 				+ "Set the qty ranges and selling rate (in <b>" + frappe.utils.escape_html(cur_lbl) + "</b>) for each product. "
 				+ "These are saved as <b>Pricing Rules</b>, so a Sales Order prices each line automatically by quantity."
 				+ (customer ? " Scoped to customer <b>" + frappe.utils.escape_html(customer) + "</b>." : " (No customer — rules apply to any customer.)")
-				+ "<br><span style='color:#8a6d1f'>Max Qty = 0 means no upper limit. Ranges should not overlap.</span></div>",
+				+ "<br><span style='color:#8a6d1f'>Max Qty = 0 means no upper limit. Ranges should not overlap. "
+				+ "A higher priority wins when dated rules overlap (use 20 for a short temporary override).</span></div>",
 		}];
+		fields.push(
+			{ fieldtype: "Section Break", label: "Rule Validity & Override" },
+			{ fieldtype: "Date", fieldname: "valid_from", label: "Valid From", default: valid_from },
+			{ fieldtype: "Column Break" },
+			{ fieldtype: "Date", fieldname: "valid_upto", label: "Valid Until", default: valid_upto,
+				description: "Leave blank for no expiry." },
+			{ fieldtype: "Column Break" },
+			{ fieldtype: "Int", fieldname: "priority", label: "Priority (1–20)", default: 10,
+				description: "Higher priority overrides another matching rule. Use 20 for a temporary price." }
+		);
 		usable.forEach(function (x, idx) {
 			fields.push({ fieldtype: "Section Break", label: x.item_name + "  (" + x.fg_item + ")" });
 			fields.push({
@@ -78,7 +89,8 @@ nxtgen_pricing.showForFGs = function (frm, fg_items, on_done) {
 			primary_action_label: "Create Pricing Rules",
 			secondary_action_label: "Skip",
 			secondary_action: function () { d.hide(); on_done(); },
-			primary_action: function () {
+			primary_action: function (values) {
+				var rule_priority = Math.max(1, Math.min(20, parseInt(values.priority, 10) || 10));
 				var jobs = usable.map(function (x, idx) { return { fg: x, rows: d.get_value("tiers_" + idx) || [] }; });
 				d.hide();
 				var total = 0;
@@ -96,9 +108,10 @@ nxtgen_pricing.showForFGs = function (frm, fg_items, on_done) {
 							tiers: JSON.stringify(j.rows),
 							customer: customer,
 							currency: currency,
-							valid_from: valid_from,
-							valid_upto: valid_upto,
+							valid_from: values.valid_from || null,
+							valid_upto: values.valid_upto || null,
 							cost_item: j.fg.cost_item,
+							priority: rule_priority,
 						},
 						freeze: true, freeze_message: "Creating pricing rules for " + j.fg.fg_item + "…",
 						callback: function (r) { total += ((r.message || {}).count || 0); run(i + 1); },

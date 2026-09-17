@@ -88,7 +88,10 @@ def after_migrate():
 # code is the single source of truth. Unlike the install-only seed fixtures (which NEVER overwrite
 # live edits), these are re-imported from file on every install/migrate — so a DEPLOY REPLACES the
 # live copy. Edit them in the file, not the Print Builder. (Requested: ship via code, not patches.)
-CODE_PRINT_FORMATS = ("offset_job_ticket", "savinda_quotation", "product_costing_summary")
+CODE_PRINT_FORMATS = (
+	"offset_job_ticket", "flexo_job_ticket", "offset_npd_job_ticket", "flexo_npd_job_ticket",
+	"savinda_quotation", "product_costing_summary",
+)
 
 
 def _sync_code_print_formats():
