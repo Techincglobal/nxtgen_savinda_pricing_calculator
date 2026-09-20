@@ -1216,16 +1216,20 @@ function oc_mount_app(el) {
 						{ fieldtype: 'Select', fieldname: 'kind', label: 'Create', reqd: 1,
 							options: 'New Qty Break\nNew Finishing Variant', default: 'New Qty Break' },
 						{ fieldtype: 'Float', fieldname: 'new_qty', label: 'Order Qty', reqd: 1,
-							depends_on: "eval:doc.kind=='New Qty Break'",
-							description: 'Duplicates this calculation, recomputed at the new quantity.' },
-						{ fieldtype: 'Data', fieldname: 'new_name', label: 'Variant Name (optional)',
+							default: (self.switcher.qty_breaks.find(function (r) { return r.is_current; }) || {}).order_qty || self.form.item_qty || 0,
+							description: 'The new calculation is recomputed for this quantity.' },
+						{ fieldtype: 'Data', fieldname: 'new_name', label: 'Quotation Item Name',
 							depends_on: "eval:doc.kind=='New Finishing Variant'",
-							description: 'A copy you can edit specs/finishing on. Blank = "… (Copy)".' },
+							description: 'Required for a finishing variant. It becomes a separate quotation item.' },
+						{ fieldtype: 'Currency', fieldname: 'new_selling_unit_price', label: 'Unit Selling Price (LKR)',
+							default: (self.switcher.qty_breaks.find(function (r) { return r.is_current; }) || {}).final_price || '',
+							description: 'Optional. Leave the copied calculation price, or enter the agreed selling price.' },
 					],
 					primary_action_label: 'Create & Open',
 					primary_action: function (v) {
 						var isQty = v.kind === 'New Qty Break';
-						if (isQty && !(parseFloat(v.new_qty) > 0)) { frappe.msgprint('Enter a quantity.'); return; }
+						if (!(parseFloat(v.new_qty) > 0)) { frappe.msgprint('Enter a quantity.'); return; }
+						if (!isQty && !(v.new_name || '').trim()) { frappe.msgprint('Enter a quotation item name for the finishing variant.'); return; }
 						d.hide();
 						frappe.call({
 							method: API.createVariant,
@@ -1233,8 +1237,9 @@ function oc_mount_app(el) {
 								source_cost_item: self.switcher.cost_item,
 								cost_sheet: self.costSheetRef || '',
 								kind: isQty ? 'qty' : 'finishing',
-								new_qty: isQty ? v.new_qty : null,
+								new_qty: v.new_qty,
 								new_name: isQty ? null : (v.new_name || null),
+								new_selling_unit_price: v.new_selling_unit_price,
 							},
 							freeze: true, freeze_message: 'Creating…',
 							callback: function (r) {
@@ -2337,6 +2342,7 @@ function oc_inject_styles() {
 .oc-wrap{display:grid;grid-template-columns:430px 1fr;gap:10px;padding:8px 10px;height:calc(100vh - 52px);overflow:hidden;font-size:13px;box-sizing:border-box}
 @media(max-width:960px){.oc-wrap{grid-template-columns:1fr;height:auto;overflow:visible}}
 .oc-panel{background:#fff;border:1px solid var(--border-color,#d1d5db);border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;flex-direction:column;overflow:hidden;min-height:0}
+@media(min-width:961px){.oc-wrap>.oc-panel:first-of-type{position:sticky;top:0;align-self:start;height:calc(100vh - 52px)}}
 .oc-ph{display:flex;align-items:center;gap:8px;padding:9px 14px;background:var(--subtle-fg,#f8fafc);border-bottom:1px solid var(--border-color,#d1d5db);flex-shrink:0}
 .oc-ph-split{justify-content:space-between}
 .oc-pt{font-weight:700;font-size:13px;color:var(--text-color,#1f272e)}

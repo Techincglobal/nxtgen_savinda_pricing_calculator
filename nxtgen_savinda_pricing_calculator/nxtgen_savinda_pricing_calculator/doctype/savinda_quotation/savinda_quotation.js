@@ -717,26 +717,38 @@ function flt_v(v) { return parseFloat(v || 0) || 0; }
 
 // ─────────────────────────────────────────────────────────────
 //  CREATE / LINK FG ITEMS
-//  Groups quotation rows by cost_item; creates FG ERPNext Item
-//  for each unique cost_item that has no finish_good yet.
+//  Quantity breaks share the same quotation item name, therefore they share one
+//  FG. A finishing variant is given its own quotation item name and gets its own FG.
 // ─────────────────────────────────────────────────────────────
 
+function _fg_product_key(row) {
+	return ((row.item_name || row.cost_item || "") + "").trim().toLowerCase();
+}
+
 function _show_create_fg_dialog(frm) {
-	// Build unique-per-cost_item list (skip rows that already have finish_good)
-	var seen = {}, pending = [], existing_fgs = [];
+	// Build a unique product list by quotation item name, not Cost Item. A Cost Item
+	// is deliberately duplicated for each quantity tier, but those tiers are one
+	// sellable product and must not produce one FG popup per tier.
+	var groups = {}, pending = [], existing_fgs = [];
 	(frm.doc.items || []).forEach(function (row) {
-		var key = row.cost_item || row.item_name;
-		if (!seen[key]) {
-			seen[key] = true;
-			if (row.finish_good) {
-				existing_fgs.push({
-					item_code: row.finish_good,
-					item_name: row.item_name || row.finish_good,
-					cost_item: row.cost_item || "",
-				});
-			} else {
-				pending.push(row);
-			}
+		var key = _fg_product_key(row);
+		if (!key) return;
+		if (!groups[key]) groups[key] = { row: row, finish_good: "" };
+		if (row.finish_good) groups[key].finish_good = row.finish_good;
+	});
+	Object.keys(groups).forEach(function (key) {
+		var group = groups[key];
+		if (group.finish_good) {
+			// Repair older quotations where only one of the quantity-tier rows was
+			// linked to the FG. All tiers of this product must use that same FG.
+			if (frm.doc.docstatus === 0) _link_fg_to_rows(frm, key, group.finish_good);
+			existing_fgs.push({
+				item_code: group.finish_good,
+				item_name: group.row.item_name || group.finish_good,
+				cost_item: group.row.cost_item || "",
+			});
+		} else {
+			pending.push(group.row);
 		}
 	});
 
@@ -744,7 +756,9 @@ function _show_create_fg_dialog(frm) {
 		// Re-open the rule editor for existing FGs. This is how a user adds a short
 		// dated override later without rebuilding or changing the finished good.
 		if (existing_fgs.length && window.nxtgen_pricing) {
-			nxtgen_pricing.showForFGs(frm, existing_fgs, function () {});
+			var open_pricing = function () { nxtgen_pricing.showForFGs(frm, existing_fgs, function () {}); };
+			if (frm.doc.docstatus === 0 && frm.is_dirty()) frm.save(null, open_pricing);
+			else open_pricing();
 			return;
 		}
 		frappe.msgprint({ title: "FG Items", message: "No finished goods are linked to this quotation yet.", indicator: "orange" });
@@ -882,7 +896,7 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) 
 
 			if (vals.existing_item) {
 				// Link existing item
-				_link_fg_to_rows(frm, row.cost_item || row.item_name, vals.existing_item);
+				_link_fg_to_rows(frm, _fg_product_key(row), vals.existing_item);
 				created.push({ item_code: vals.existing_item, item_name: row.item_name, cost_item: row.cost_item || "" });
 				_create_fg_for_item(frm, pending_rows, idx + 1, ig_default, created);
 				return;
@@ -926,7 +940,7 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) 
 						});
 						// Link the first created FG to the quotation row(s) for this cost item
 						if (items.length) {
-							_link_fg_to_rows(frm, row.cost_item || row.item_name, items[0].item_code);
+							_link_fg_to_rows(frm, _fg_product_key(row), items[0].item_code);
 						}
 						// Each variant is its own sellable FG → price every variant.
 						items.forEach(function (it) {
@@ -955,7 +969,7 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) 
 				callback: function (r) {
 					if (!r.message) return;
 					frappe.show_alert({ message: "Created: " + r.message.item_code, indicator: "green" });
-					_link_fg_to_rows(frm, row.cost_item || row.item_name, r.message.item_code);
+					_link_fg_to_rows(frm, _fg_product_key(row), r.message.item_code);
 					created.push({ item_code: r.message.item_code, item_name: vals.item_name_field, cost_item: row.cost_item || "" });
 					_create_fg_for_item(frm, pending_rows, idx + 1, ig_default, created);
 				},
@@ -965,10 +979,9 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) 
 	d.show();
 }
 
-function _link_fg_to_rows(frm, cost_item_key, fg_item_code) {
+function _link_fg_to_rows(frm, product_key, fg_item_code) {
 	(frm.doc.items || []).forEach(function (row) {
-		var key = row.cost_item || row.item_name;
-		if (key === cost_item_key && !row.finish_good) {
+		if (_fg_product_key(row) === product_key && !row.finish_good) {
 			frappe.model.set_value(row.doctype, row.name, "finish_good", fg_item_code);
 		}
 	});
@@ -1093,6 +1106,11 @@ function _render_so_dialog(frm, fg_list, order_type) {
 				fieldtype: "Date", fieldname: "po_date",
 				label: "Customer's PO Date",
 			},
+			{
+				fieldtype: "Link", fieldname: "department",
+				label: "Department", options: "Department", reqd: 1,
+				description: "Used for Production Planning and the Material Request.",
+			},
 			{ fieldtype: "Section Break", label: "Finished Goods — tick the ones to book" + (is_npd ? " in the NPD order" : " in the Sales Order") },
 			{
 				fieldtype: "Table", fieldname: "fg_items",
@@ -1146,6 +1164,7 @@ function _render_so_dialog(frm, fg_list, order_type) {
 						delivery_date: vals.delivery_date,
 						po_no: vals.po_no || "",
 						po_date: vals.po_date || null,
+						custom_department: vals.department,
 						currency: cur,
 						conversion_rate: crate,
 						// Let ERPNext apply the qty Pricing Rules (auto-created on FG creation)

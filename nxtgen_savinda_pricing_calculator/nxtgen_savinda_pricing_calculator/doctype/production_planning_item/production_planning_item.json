@@ -8,7 +8,10 @@
  "field_order": [
   "fg_item",
   "item_name",
+  "base_qty",
+  "tolerance_qty",
   "qty",
+  "is_tolerance",
   "ups",
   "cuts",
   "full_sheet_qty",
@@ -23,7 +26,10 @@
  "fields": [
   {"fieldname": "fg_item", "fieldtype": "Link", "label": "FG Item", "options": "Item", "in_list_view": 1, "columns": 2},
   {"fieldname": "item_name", "fieldtype": "Data", "label": "Item Name", "in_list_view": 1, "columns": 2},
-  {"fieldname": "qty", "fieldtype": "Float", "label": "Qty", "in_list_view": 1, "columns": 1},
+  {"fieldname": "base_qty", "fieldtype": "Float", "label": "Order Qty", "in_list_view": 1, "columns": 1, "read_only": 1},
+  {"fieldname": "tolerance_qty", "fieldtype": "Float", "label": "Tolerance Qty", "in_list_view": 1, "columns": 1, "read_only": 1},
+  {"fieldname": "qty", "fieldtype": "Float", "label": "Planning Qty", "columns": 1, "read_only": 1},
+  {"fieldname": "is_tolerance", "fieldtype": "Check", "label": "Tolerance Row", "read_only": 1},
   {"fieldname": "ups", "fieldtype": "Int", "label": "Ups", "in_list_view": 1, "columns": 1},
   {"fieldname": "cuts", "fieldtype": "Int", "label": "Cuts", "in_list_view": 1, "columns": 1},
   {"fieldname": "full_sheet_qty", "fieldtype": "Float", "label": "Full Sheets", "in_list_view": 1, "columns": 1},

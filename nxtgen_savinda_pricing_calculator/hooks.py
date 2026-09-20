@@ -52,6 +52,9 @@ doctype_js = {
 	"Sales Order":     "public/js/sales_order.js",
 	"Production Plan": "public/js/production_plan.js",
 	"Delivery Note":   "public/js/delivery_note.js",
+	# A finished good may receive new dated / quantity pricing after its original
+	# quotation has been completed.  Keep this on the FG Item itself.
+	"Item":            "public/js/item.js",
 	"NPD Request":     "public/js/npd_request.js",
 }
 
