@@ -123,7 +123,7 @@ _PL_REVIEW = [
 	("flexo_type", "Flexo"), ("width_mm", "Flexo"), ("length_mm", "Flexo"),
 	("core_size", "Flexo"), ("pcs_per_roll", "Flexo"),
 	("winding_direction", "Flexo"), ("tolerance", "Flexo"), ("remark", ""),
-	("cold_foil", ""), ("hot_foil", ""), ("embossing", ""),
+	("cold_foil", ""), ("hot_foil", ""), ("foil_details", "Flexo"), ("embossing", ""),
 	("lamination", ""),("die_cut_code", "")
 ]
 _PL_KEYS = [fn for fn, _ in _PL_REVIEW]
@@ -355,6 +355,32 @@ def create_fg_from_cost_sheet(cost_sheet, details=None):
 
 
 # ── Create FG on the Savinda Quotation (per cost item) ────────────────────────
+def _foil_defaults_from_cb(cb_name):
+	"""Product Library defaults for foil choices held in a Flexo CB's ui_state."""
+	if not cb_name:
+		return {"pl_cold_foil": 0, "pl_hot_foil": 0, "pl_foil_details": ""}
+	try:
+		state = json.loads(frappe.db.get_value("Calculation Breakdown", cb_name, "ui_state") or "{}") or {}
+	except Exception:
+		return {"pl_cold_foil": 0, "pl_hot_foil": 0, "pl_foil_details": ""}
+	cold = hot = 0
+	details, seen = [], set()
+	for spec in (state.get("selected_specs") or []):
+		for foil in ((spec.get("machine_assignment") or {}).get("foils") or []):
+			group = (foil.get("foil_group") or "").strip().upper()
+			name = (foil.get("foil_name") or foil.get("foil_key") or "").strip()
+			if not name:
+				continue
+			cold = cold or int(group == "COLD")
+			hot = hot or int(group == "HOT")
+			pct = flt(foil.get("percentage") or 100)
+			label = (group + ": " if group else "") + name + (" (%g%%)" % pct)
+			if label not in seen:
+				seen.add(label)
+				details.append(label)
+	return {"pl_cold_foil": cold, "pl_hot_foil": hot, "pl_foil_details": ", ".join(details)}
+
+
 def _pl_defaults_from_cost_item(ci):
 	"""pl_* defaults derived from a cost Item and its Calculation Breakdown, for the
 	quotation FG popup. Fields we can't derive are left blank for the user to fill."""
@@ -369,7 +395,7 @@ def _pl_defaults_from_cost_item(ci):
 	# carton size) so the FG popup pre-fills it from the costing.
 	product_size = (ci_doc.get("dimensions") or "").strip() \
 		or (frappe.db.get_value("Calculation Breakdown", cb, "carton_size") if cb else "") or ""
-	return {
+	defaults = {
 		"item_name": ci_doc.get("cost_item_name") or ci,
 		"pricing": pricing, "is_flexo": is_flexo,
 		"department": _dept_for_pricing(pricing),
@@ -383,6 +409,9 @@ def _pl_defaults_from_cost_item(ci):
 		"pl_width_mm": flt(cbd.get("_reel_width")),
 		"pl_length_mm": flt(cbd.get("_reel_length")),
 	}
+	if is_flexo:
+		defaults.update(_foil_defaults_from_cb(cb))
+	return defaults
 
 
 @frappe.whitelist()
@@ -613,7 +642,8 @@ def _gather_ticket(source_type, source_name):
 			"custom_color_ref": src.color_ref, "custom_quote_no": src.quote_no,
 			"custom_remarks": src.remarks, "custom_art_no": src.artwork_no,
 			"custom_art_version": src.artwork_version,
-			"custom_artwork_status": src.artwork_status or "Pending",
+			# Artwork must be approved in this PP workflow, independently of NPD status.
+			"custom_artwork_status": "Pending",
 		}
 		return "NPD", pricing, header, lines
 
@@ -635,6 +665,7 @@ def _gather_ticket(source_type, source_name):
 			board = cb.get("custom_material_name") or ""
 		header = {
 			"custom_sales_order": so.name,
+			"custom_department": so.get("custom_department") or "",
 			"custom_customer": so.customer, "custom_customer_name": so.customer_name,
 			"custom_po_no": so.po_no, "custom_req_date": so.delivery_date,
 			"custom_colors": cint(cb.get("no_of_colors")), "custom_job_board": board,
@@ -644,7 +675,8 @@ def _gather_ticket(source_type, source_name):
 			"custom_art_version": (pl.get("artwork_version") if pl else "") or "",
 			"custom_quote_no": (pl.get("quotation_no") if pl else "") or "",
 			"custom_finishings": jt_api._finishings_text(pl) if pl else "",
-			"custom_artwork_status": "Approved",
+			# The CS Team approves artwork on the PP before it can be submitted.
+			"custom_artwork_status": "Pending",
 		}
 		return "Job", pricing, header, lines
 
@@ -940,7 +972,7 @@ def add_planning_items(production_plan, selections, consolidate=0):
 	each item's cost calculation at the (possibly edited) qty.
 
 	consolidate (Offset only): the selection is ONE combined print run — full/cut sheet qty
-	and wastage are computed for the whole group (first item's CB at the total qty) and put
+	and wastage are computed for the whole group (including tolerance quantities) and put
 	on the FIRST row only; every row still carries its own ups & cuts."""
 	if isinstance(selections, str):
 		selections = frappe.parse_json(selections) or []
@@ -956,20 +988,25 @@ def add_planning_items(production_plan, selections, consolidate=0):
 	# Combined-run sheet figures (offset consolidate): first CB at the total selected qty.
 	combined = None
 	if consolidate and not is_flexo and not npd_mode and selections:
-		total_qty = sum(flt(s.get("qty")) for s in selections)
+		total_qty = sum(flt(s.get("qty")) + max(0, flt(s.get("tolerance_qty"))) for s in selections)
 		combined = _plan_print_data(selections[0].get("calculation_breakdown"), total_qty, pricing)
 
 	pp.set(field, [])
 	for i, sel in enumerate(selections):
 		cb = sel.get("calculation_breakdown")
-		qty = flt(sel.get("qty"))
-		pd = _plan_print_data(cb, qty, pricing)
+		base_qty = flt(sel.get("qty"))
+		tolerance_qty = max(0, flt(sel.get("tolerance_qty")))
+		# Sheet/reel requirements include tolerance, but the displayed order row remains
+		# the original order quantity. The tolerance is shown only on its own row.
+		run_qty = base_qty + tolerance_qty
+		pd = _plan_print_data(cb, run_qty, pricing)
 		row = {
 			"fg_item": sel.get("fg_item") or "",
 			"item_name": sel.get("item_name") or sel.get("fg_item") or "",
 			"cost_item": sel.get("cost_item") or "",
 			"calculation_breakdown": cb or "",
-			"qty": qty, "ups": pd["ups"], "cuts": pd["cuts"],
+			"base_qty": base_qty, "qty": base_qty,
+			"ups": pd["ups"], "cuts": pd["cuts"],
 		}
 		if is_flexo:
 			row["reel_area"] = pd["reel_area"]
@@ -987,6 +1024,17 @@ def add_planning_items(production_plan, selections, consolidate=0):
 			row["cut_sheet_qty"] = pd["cut_sheet_qty"]
 			row["wastage"] = pd["wastage"]
 		pp.append(field, row)
+		# A traceable tolerance line is shown separately, but deliberately has no
+		# paper/sheet/reel figures: those are already included once on the run above.
+		if tolerance_qty:
+			pp.append(field, {
+				"fg_item": sel.get("fg_item") or "",
+				"item_name": (sel.get("item_name") or sel.get("fg_item") or "") + " (Tolerance)",
+				"cost_item": sel.get("cost_item") or "",
+				"calculation_breakdown": cb or "",
+				"tolerance_qty": tolerance_qty,
+				"qty": tolerance_qty, "is_tolerance": 1,
+			})
 
 	pp.save(ignore_permissions=True)
 	return {"added": len(selections), "field": field, "pricing_type": pricing}
@@ -1039,9 +1087,17 @@ def create_purchase_request(production_plan):
 		)
 
 	company = pp.company or jt_api._default_company()
+	department = pp.get("custom_department")
+	if not department and pp.get("custom_sales_order"):
+		department = frappe.db.get_value("Sales Order", pp.custom_sales_order, "custom_department")
+	if not department:
+		frappe.throw(
+			"Set a <b>Department</b> on the source Sales Order before creating the Purchase Request."
+		)
 	mr = frappe.new_doc("Material Request")
 	mr.material_request_type = "Purchase"
 	mr.company = company
+	mr.custom_department = department
 	mr.transaction_date = today()
 	mr.schedule_date = today()
 	for m in rows:
@@ -1124,8 +1180,7 @@ def on_production_plan_update(doc, method=None):
 
 	name = doc.name
 	if new_state == "Draft" and before is None:
-		# Artwork is validated on the Cost Sheet — pull its status + the quotation onto the
-		# plan (SO plans) rather than approving artwork here.
+		# Pull the quotation reference for the plan. Artwork is approved in this workflow.
 		_fetch_artwork_quotation(doc)
 		notify_role("BOM Team", "Production Plan created: " + name, _msg(doc, "was created — please validate / create the BOM."), doc)
 		notify_role("Supply Chain", "Production Plan created: " + name, _msg(doc, "was created — stock validation follows BOM validation."), doc)
@@ -1135,14 +1190,10 @@ def on_production_plan_update(doc, method=None):
 		if not doc.get("custom_cs_released_on"):
 			_stamp(name, {"custom_cs_released_on": now()})
 		notify_role("BOM Team", "BOM validation needed: " + name, _msg(doc, "needs BOM validation — create/confirm BOMs (Open BOM Builder / Sync BOMs), then Confirm BOM."), doc)
-	elif new_state == "Pre-Print Validation":
-		# BOM confirmed by the BOM team → stamp and hand off to the Pre-Print team.
-		_stamp(name, {"custom_bom_confirmed": 1, "custom_bom_by": _fullname(), "custom_bom_on": now()})
-		notify_role("Pre-Print Team", "Pre-print validation needed: " + name, _msg(doc, "BOM confirmed — please complete pre-print validation, then Validate Pre-Print."), doc)
 	elif new_state == "Supply Chain Validation":
-		# Pre-print validated → stamp and hand off to Supply Chain for stock validation.
-		_stamp(name, {"custom_preprint_by": _fullname(), "custom_preprint_on": now()})
-		notify_role("Supply Chain", "Stock validation needed: " + name, _msg(doc, "pre-print validated — please validate stock."), doc)
+		# BOM validation completed → Supply Chain performs stock validation.
+		_stamp(name, {"custom_bom_confirmed": 1, "custom_bom_by": _fullname(), "custom_bom_on": now()})
+		notify_role("Supply Chain", "Stock validation needed: " + name, _msg(doc, "BOM confirmed — please validate stock."), doc)
 	elif new_state == "Approved":
 		_run_stock_stub(doc)
 		_stamp(name, {"custom_stock_validated": 1, "custom_checked_by": _fullname(), "custom_checked_on": now()})
@@ -1165,9 +1216,8 @@ def on_production_plan_update(doc, method=None):
 
 
 def _fetch_artwork_quotation(doc):
-	"""For a plan sourced from a Sales Order, pull the artwork-approval status and quotation
-	from the linked Cost Sheet / Savinda Quotation (artwork is validated on the Cost Sheet,
-	not on the plan). Best-effort; never blocks."""
+	"""For a Sales Order plan, pull its quotation reference. Artwork approval is intentionally
+	performed on the Production Plan by the CS Team. Best-effort; never blocks."""
 	try:
 		cost_item = None
 		for tl in (doc.get("custom_ticket_items") or []):
@@ -1180,9 +1230,6 @@ def _fetch_artwork_quotation(doc):
 		if not cs:
 			return
 		vals = {}
-		aw = frappe.db.get_value("Cost Sheet", cs, "artwork_status")
-		if aw:
-			vals["custom_artwork_status"] = aw
 		sq = frappe.db.get_value(
 			"Savinda Quotation", {"cost_sheet": cs}, "name", order_by="creation desc")
 		if sq and not doc.get("custom_quote_no"):

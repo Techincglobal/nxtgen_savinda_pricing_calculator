@@ -4,14 +4,28 @@
 
 frappe.ui.form.on("Production Plan", {
 	refresh: function (frm) {
-		if (frm.doc.docstatus === 0 && (frm.doc.mr_items || []).length) {
+		// Custom actions follow the Production Plan workflow. This keeps a user from
+		// performing a later team's task while the plan is still with another team.
+		var is_ticket_plan = !frm.is_new() && !!frm.doc.custom_ticket_type;
+		var is_draft = frm.doc.docstatus === 0;
+		var workflow_state = frm.doc.workflow_state || "Draft";
+		var is_cs_stage = is_ticket_plan && is_draft && workflow_state === "Draft";
+		var is_bom_stage = is_ticket_plan && is_draft && workflow_state === "BOM Validation";
+		var is_system_manager = frappe.user.has_role("System Manager");
+		var is_supply_stage = is_ticket_plan && is_draft && workflow_state === "Supply Chain Validation";
+		var can_view_ticket = is_ticket_plan && [
+			"Supply Chain Validation", "Approved", "Submitted"
+		].indexOf(workflow_state) !== -1;
+
+		// Supply Chain: wastage and purchasing happen only after CS artwork approval.
+		if (is_supply_stage && (frm.doc.mr_items || []).length) {
 			frm.add_custom_button(__("Add Wastage"), function () {
 				_show_wastage_dialog(frm);
 			}, __("Actions"));
 		}
 
-		// Fetch/refresh the Job Ticket header + line specs from the source (SO / NPD).
-		if (!frm.is_new() && (frm.doc.po_items || []).length) {
+		// CS Team: prepare and verify the source details before handing off to BOM.
+		if (is_cs_stage && (frm.doc.po_items || []).length) {
 			frm.add_custom_button(__("Fetch Job Ticket Details"), function () {
 				frappe.call({
 					method: "nxtgen_savinda_pricing_calculator.api.production_plan.fetch_ticket_details",
@@ -25,8 +39,8 @@ frappe.ui.form.on("Production Plan", {
 			}, __("Actions"));
 		}
 
-		// BOM team helpers — for ticket plans still awaiting BOMs (draft only).
-		if (!frm.is_new() && frm.doc.docstatus === 0 && frm.doc.custom_ticket_type) {
+		// BOM Team: build/reconcile BOMs only during BOM Validation.
+		if (is_bom_stage) {
 			if (frm.doc.custom_needs_bom) {
 				frm.dashboard.set_headline(
 					'<span class="indicator orange">Some items have no BOM</span> — Open BOM Builder to create them, then Sync BOMs.'
@@ -62,15 +76,17 @@ frappe.ui.form.on("Production Plan", {
 			}, __("Actions"));
 		}
 
-		// Manufacturing planning — pull FGs into the planning table with print data.
-		if (!frm.is_new() && frm.doc.docstatus === 0 && frm.doc.custom_ticket_type) {
+		// CS Team defines runs in Draft. A System Manager can recover a plan that was
+		// sent to BOM Validation before the runs were added, without exposing the
+		// planning action to ordinary BOM users.
+		if (is_cs_stage || (is_bom_stage && is_system_manager)) {
 			frm.add_custom_button(__("Get Finished Goods for Manufacture"), function () {
 				_get_manufacture_fg_dialog(frm);
 			}, __("Actions"));
 		}
 
-		// Procurement — create a Purchase Request (Material Request) from raw materials.
-		if (!frm.is_new() && frm.doc.docstatus === 0 && frm.doc.custom_ticket_type
+		// Supply Chain: create purchasing demand only in Stock/Supply validation.
+		if (is_supply_stage
 			&& (frm.doc.mr_items || []).length) {
 			frm.add_custom_button(__("Create Purchase Request"), function () {
 				frappe.call({
@@ -92,8 +108,8 @@ frappe.ui.form.on("Production Plan", {
 			}, __("Actions"));
 		}
 
-		// Job Ticket PDF — pick the print format relevant to the type (Offset / Flexo).
-		if (!frm.is_new() && frm.doc.custom_ticket_type) {
+		// The approved production document is relevant from Artwork Approval onward.
+		if (can_view_ticket) {
 			frm.add_custom_button(__("View/Download Job Ticket"), function () {
 				var fmt = (frm.doc.custom_pricing_type === "Flexo") ? "Flexo Job Ticket" : "Offset Job Ticket";
 				var url = "/api/method/frappe.utils.print_format.download_pdf?doctype=Production+Plan&name="
@@ -119,11 +135,12 @@ function _get_manufacture_fg_dialog(frm) {
 				return "<tr>"
 					+ "<td style='text-align:center'><input type='checkbox' class='fg-sel' data-idx='" + i + "' checked></td>"
 					+ "<td>" + frappe.utils.escape_html(it.item_name || it.fg_item || "") + "</td>"
-					+ "<td><input type='number' class='fg-qty' data-idx='" + i + "' value='" + (it.qty || 0) + "' style='width:120px'></td>"
+					+ "<td><input type='number' min='0' class='fg-qty' data-idx='" + i + "' value='" + (it.qty || 0) + "' style='width:110px'></td>"
+					+ "<td><input type='number' min='0' class='fg-tolerance-qty' data-idx='" + i + "' value='0' style='width:110px'></td>"
 					+ "</tr>";
 			}).join("");
 			var html = "<table class='table table-bordered' style='font-size:12px;margin-bottom:0'>"
-				+ "<thead><tr><th style='width:40px'></th><th>Item</th><th style='width:130px'>Qty</th></tr></thead>"
+				+ "<thead><tr><th style='width:40px'></th><th>Item</th><th style='width:120px'>Order Qty</th><th style='width:120px'>Tolerance Qty</th></tr></thead>"
 				+ "<tbody>" + rows + "</tbody></table>";
 			var fields = [];
 			if (is_offset) {
@@ -142,10 +159,13 @@ function _get_manufacture_fg_dialog(frm) {
 					$w.find(".fg-sel:checked").each(function () {
 						var idx = parseInt($(this).attr("data-idx"), 10);
 						var qty = parseFloat($w.find(".fg-qty[data-idx='" + idx + "']").val()) || 0;
+						var tolerance_qty = parseFloat($w.find(".fg-tolerance-qty[data-idx='" + idx + "']").val()) || 0;
+						if (qty <= 0) { frappe.msgprint(__("Order Qty must be greater than zero.")); return false; }
+						if (tolerance_qty < 0) { frappe.msgprint(__("Tolerance Qty cannot be negative.")); return false; }
 						var it = items[idx];
 						sel.push({
 							fg_item: it.fg_item, item_name: it.item_name, cost_item: it.cost_item,
-							calculation_breakdown: it.calculation_breakdown, qty: qty
+							calculation_breakdown: it.calculation_breakdown, qty: qty, tolerance_qty: tolerance_qty
 						});
 					});
 					if (!sel.length) { frappe.msgprint(__("Select at least one item.")); return; }

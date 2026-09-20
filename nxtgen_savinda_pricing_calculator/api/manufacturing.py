@@ -13,6 +13,32 @@ def _fmt_sheets(v):
 	return ("%.0f" % v) if v == int(v) else ("%.2f" % v)
 
 
+def _foil_summary_from_cb(cb):
+	"""Return Product Library foil flags/details from a saved Flexo calculation."""
+	if not cb or not cb.get("ui_state"):
+		return {"cold_foil": 0, "hot_foil": 0, "foil_details": ""}
+	try:
+		state = json.loads(cb.get("ui_state") or "{}") or {}
+	except Exception:
+		return {"cold_foil": 0, "hot_foil": 0, "foil_details": ""}
+	cold = hot = 0
+	details, seen = [], set()
+	for spec in (state.get("selected_specs") or []):
+		for foil in ((spec.get("machine_assignment") or {}).get("foils") or []):
+			group = (foil.get("foil_group") or "").strip().upper()
+			name = (foil.get("foil_name") or foil.get("foil_key") or "").strip()
+			if not name:
+				continue
+			cold = cold or int(group == "COLD")
+			hot = hot or int(group == "HOT")
+			pct = flt(foil.get("percentage") or 100)
+			label = (group + ": " if group else "") + name + (" (%g%%)" % pct)
+			if label not in seen:
+				seen.add(label)
+				details.append(label)
+	return {"cold_foil": cold, "hot_foil": hot, "foil_details": ", ".join(details)}
+
+
 def validate_base_material_transfer_cap(doc, method=None):
 	"""Cap base-material WIP transfers at the plan's Full Sheets (+ Re-Issue Count buffer).
 
@@ -199,6 +225,10 @@ def _upsert_product_library(fg_item_code, cost_item=None, customer_ref=None, ove
 			"length_mm":             l,
 			"bom_remark":            ci.get("bom_remark") or "",
 		}
+		# A foil assignment is stored with the Flexo calculation, not as a normal
+		# finishing row. Carry its category and exact foil/coverage to the FG's
+		# Product Library automatically.
+		pl_data.update(_foil_summary_from_cb(cb))
 		# Copy the cost-spec linked finishings (Finishing-group specs on the CB) so the
 		# Product Library lists the same finishings quoted for the item.
 		try:

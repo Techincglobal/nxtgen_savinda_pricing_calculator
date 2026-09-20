@@ -290,7 +290,32 @@ def get_ticket_print_data(production_plan_name):
 
 	lines = []
 	ticket_rows = doc.get("custom_ticket_items") or []
-	if ticket_rows:
+	plan_rows = doc.get(plan_field) or []
+	ticket_by_fg = {r.get("fg_item"): r for r in ticket_rows if r.get("fg_item")}
+	# Manufacturing Planning is the authoritative item breakdown for the job card.
+	# It includes the separately recorded tolerance rows and its calculated sheet quantities.
+	if plan_rows:
+		for p in plan_rows:
+			r = ticket_by_fg.get(p.get("fg_item")) or {}
+			is_tolerance = 1 if p.get("is_tolerance") else 0
+			shown_qty = _num(p.get("tolerance_qty") if is_tolerance else (p.get("base_qty") or p.get("qty")))
+			item_name = p.get("item_name") or r.get("description") or p.get("fg_item") or ""
+			lines.append({
+				"item_code": p.get("fg_item") or "", "item_name": item_name,
+				"description": item_name, "qty": shown_qty,
+				"order_qty": _num(p.get("base_qty")) if not is_tolerance else 0,
+				"tolerance_qty": _num(p.get("tolerance_qty")) if is_tolerance else 0,
+				"is_tolerance": is_tolerance, "has_bom": 1 if r.get("has_bom") else 0,
+				"product_code": r.get("product_code") or "", "size": r.get("size") or "",
+				"variant_value": (frappe.db.get_value("Item", p.get("fg_item"), "custom_variant_value") if p.get("fg_item") else "") or "",
+				"batch_no": r.get("batch_no") or "", "pack_date": r.get("pack_date"), "exp_date": r.get("exp_date"),
+				"full_sheets": _num(p.get("full_sheet_qty")), "cut_sheets": _num(p.get("cut_sheet_qty")),
+				"wastage": _num(p.get("wastage")), "cuts": int(p.get("cuts") or 0), "ups": int(p.get("ups") or 0),
+				"full_sheet_size": r.get("full_sheet_size") or "", "cut_sheet_size": r.get("cut_sheet_size") or "",
+				"reel_length": _num(r.get("reel_length")), "reel_width": _num(r.get("reel_width")),
+				"reel_area": _num(p.get("reel_area")), "slit_width": r.get("slit_width") or "",
+			})
+	elif ticket_rows:
 		for r in ticket_rows:
 			item_name = r.get("description") or (frappe.db.get_value("Item", r.fg_item, "item_name") if r.get("fg_item") else "") or r.get("fg_item") or ""
 			pl = plan_by_fg.get(r.get("fg_item"))
@@ -338,9 +363,7 @@ def get_ticket_print_data(production_plan_name):
 				"reel_area": _num(r.get("custom_reel_area")), "slit_width": r.get("custom_slit_width") or "",
 			})
 
-	# Base material(s) = the board/paper, which is NOT listed among "other materials" (it is
-	# shown via the Board/Paper section + the line's Full/Cut Sheets). Collect them from each
-	# line's Calculation Breakdown so they can be excluded.
+	# Raw materials are consolidated into one print section, including board/paper.
 	base_items = set()
 	for r in ticket_rows:
 		cbn = r.get("calculation_breakdown")
@@ -354,8 +377,6 @@ def get_ticket_print_data(production_plan_name):
 	# (the gross BOM requirement) and drop the base material.
 	agg = {}
 	for m in (doc.get("mr_items") or []):
-		if m.item_code in base_items:
-			continue
 		a = agg.get(m.item_code)
 		if not a:
 			a = {"item_code": m.item_code,
@@ -373,7 +394,7 @@ def get_ticket_print_data(production_plan_name):
 	} for a in agg.values()]
 
 	# Fallback for draft plans (no Material Request yet): explode each FG's BOM for the full
-	# production requirement, still excluding the base material.
+	# production requirement, consolidated by material.
 	if not materials:
 		for r in (doc.get("po_items") or []):
 			bom_no = r.get("bom_no")
@@ -386,7 +407,10 @@ def get_ticket_print_data(production_plan_name):
 			bom_qty = flt(bom.quantity) or 1
 			scale = (flt(r.get("planned_qty")) / bom_qty) if bom_qty else flt(r.get("planned_qty"))
 			for bi in (bom.get("exploded_items") or bom.get("items") or []):
-				if bi.item_code in base_items:
+				key = bi.item_code
+				found = next((x for x in materials if x["item_code"] == key), None)
+				if found:
+					found["quantity"] = _num(flt(found["quantity"]) + flt(bi.get("stock_qty") or bi.get("qty")) * scale)
 					continue
 				materials.append({
 					"item_code": bi.item_code,
@@ -422,7 +446,7 @@ def get_ticket_print_data(production_plan_name):
 		if bomc.get("custom_cut_sheet_size") or plv.get("cut_sheet_size"):
 			l["cut_sheet_size"] = bomc.get("custom_cut_sheet_size") or plv.get("cut_sheet_size")
 		l["no_of_colors"] = cint(bomc.get("custom_no_of_colors") or plv.get("no_of_colors") or l.get("no_of_colors") or 0)
-		if bomc.get("custom_no_of_ups") or bomc.get("custom_cut_sheet_ups"):
+		if not plan_rows and (bomc.get("custom_no_of_ups") or bomc.get("custom_cut_sheet_ups")):
 			_sh = _sheet_counts_from_bom(bomc, l.get("qty"), _cfg)
 			l["ups"], l["cuts"] = _sh["ups"], _sh["cuts"]
 			l["cut_sheets"] = _num(_sh["cut_sheets"]); l["wastage"] = _num(_sh["wastage"]); l["full_sheets"] = _num(_sh["full_sheets"])
@@ -551,6 +575,18 @@ def get_ticket_print_data(production_plan_name):
 			except Exception:
 				pass
 
+	# Optional manually selected materials used specifically for tolerance production.
+	tolerance_materials = []
+	for m in (doc.get("custom_tolerance_materials") or []):
+		if not m.get("item_code") or not flt(m.get("qty")):
+			continue
+		tolerance_materials.append({
+			"item_code": m.get("item_code"),
+			"item_name": m.get("item_name") or frappe.db.get_value("Item", m.item_code, "item_name") or m.item_code,
+			"uom": m.get("uom") or frappe.db.get_value("Item", m.item_code, "stock_uom") or "",
+			"quantity": _num(m.get("qty")), "remarks": m.get("remarks") or "",
+		})
+
 	return {
 		"doc": doc,
 		"is_flexo": is_flexo,
@@ -558,6 +594,7 @@ def get_ticket_print_data(production_plan_name):
 		"logo": _company_logo(),
 		"lines": lines,
 		"materials": materials,
+		"tolerance_materials": tolerance_materials,
 		"header": header,
 		"approvals": [
 			{"label": "Created by",              "by": doc.get("custom_created_by") or "", "on": doc.get("custom_created_on")},

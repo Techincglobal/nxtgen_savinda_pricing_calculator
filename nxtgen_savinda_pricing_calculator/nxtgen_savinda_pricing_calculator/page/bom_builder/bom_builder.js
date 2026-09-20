@@ -75,6 +75,11 @@ function bb_mount_app(el) {
 		computed: {
 			selectedFGData() { return this.fgItems.find(function (f) { return f.item_code === this.selectedFG; }, this) || null; },
 			canCreate() { return this.selectedFG && this.mfgQty > 0 && this.operations.length > 0; },
+			outputFgOrderError() {
+				var active = this.operations.filter(function (op) { return !op.exclude_from_bom; });
+				var index = active.findIndex(function (op) { return op.output_is_fg; });
+				return index >= 0 && index !== active.length - 1;
+			},
 			costItem() {
 				var fg = this.selectedFGData;
 				return fg ? (fg.cost_item || '') : '';
@@ -92,6 +97,20 @@ function bb_mount_app(el) {
 		mounted() { this.loadFromUrl(); },
 		methods: {
 			fmt, fmtq, fmtN,
+
+			// A spec name is not a safe identity: it can be repeated and a manually-added
+			// operation does not exist in the calculation at all. Keep a stable key so saved
+			// order/customisations survive a reload.
+			ensureOperationKeys(ops) {
+				var seen = {};
+				(ops || []).forEach(function (op) {
+					if (op.operation_key) return;
+					var base = op.manual ? 'manual' : ('spec:' + (op.spec_name || 'operation'));
+					seen[base] = (seen[base] || 0) + 1;
+					op.operation_key = base + ':' + seen[base];
+				});
+				return ops;
+			},
 
 			loadFromUrl() {
 				var p = new URLSearchParams(window.location.search);
@@ -339,7 +358,7 @@ function bb_mount_app(el) {
 						// Seed the editable drivers from the effective calculation.
 						if (d.pricing_type) self.pricingType = d.pricing_type;
 						if (d.drivers && !useDrivers) { self.drivers = Object.assign({}, self.drivers, d.drivers); self.driversDirty = false; }
-								var ops = d.operations || [];
+						var ops = self.ensureOperationKeys(d.operations || []);
 						ops.forEach(function (op) {
 							if (!Array.isArray(op.materials))          op.materials = [];
 							if (!('split_to_item_unit' in op))         op.split_to_item_unit = false;
@@ -394,10 +413,16 @@ function bb_mount_app(el) {
 							args:   { fg_item: self.selectedFG },
 							callback: function (rc) {
 								if (!rc.message || !rc.message.operations) return;
-								var savedOps = rc.message.operations;
-								// Match by spec_name and overlay user customisations
+								var rawSavedOps = rc.message.operations || [];
+								var legacySavedOps = rawSavedOps.filter(function (op) { return !op.operation_key; });
+								var savedOps = self.ensureOperationKeys(rawSavedOps);
+								var savedByKey = {};
+								savedOps.forEach(function (op) { savedByKey[op.operation_key] = op; });
+								// Match by the stable operation key. Older saved configurations do not
+								// have keys, so retain the former spec-name fallback for them.
 								self.operations.forEach(function (op) {
-									var saved = savedOps.find(function(s){ return s.spec_name === op.spec_name; });
+									var saved = savedByKey[op.operation_key]
+										|| legacySavedOps.find(function(s){ return s.spec_name === op.spec_name; });
 									if (!saved) return;
 									if (saved.sfg_code)          op.sfg_code = saved.sfg_code;
 									if (saved.sfg_name)          op.sfg_name = saved.sfg_name;
@@ -412,12 +437,18 @@ function bb_mount_app(el) {
 									if ('has_quality_inspection' in saved)      op.has_quality_inspection      = saved.has_quality_inspection;
 									if ('quality_inspection_template' in saved) op.quality_inspection_template = saved.quality_inspection_template;
 								});
-								// Restore the user's SAVED operation order (match by spec_name).
+								// Manual operations are not returned from the calculator; add them back
+								// before restoring the saved order.
+								savedOps.forEach(function (saved) {
+									if (!saved.manual || self.operations.some(function (op) { return op.operation_key === saved.operation_key; })) return;
+									self.operations.push(Object.assign({}, saved, { materials: (saved.materials || []).slice() }));
+								});
+								// Restore the user's SAVED operation order.
 								var savedOrder = {};
-								savedOps.forEach(function (s, i) { savedOrder[s.spec_name] = i; });
+								savedOps.forEach(function (s, i) { savedOrder[s.operation_key] = i; });
 								self.operations.sort(function (a, b) {
-									var ai = (a.spec_name in savedOrder) ? savedOrder[a.spec_name] : 9999;
-									var bi = (b.spec_name in savedOrder) ? savedOrder[b.spec_name] : 9999;
+									var ai = (a.operation_key in savedOrder) ? savedOrder[a.operation_key] : 9999;
+									var bi = (b.operation_key in savedOrder) ? savedOrder[b.operation_key] : 9999;
 									return ai - bi;
 								});
 								self.syncChain();
@@ -554,6 +585,7 @@ function bb_mount_app(el) {
 						split_to_item_unit: false, exclude_from_bom: false, output_is_fg: false,
 						erp_operation: v.erp_operation || '', has_quality_inspection: false, quality_inspection_template: '',
 						manual: true,
+						operation_key: 'manual:' + Date.now() + ':' + self.operations.length,
 					});
 					self.syncChain();
 					frappe.show_alert({ message: 'Operation added — drag it to the right position in the chain.', indicator: 'blue' }, 4);
@@ -989,7 +1021,7 @@ function bb_mount_app(el) {
     <div class="bb-card" v-if="selectedFG">
       <div class="bb-card-title-row">
         <div class="bb-card-title">
-          SFG Operation Chain
+          {{ pricingType === 'Flexo' ? 'Flexo SFG Operation Chain' : 'Offset SFG Operation Chain' }}
           <span class="bb-count">{{ operations.length }} ops</span>
           <span class="bb-hint" style="margin-left:8px">Drag ≡ to reorder — chain updates automatically</span>
         </div>
@@ -1000,6 +1032,10 @@ function bb_mount_app(el) {
       </div>
 
       <div v-else>
+        <div v-if="outputFgOrderError" class="bb-error" style="margin:10px 14px 0">
+          <b>Output = FG must be the final active operation.</b> Drag that operation to the end,
+          or clear the marker. Creating the BOM is blocked until the chain is complete.
+        </div>
         <!-- Chain legend -->
         <div class="bb-chain-legend">
           <span class="bb-leg-in">▶ Input Material</span>
@@ -1168,7 +1204,7 @@ function bb_mount_app(el) {
         Set FG BOM as Default
       </label>
       <div style="display:flex;gap:8px">
-        <button class="bb-btn bb-btn-create" @click="createBOM" :disabled="!canCreate||saving" style="flex:1">
+        <button class="bb-btn bb-btn-create" @click="createBOM" :disabled="!canCreate||saving||outputFgOrderError" style="flex:1">
           {{ saving ? 'Creating…' : (selectedFGs.length > 1 ? ('⚙ Create Consolidated BOM for ' + selectedFGs.length + ' FGs') : ('⚙ Create BOM Chain for ' + selectedFG)) }}
         </button>
         <button class="bb-btn" style="background:#1e40af;color:#fff;padding:10px 16px;border:none;border-radius:5px;cursor:pointer;font-size:13px"

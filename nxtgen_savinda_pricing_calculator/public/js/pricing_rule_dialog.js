@@ -10,11 +10,14 @@ nxtgen_pricing.showForFGs = function (frm, fg_items, on_done) {
 	on_done = on_done || function () {};
 	if (!fg_items || !fg_items.length) { on_done(); return; }
 
-	var currency = frm.doc.currency || "";
-	var crate = parseFloat(frm.doc.conversion_rate) || 1;
-	var customer = frm.doc.customer || "";
+	// The dialog is also opened from an FG Item after a quotation is complete.
+	// It therefore accepts either a Frappe form or a small form-like context.
+	var source_doc = (frm && frm.doc) || {};
+	var currency = source_doc.currency || "";
+	var crate = parseFloat(source_doc.conversion_rate) || 1;
+	var customer = source_doc.customer || "";
 	var valid_from = frappe.datetime.get_today();
-	var valid_upto = frm.doc.valid_till || null;
+	var valid_upto = source_doc.valid_till || null;
 	var API = "nxtgen_savinda_pricing_calculator.api.pricing_rule.";
 
 	function conv(v) { return Math.round(((parseFloat(v) || 0) / crate) * 100) / 100; }
@@ -53,7 +56,8 @@ nxtgen_pricing.showForFGs = function (frm, fg_items, on_done) {
 			fieldtype: "HTML",
 			options: "<div style='padding:6px 10px;background:#f0f4ff;border-radius:4px;font-size:12px;color:#1a3a5c'>"
 				+ "Set the qty ranges and selling rate (in <b>" + frappe.utils.escape_html(cur_lbl) + "</b>) for each product. "
-				+ "These are saved as <b>Pricing Rules</b>, so a Sales Order prices each line automatically by quantity."
+				+ "These are saved as <b>Pricing Rules</b>, so a Sales Order prices each line automatically by quantity. "
+				+ "Use <b>Add Row</b> for a pricing-only new quantity tier; create a new calculation qty break first when its production cost must also be recalculated."
 				+ (customer ? " Scoped to customer <b>" + frappe.utils.escape_html(customer) + "</b>." : " (No customer — rules apply to any customer.)")
 				+ "<br><span style='color:#8a6d1f'>Max Qty = 0 means no upper limit. Ranges should not overlap. "
 				+ "A higher priority wins when dated rules overlap (use 20 for a short temporary override).</span></div>",

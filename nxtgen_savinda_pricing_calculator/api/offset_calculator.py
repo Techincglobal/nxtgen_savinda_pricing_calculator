@@ -2271,18 +2271,32 @@ def get_calc_switcher(cost_sheet=None, calculation_breakdown=None):
 
 
 @frappe.whitelist()
-def create_variant_for_switcher(source_cost_item, cost_sheet=None, kind="qty", new_qty=None, new_name=None):
+def create_variant_for_switcher(source_cost_item, cost_sheet=None, kind="qty", new_qty=None,
+                                new_name=None, new_selling_unit_price=None):
     """Create a qty break (kind='qty') or finishing variant (kind='finishing') of a cost item,
     add it to the cost sheet (draft only), and return the new CB so the calculator reloads to it."""
     if not source_cost_item or not frappe.db.exists("cost Item", source_cost_item):
         return {"error": "Source cost item not found"}
+    if not new_qty or flt(new_qty) <= 0:
+        return {"error": "Order quantity must be greater than 0"}
     if kind == "qty":
         res = add_qty_variant(source_cost_item, new_qty)
     else:
-        res = duplicate_cost_item(source_cost_item, new_name=new_name or None, new_qty=None)
+        if not (new_name or "").strip():
+            return {"error": "Enter a quotation item name for the finishing variant"}
+        res = duplicate_cost_item(source_cost_item, new_name=new_name.strip(), new_qty=new_qty)
     if not res or res.get("error"):
         return res or {"error": "Failed to create variant"}
     new_ci = res.get("new_cost_item")
+    new_cb = (res.get("new_cbs") or [None])[0]
+
+    if new_cb and new_selling_unit_price not in (None, ""):
+        unit_sell = flt(new_selling_unit_price)
+        cb_qty = flt(frappe.db.get_value("Calculation Breakdown", new_cb, "item_qty"))
+        frappe.db.set_value(
+            "Calculation Breakdown", new_cb, "selling_price", round(unit_sell * cb_qty, 2),
+            update_modified=False,
+        )
 
     if cost_sheet and frappe.db.exists("Cost Sheet", cost_sheet):
         cs = frappe.get_doc("Cost Sheet", cost_sheet)
@@ -2299,13 +2313,26 @@ def create_variant_for_switcher(source_cost_item, cost_sheet=None, kind="qty", n
                     v = src_row.get(f)
                     if v not in (None, ""):
                         new_row[f] = v
+            if new_cb:
+                cb_values = frappe.db.get_value(
+                    "Calculation Breakdown", new_cb,
+                    ["selling_price", "item_qty", "profit_margin"], as_dict=True,
+                ) or {}
+                cb_qty = flt(cb_values.get("item_qty")) or flt(ci.get("item_qty")) or 1
+                sell_unit = round(flt(cb_values.get("selling_price")) / cb_qty, 4)
+                new_row.update({
+                    "profit_margin": flt(cb_values.get("profit_margin")),
+                    "selling_unit_price": sell_unit,
+                    "ammount": round(flt(ci.get("item_qty")) * flt(ci.get("unit_cost")), 2),
+                    "selling_ammount": round(flt(ci.get("item_qty")) * sell_unit, 2),
+                })
             cs.append("pricing_list", new_row)
             # Skip link validation so a pre-existing stale link elsewhere on the sheet (e.g. an
             # old sales_person) can't block adding the variant row.
             cs.flags.ignore_links = True
             cs.save(ignore_permissions=True)
             frappe.db.commit()
-    return {"new_cost_item": new_ci, "new_cb": (res.get("new_cbs") or [None])[0], "cost_sheet": cost_sheet}
+    return {"new_cost_item": new_ci, "new_cb": new_cb, "cost_sheet": cost_sheet}
 
 
 @frappe.whitelist()

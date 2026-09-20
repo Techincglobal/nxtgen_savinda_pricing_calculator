@@ -60,6 +60,7 @@ def after_install():
 	_ensure_property_setters()
 	_ensure_roles()
 	_ensure_workflow()
+	_migrate_artwork_approval_plans_to_supply_chain()
 	_ensure_quotation_workflow()
 	_ensure_npd_request_workflow()
 	_retire_sales_order_npd_workflow()
@@ -78,6 +79,7 @@ def after_migrate():
 	_ensure_property_setters()
 	_ensure_roles()
 	_ensure_workflow()
+	_migrate_artwork_approval_plans_to_supply_chain()
 	_ensure_quotation_workflow()
 	_ensure_npd_request_workflow()
 	_retire_sales_order_npd_workflow()
@@ -211,8 +213,8 @@ WORKFLOW_NAME = "Production Plan Approval"
 def _ensure_workflow():
 	"""Seed / reconcile the Production Plan approval Workflow.
 
-	Artwork is validated on the Cost Sheet, so there is NO artwork state here — the flow is
-	CS Team -> BOM Team (BOM Validation) -> Supply Chain (Stock Validation) -> submit. The
+	Artwork validation is an independent FG/Product Library record. The flow is
+	CS Team -> BOM Team (BOM Validation) -> Supply Chain -> submit. The
 	definition is code-owned: an existing Workflow of this name is RECONCILED to match the
 	code (states/transitions rebuilt) so definition changes apply on migrate."""
 	if not frappe.db.table_exists("Workflow"):
@@ -222,7 +224,6 @@ def _ensure_workflow():
 		states = [
 			("Draft",                   "0", "CS Team",            ""),
 			("BOM Validation",          "0", "BOM Team",           "Warning"),
-			("Pre-Print Validation",    "0", "Pre-Print Team",     "Warning"),
 			("Supply Chain Validation", "0", "Supply Chain",       "Warning"),
 			("Approved",                "0", "Supply Chain",       "Success"),
 			("Submitted",               "1", "Manufacturing User", "Success"),
@@ -235,7 +236,6 @@ def _ensure_workflow():
 				}).insert(ignore_permissions=True)
 
 		actions = ["Send for BOM", "Confirm BOM", "Reject BOM",
-		           "Validate Pre-Print", "Reject Pre-Print",
 		           "Validate Stock", "Submit Plan", "Reopen"]
 		for action in actions:
 			if not frappe.db.exists("Workflow Action Master", action):
@@ -246,10 +246,8 @@ def _ensure_workflow():
 		# (from_state, action, next_state, allowed role)
 		transitions = [
 			("Draft",                   "Send for BOM",      "BOM Validation",          "CS Team"),
-			("BOM Validation",          "Confirm BOM",       "Pre-Print Validation",    "BOM Team"),
+			("BOM Validation",          "Confirm BOM",       "Supply Chain Validation", "BOM Team"),
 			("BOM Validation",          "Reject BOM",        "Rejected",                "BOM Team"),
-			("Pre-Print Validation",    "Validate Pre-Print","Supply Chain Validation", "Pre-Print Team"),
-			("Pre-Print Validation",    "Reject Pre-Print",  "Rejected",                "Pre-Print Team"),
 			("Supply Chain Validation", "Validate Stock",    "Approved",                "Supply Chain"),
 			("Approved",                "Submit Plan",       "Submitted",               "Manufacturing User"),
 			("Rejected",                "Reopen",            "Draft",                   "CS Team"),
@@ -281,6 +279,24 @@ def _ensure_workflow():
 	except Exception:
 		frappe.log_error(
 			title="pricing_calculator: ensure workflow failed",
+			message=frappe.get_traceback(),
+		)
+
+
+def _migrate_artwork_approval_plans_to_supply_chain():
+	"""Do not strand plans after artwork becomes an independent FG validation."""
+	try:
+		if not frappe.db.table_exists("Production Plan"):
+			return
+		frappe.db.set_value(
+			"Production Plan",
+			{"workflow_state": "Artwork Approval", "docstatus": 0, "custom_ticket_type": ["!=", ""]},
+			"workflow_state", "Supply Chain Validation", update_modified=False,
+		)
+		frappe.db.commit()
+	except Exception:
+		frappe.log_error(
+			title="pricing_calculator: migrate artwork-approval plans failed",
 			message=frappe.get_traceback(),
 		)
 
@@ -574,6 +590,18 @@ def _ensure_custom_fields():
 					"description":  "Wastage portion included in Quantity (added at production planning). Kept separate for print formats.",
 				},
 			],
+			# Department follows the commercial order through planning and purchasing, so
+			# Supply Chain can identify which department owns each request.
+			"Material Request": [
+				{
+					"fieldname": "custom_department",
+					"label": "Department",
+					"fieldtype": "Link",
+					"options": "Department",
+					"insert_after": "company",
+					"in_standard_filter": 1,
+				},
+			],
 			# Packing details carried from the Cost Sheet flow; editable on the SO per PO.
 			"Sales Order": [
 				{
@@ -609,6 +637,14 @@ def _ensure_custom_fields():
 			"insert_after": "po_date",
 			"label": "CS Person",
 			"options": "Employee",
+			},
+			{
+			"fieldname": "custom_department",
+			"label": "Department",
+			"fieldtype": "Link",
+			"options": "Department",
+			"insert_after": "custom_cs_person",
+			"in_standard_filter": 1,
 			},
 			],
 			"Sales Order Item": [
@@ -769,7 +805,8 @@ def _ensure_custom_fields():
 				{"fieldname": "custom_pricing_type", "label": "Pricing Type", "fieldtype": "Select", "options": "Offset\nFlexo", "insert_after": "custom_ticket_type", "in_standard_filter": 1},
 				{"fieldname": "custom_npd_request", "label": "NPD Request", "fieldtype": "Link", "options": "NPD Request", "insert_after": "custom_pricing_type"},
 				{"fieldname": "custom_sales_order", "label": "Source Sales Order", "fieldtype": "Link", "options": "Sales Order", "insert_after": "custom_npd_request", "read_only": 1},
-				{"fieldname": "workflow_state", "label": "Workflow State", "fieldtype": "Link", "options": "Workflow State", "insert_after": "custom_sales_order", "read_only": 1, "allow_on_submit": 1, "in_standard_filter": 1, "no_copy": 1},
+				{"fieldname": "custom_department", "label": "Department", "fieldtype": "Link", "options": "Department", "insert_after": "custom_sales_order", "read_only": 1, "in_standard_filter": 1},
+				{"fieldname": "workflow_state", "label": "Workflow State", "fieldtype": "Link", "options": "Workflow State", "insert_after": "custom_department", "read_only": 1, "allow_on_submit": 1, "in_standard_filter": 1, "no_copy": 1},
 				{"fieldname": "custom_bom_confirmed", "label": "BOM Confirmed", "fieldtype": "Check", "insert_after": "workflow_state", "read_only": 1, "allow_on_submit": 1},
 				{"fieldname": "custom_stock_validated", "label": "Stock Validated", "fieldtype": "Check", "insert_after": "custom_bom_confirmed", "read_only": 1, "allow_on_submit": 1},
 				{"fieldname": "custom_needs_bom", "label": "Has Items Pending BOM", "fieldtype": "Check", "insert_after": "custom_stock_validated", "read_only": 1, "allow_on_submit": 1, "description": "Some fetched items have no BOM yet — sent to the BOM team. Use 'Open BOM Builder' then 'Sync BOMs'."},
@@ -804,6 +841,8 @@ def _ensure_custom_fields():
 				{"fieldname": "custom_offset_planning", "label": "Offset Planning", "fieldtype": "Table", "options": "Production Planning Item", "insert_after": "custom_offset_planning_sec"},
 				{"fieldname": "custom_flexo_planning_sec", "label": "Manufacturing Planning (Flexo)", "fieldtype": "Section Break", "insert_after": "custom_offset_planning", "depends_on": "eval:doc.custom_pricing_type=='Flexo'"},
 				{"fieldname": "custom_flexo_planning", "label": "Flexo Planning", "fieldtype": "Table", "options": "Production Planning Item", "insert_after": "custom_flexo_planning_sec"},
+				{"fieldname": "custom_tolerance_materials_sec", "label": "Tolerance Materials", "fieldtype": "Section Break", "insert_after": "custom_flexo_planning", "description": "Optional extra materials required for the tolerance production quantity."},
+				{"fieldname": "custom_tolerance_materials", "label": "Tolerance Materials", "fieldtype": "Table", "options": "Production Plan Tolerance Material", "insert_after": "custom_tolerance_materials_sec"},
 				# Artwork + approval stamps (allow_on_submit so the workflow can fill them post-submit)
 				{"fieldname": "custom_appr_section", "label": "Ticket Approvals", "fieldtype": "Section Break", "insert_after": "custom_remarks", "collapsible": 1},
 				{"fieldname": "custom_artwork_status", "label": "Artwork Status", "fieldtype": "Select", "options": "Pending\nApproved\nRejected", "default": "Pending", "insert_after": "custom_appr_section", "read_only": 1, "allow_on_submit": 1},

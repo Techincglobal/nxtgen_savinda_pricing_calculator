@@ -686,6 +686,7 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 
 	if not operations:
 		frappe.throw("No operations defined. Please add at least one operation.")
+	operations = _normalise_operation_chain(operations)
 
 	# Variant → give every SFG code a unique suffix so its chain is fully independent.
 	variant_suffix = re.sub(r"[^A-Za-z0-9]+", "", (variant_suffix or "")).upper()[:8]
@@ -1238,6 +1239,66 @@ def _active_ops(operations):
 	return out, first_in, first_inn
 
 
+def _normalise_operation_chain(operations):
+	"""Validate and make the submitted SFG chain safe independently of the browser.
+
+	The builder normally links inputs in JavaScript after a drag/drop.  Rebuilding it here
+	means a stale browser state, a manual operation, or an excluded operation cannot leave a
+	BOM consuming the wrong SFG.  An operation marked ``Output = FG`` must be last: otherwise
+	the old implementation stopped at that operation and silently omitted the remaining steps.
+	"""
+	operations = [dict(op) for op in (operations or [])]
+	active = [op for op in operations if not op.get("exclude_from_bom")]
+	if not active:
+		frappe.throw("All operations are excluded from BOM. Include at least one operation.")
+
+	# An FG-producing operation terminates the chain. Do not silently discard any later steps.
+	fg_positions = [i for i, op in enumerate(active) if op.get("output_is_fg")]
+	if len(fg_positions) > 1:
+		frappe.throw("Only one operation can be marked 'Output = FG'.")
+	if fg_positions and fg_positions[0] != len(active) - 1:
+		frappe.throw(
+			"'Output = FG' is on <b>{0}</b>, but it is not the final active operation. "
+			"Move that operation to the end or clear the marker before creating the BOM."
+			.format(frappe.utils.escape_html(active[fg_positions[0]].get("spec_name") or "this operation"))
+		)
+
+	# Active SFG codes identify actual ERPNext items, so duplicates would merge two stages.
+	seen = set()
+	for op in active:
+		code = (op.get("sfg_code") or "").strip()
+		if not code:
+			frappe.throw("Every included operation needs an Output SFG code.")
+		if code in seen:
+			frappe.throw("Duplicate Output SFG code: <b>{0}</b>. Give each operation a unique code.".format(
+				frappe.utils.escape_html(code)))
+		seen.add(code)
+
+	# Preserve the base-material input of the first stage, then force every later active stage
+	# to consume exactly the previous active stage's SFG. Quantities/UOM remain user-editable.
+	all_sfg_codes = {(op.get("sfg_code") or "").strip() for op in operations}
+	base_code = base_name = ""
+	for op in operations:
+		candidate = (op.get("input_item_code") or "").strip()
+		if candidate and candidate not in all_sfg_codes:
+			base_code = candidate
+			base_name = op.get("input_item_name") or candidate
+			break
+	if not base_code:
+		base_code = (active[0].get("input_item_code") or "").strip()
+		base_name = active[0].get("input_item_name") or base_code
+
+	for index, op in enumerate(active):
+		if index == 0:
+			op["input_item_code"] = base_code
+			op["input_item_name"] = base_name
+		else:
+			previous = active[index - 1]
+			op["input_item_code"] = previous["sfg_code"]
+			op["input_item_name"] = previous.get("sfg_name") or previous["sfg_code"]
+	return operations
+
+
 def _per_unit_mats(op):
 	out_qty = flt(op.get("output_qty")) or 1
 	res = []
@@ -1268,6 +1329,7 @@ def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, 
 		                        json.dumps(extra_materials), is_default, submit=submit)
 	if not operations:
 		frappe.throw("No operations defined.")
+	operations = _normalise_operation_chain(operations)
 
 	_validate_materials(operations)
 

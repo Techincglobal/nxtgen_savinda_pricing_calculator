@@ -25,6 +25,11 @@
   "column_break_refs",
   "artwork_no",
   "artwork_version",
+  "artwork_validation_section",
+  "artwork_validation_status",
+  "artwork_validation_remarks",
+  "artwork_validated_by",
+  "artwork_validated_on",
   "section_tech_offset",
   "full_sheet_size",
   "cut_sheet_size",
@@ -49,6 +54,7 @@
   "section_production",
   "cold_foil",
   "hot_foil",
+  "foil_details",
   "column_break_prod",
   "embossing",
   "lamination",
@@ -158,6 +164,37 @@
    "fieldname": "artwork_version",
    "fieldtype": "Data",
    "label": "Artwork Version"
+  },
+  {
+   "fieldname": "artwork_validation_section",
+   "fieldtype": "Section Break",
+   "label": "Artwork Validation"
+  },
+  {
+   "default": "Pending",
+   "fieldname": "artwork_validation_status",
+   "fieldtype": "Select",
+   "label": "Artwork Validation Status",
+   "options": "Pending\nApproved\nRejected",
+   "read_only": 1
+  },
+  {
+   "fieldname": "artwork_validation_remarks",
+   "fieldtype": "Small Text",
+   "label": "Artwork Validation Remarks",
+   "read_only": 1
+  },
+  {
+   "fieldname": "artwork_validated_by",
+   "fieldtype": "Data",
+   "label": "Artwork Validated By",
+   "read_only": 1
+  },
+  {
+   "fieldname": "artwork_validated_on",
+   "fieldtype": "Datetime",
+   "label": "Artwork Validated On",
+   "read_only": 1
   },
   {
    "collapsible": 1,
@@ -284,6 +321,12 @@
    "fieldname": "hot_foil",
    "fieldtype": "Check",
    "label": "Hot Foil"
+  },
+  {
+   "fieldname": "foil_details",
+   "fieldtype": "Small Text",
+   "label": "Foil Details",
+   "read_only": 1
   },
   {
    "fieldname": "column_break_prod",
