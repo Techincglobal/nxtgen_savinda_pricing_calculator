@@ -891,38 +891,78 @@ def sync_boms(production_plan):
 	return {"resolved": resolved, "still_missing": still}
 
 
+@frappe.whitelist()
+def split_job_ticket_item(production_plan, ticket_item, first_qty):
+	"""Split one draft Job Ticket item into two rows without losing its FG/BOM/geometry.
+
+	Example: 1675 split at 1600 becomes two otherwise identical rows: 1600 and 75.
+	The native Production Plan rows are rebuilt too, so subsequent manufacturing planning
+	and Work Order creation use the same breakdown.
+	"""
+	roles = frappe.get_roles(frappe.session.user)
+	if "CS Team" not in roles and "System Manager" not in roles:
+		frappe.throw("Only CS Team users can split Job Ticket items.")
+	pp = frappe.get_doc("Production Plan", production_plan)
+	if pp.docstatus != 0:
+		frappe.throw("Job Ticket items can only be split while the Production Plan is a draft.")
+	row = next((r for r in (pp.get("custom_ticket_items") or []) if r.name == ticket_item), None)
+	if not row:
+		frappe.throw("Job Ticket item was not found on this Production Plan.")
+	original = flt(row.qty)
+	first_qty = flt(first_qty)
+	if first_qty <= 0 or first_qty >= original:
+		frappe.throw("Split quantity must be greater than zero and less than the current quantity ({0}).".format(original))
+	second_qty = original - first_qty
+	copy = row.as_dict().copy()
+	for key in ("name", "idx", "parent", "parentfield", "parenttype", "doctype", "docstatus", "owner", "creation", "modified", "modified_by"):
+		copy.pop(key, None)
+	row.qty = first_qty
+	copy["qty"] = second_qty
+	pp.append("custom_ticket_items", copy)
+	_build_po_items(pp)
+	pp.save(ignore_permissions=True)
+	return {"first_qty": first_qty, "second_qty": second_qty, "rows": len(pp.custom_ticket_items or [])}
+
+
 # ── Manufacturing planning: "Get Finished Goods for Manufacture" ─────────────
 @frappe.whitelist()
 def get_manufacture_fg_list(production_plan):
-	"""FG list (with default qty + cost links) to show in the Get-Finished-Goods dialog."""
+	"""Job Ticket lines (with their own qty + cost links) for the manufacturing dialog.
+
+	Do not deduplicate by FG: a manually split Job Ticket item must be shown as two selectable
+	lines (for example, 1600 and 75), even though both lines use the same FG and calculation.
+	"""
 	pp = frappe.get_doc("Production Plan", production_plan)
 	out = []
-	seen = set()
 	for tl in (pp.get("custom_ticket_items") or []):
-		key = (tl.get("fg_item") or "", tl.get("calculation_breakdown") or "", tl.get("description") or "")
-		if key in seen:
-			continue
-		seen.add(key)
-		out.append({
+		line = {
 			"fg_item": tl.get("fg_item") or "",
 			"item_name": tl.get("description") or tl.get("fg_item") or "",
 			"cost_item": tl.get("cost_item") or "",
 			"calculation_breakdown": tl.get("calculation_breakdown") or "",
 			"qty": flt(tl.get("qty")) or 1,
-		})
+		}
+		for field in _TICKET_GEOM_FIELDS:
+			line[field] = tl.get(field)
+		line.update({"batch_no": tl.get("batch_no"), "pack_date": tl.get("pack_date"), "exp_date": tl.get("exp_date")})
+		out.append(line)
 	if not out:
 		# Native plan without ticket items — fall back to the source lines.
 		source_type, source_name = _resolve_source(pp)
 		if source_type:
 			_ttype, _pr, _hdr, lines = _gather_ticket(source_type, source_name)
 			for tl in lines:
-				out.append({
+				line = {
 					"fg_item": tl.get("fg_item") or "",
 					"item_name": tl.get("description") or tl.get("fg_item") or "",
 					"cost_item": tl.get("cost_item") or "",
 					"calculation_breakdown": tl.get("calculation_breakdown") or "",
 					"qty": flt(tl.get("qty")) or 1,
-				})
+				}
+				for field in _TICKET_GEOM_FIELDS:
+					line[field] = tl.get(field)
+				line.update({"batch_no": tl.get("batch_no"), "pack_date": tl.get("pack_date"), "exp_date": tl.get("exp_date")})
+				out.append(line)
 	return out
 
 
@@ -946,7 +986,7 @@ def _recompute_sheet(cb_name, qty):
 
 def _plan_print_data(cb_name, qty, pricing_type):
 	"""Print figures for one planning row at the given qty."""
-	out = {"ups": 0, "cuts": 0, "full_sheet_qty": 0.0, "cut_sheet_qty": 0.0, "wastage": 0.0, "reel_area": 0.0}
+	out = {"ups": 0, "cuts": 0, "full_sheet_qty": 0.0, "cut_sheet_qty": 0.0, "wastage": 0.0, "reel_area": 0.0, "reel_length": 0.0, "reel_width": 0.0, "slit_width": ""}
 	if not cb_name:
 		return out
 	try:
@@ -958,6 +998,9 @@ def _plan_print_data(cb_name, qty, pricing_type):
 	if (pricing_type or "Offset") == "Flexo":
 		out["ups"] = cint(sheet.get("ups"))
 		out["reel_area"] = flt(sheet.get("reel_area"))
+		out["reel_length"] = flt(sheet.get("reel_length") or form.get("reel_length") or form.get("material_length"))
+		out["reel_width"] = flt(sheet.get("reel_width") or form.get("reel_width") or form.get("material_width"))
+		out["slit_width"] = sheet.get("slit_width") or form.get("slit_width") or ""
 	else:
 		out["ups"] = cint(form.get("no_of_ups"))
 		out["full_sheet_qty"] = flt(sheet.get("full_sheet_qty"))
@@ -972,7 +1015,7 @@ def add_planning_items(production_plan, selections, consolidate=0):
 	each item's cost calculation at the (possibly edited) qty.
 
 	consolidate (Offset only): the selection is ONE combined print run — full/cut sheet qty
-	and wastage are computed for the whole group (including tolerance quantities) and put
+	and wastage are computed for the whole group and put
 	on the FIRST row only; every row still carries its own ups & cuts."""
 	if isinstance(selections, str):
 		selections = frappe.parse_json(selections) or []
@@ -988,28 +1031,32 @@ def add_planning_items(production_plan, selections, consolidate=0):
 	# Combined-run sheet figures (offset consolidate): first CB at the total selected qty.
 	combined = None
 	if consolidate and not is_flexo and not npd_mode and selections:
-		total_qty = sum(flt(s.get("qty")) + max(0, flt(s.get("tolerance_qty"))) for s in selections)
+		total_qty = sum(flt(s.get("qty")) for s in selections)
 		combined = _plan_print_data(selections[0].get("calculation_breakdown"), total_qty, pricing)
 
 	pp.set(field, [])
 	for i, sel in enumerate(selections):
 		cb = sel.get("calculation_breakdown")
-		base_qty = flt(sel.get("qty"))
-		tolerance_qty = max(0, flt(sel.get("tolerance_qty")))
-		# Sheet/reel requirements include tolerance, but the displayed order row remains
-		# the original order quantity. The tolerance is shown only on its own row.
-		run_qty = base_qty + tolerance_qty
-		pd = _plan_print_data(cb, run_qty, pricing)
+		qty = flt(sel.get("qty"))
+		pd = _plan_print_data(cb, qty, pricing)
 		row = {
 			"fg_item": sel.get("fg_item") or "",
 			"item_name": sel.get("item_name") or sel.get("fg_item") or "",
 			"cost_item": sel.get("cost_item") or "",
 			"calculation_breakdown": cb or "",
-			"base_qty": base_qty, "qty": base_qty,
+			"qty": qty,
 			"ups": pd["ups"], "cuts": pd["cuts"],
 		}
 		if is_flexo:
-			row["reel_area"] = pd["reel_area"]
+			row.update({
+				"size": sel.get("size") or "", "pack_date": sel.get("pack_date"),
+				"exp_date": sel.get("exp_date"), "batch_no": sel.get("batch_no") or "",
+				"product_code": sel.get("product_code") or "",
+				"reel_length": flt(sel.get("reel_length")) or pd["reel_length"],
+				"reel_width": flt(sel.get("reel_width")) or pd["reel_width"],
+				"reel_area": pd["reel_area"] or flt(sel.get("reel_area")),
+				"slit_width": sel.get("slit_width") or pd["slit_width"],
+			})
 		elif npd_mode:
 			pass  # NPD sample: ups & cuts only, no sheet qty.
 		elif consolidate:
@@ -1024,17 +1071,6 @@ def add_planning_items(production_plan, selections, consolidate=0):
 			row["cut_sheet_qty"] = pd["cut_sheet_qty"]
 			row["wastage"] = pd["wastage"]
 		pp.append(field, row)
-		# A traceable tolerance line is shown separately, but deliberately has no
-		# paper/sheet/reel figures: those are already included once on the run above.
-		if tolerance_qty:
-			pp.append(field, {
-				"fg_item": sel.get("fg_item") or "",
-				"item_name": (sel.get("item_name") or sel.get("fg_item") or "") + " (Tolerance)",
-				"cost_item": sel.get("cost_item") or "",
-				"calculation_breakdown": cb or "",
-				"tolerance_qty": tolerance_qty,
-				"qty": tolerance_qty, "is_tolerance": 1,
-			})
 
 	pp.save(ignore_permissions=True)
 	return {"added": len(selections), "field": field, "pricing_type": pricing}
@@ -1057,6 +1093,10 @@ def _ensure_planning(pp):
 		"fg_item": t.get("fg_item"), "item_name": t.get("description"),
 		"cost_item": t.get("cost_item"), "calculation_breakdown": t.get("calculation_breakdown"),
 		"qty": flt(t.get("qty")) or 1,
+		"size": t.get("size"), "pack_date": t.get("pack_date"), "exp_date": t.get("exp_date"),
+		"batch_no": t.get("batch_no"), "product_code": t.get("product_code"),
+		"reel_length": t.get("reel_length"), "reel_width": t.get("reel_width"),
+		"reel_area": t.get("reel_area"), "slit_width": t.get("slit_width"),
 	} for t in tickets]
 	try:
 		add_planning_items(pp.name, selections, consolidate=0)

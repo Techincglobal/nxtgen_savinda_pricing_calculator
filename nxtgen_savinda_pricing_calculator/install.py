@@ -76,6 +76,7 @@ def after_migrate():
 	"""
 	_ensure_item_group_tree()
 	_ensure_custom_fields()
+	_migrate_flexo_planning_rows()
 	_ensure_property_setters()
 	_ensure_roles()
 	_ensure_workflow()
@@ -84,6 +85,51 @@ def after_migrate():
 	_ensure_npd_request_workflow()
 	_retire_sales_order_npd_workflow()
 	_sync_code_print_formats()
+
+
+def _migrate_flexo_planning_rows():
+	"""Copy existing Flexo planning rows out of the former shared Offset/Flexo child table.
+
+	The old table remains in the database for audit/history, while each copied row keeps its
+	original child-row name.  Re-running migrate is therefore safe and never duplicates data.
+	"""
+	try:
+		legacy_rows = frappe.db.sql("""
+			select p.name, p.parent, p.idx, p.fg_item, p.item_name, p.qty, p.reel_area,
+				p.cost_item, p.calculation_breakdown
+			from `tabProduction Planning Item` p
+			inner join `tabProduction Plan` pp on pp.name = p.parent
+			where p.parenttype = 'Production Plan'
+				and p.parentfield = 'custom_flexo_planning'
+				and ifnull(pp.custom_pricing_type, 'Offset') = 'Flexo'
+			order by p.parent, p.idx
+		""", as_dict=True)
+		for old in legacy_rows:
+			if frappe.db.exists("Flexo Production Planning Item", {"legacy_planning_row": old.name}):
+				continue
+			# The Job Ticket is the source for the traceability fields that did not exist
+			# in the former shared planning table.
+			ticket = frappe.db.get_value(
+				"Job Ticket Item",
+				{"parent": old.parent, "parentfield": "custom_ticket_items", "fg_item": old.fg_item},
+				["size", "pack_date", "exp_date", "batch_no", "product_code", "reel_length", "reel_width", "slit_width"],
+				as_dict=True,
+			) or {}
+			frappe.get_doc({
+				"doctype": "Flexo Production Planning Item",
+				"parent": old.parent, "parenttype": "Production Plan", "parentfield": "custom_flexo_planning",
+				"idx": old.idx, "fg_item": old.fg_item, "item_name": old.item_name, "qty": old.qty,
+				"size": ticket.get("size"), "pack_date": ticket.get("pack_date"),
+				"exp_date": ticket.get("exp_date"), "batch_no": ticket.get("batch_no"),
+				"product_code": ticket.get("product_code"), "reel_length": ticket.get("reel_length"),
+				"reel_width": ticket.get("reel_width"), "reel_area": old.reel_area,
+				"slit_width": ticket.get("slit_width"), "cost_item": old.cost_item,
+				"calculation_breakdown": old.calculation_breakdown, "legacy_planning_row": old.name,
+			}).insert(ignore_permissions=True)
+		if legacy_rows:
+			frappe.db.commit()
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "pricing_calculator: migrate Flexo planning rows failed")
 
 
 # Print formats that are CODE-MANAGED: their HTML lives in the app's print_format/*.json and the
@@ -840,7 +886,7 @@ def _ensure_custom_fields():
 				{"fieldname": "custom_offset_planning_sec", "label": "Manufacturing Planning (Offset)", "fieldtype": "Section Break", "insert_after": "custom_ticket_items", "depends_on": "eval:doc.custom_pricing_type=='Offset'"},
 				{"fieldname": "custom_offset_planning", "label": "Offset Planning", "fieldtype": "Table", "options": "Production Planning Item", "insert_after": "custom_offset_planning_sec"},
 				{"fieldname": "custom_flexo_planning_sec", "label": "Manufacturing Planning (Flexo)", "fieldtype": "Section Break", "insert_after": "custom_offset_planning", "depends_on": "eval:doc.custom_pricing_type=='Flexo'"},
-				{"fieldname": "custom_flexo_planning", "label": "Flexo Planning", "fieldtype": "Table", "options": "Production Planning Item", "insert_after": "custom_flexo_planning_sec"},
+				{"fieldname": "custom_flexo_planning", "label": "Flexo Planning", "fieldtype": "Table", "options": "Flexo Production Planning Item", "insert_after": "custom_flexo_planning_sec"},
 				{"fieldname": "custom_tolerance_materials_sec", "label": "Tolerance Materials", "fieldtype": "Section Break", "insert_after": "custom_flexo_planning", "description": "Optional extra materials required for the tolerance production quantity."},
 				{"fieldname": "custom_tolerance_materials", "label": "Tolerance Materials", "fieldtype": "Table", "options": "Production Plan Tolerance Material", "insert_after": "custom_tolerance_materials_sec"},
 				# Artwork + approval stamps (allow_on_submit so the workflow can fill them post-submit)

@@ -80,6 +80,9 @@ frappe.ui.form.on("Production Plan", {
 		// sent to BOM Validation before the runs were added, without exposing the
 		// planning action to ordinary BOM users.
 		if (is_cs_stage || (is_bom_stage && is_system_manager)) {
+			frm.add_custom_button(__("Break Down Job Ticket Item"), function () {
+				_show_job_ticket_breakdown_dialog(frm);
+			}, __("Actions"));
 			frm.add_custom_button(__("Get Finished Goods for Manufacture"), function () {
 				_get_manufacture_fg_dialog(frm);
 			}, __("Actions"));
@@ -121,6 +124,38 @@ frappe.ui.form.on("Production Plan", {
 	},
 });
 
+function _show_job_ticket_breakdown_dialog(frm) {
+	var rows = (frm.doc.custom_ticket_items || []).filter(function (r) { return (parseFloat(r.qty) || 0) > 1; });
+	if (!rows.length) { frappe.msgprint(__("There is no Job Ticket item with a quantity available to split.")); return; }
+	var labels = rows.map(function (r) { return r.name + " — " + (r.description || r.fg_item || "Item") + " (Qty: " + r.qty + ")"; });
+	var by_name = {}; rows.forEach(function (r) { by_name[r.name] = r; });
+	var d = new frappe.ui.Dialog({
+		title: __("Break Down Job Ticket Item"),
+		fields: [
+			{fieldtype: "Select", fieldname: "ticket_item", label: "Job Ticket Item", options: labels.join("\n"), reqd: 1},
+			{fieldtype: "Float", fieldname: "first_qty", label: "First Line Qty", reqd: 1,
+				description: "The remaining quantity is automatically added as a new line with the same item details."},
+		],
+		primary_action_label: __("Split into Two Lines"),
+		primary_action: function (v) {
+			var name = (v.ticket_item || "").split(" — ")[0];
+			var row = by_name[name];
+			if (!row) return;
+			var q = parseFloat(v.first_qty) || 0;
+			if (q <= 0 || q >= (parseFloat(row.qty) || 0)) {
+				frappe.msgprint(__("First Line Qty must be between 0 and {0}.", [row.qty])); return;
+			}
+			frappe.call({
+				method: "nxtgen_savinda_pricing_calculator.api.production_plan.split_job_ticket_item",
+				args: {production_plan: frm.doc.name, ticket_item: name, first_qty: q},
+				freeze: true, freeze_message: __("Splitting item…"),
+				callback: function (r) { d.hide(); frappe.show_alert({message: __("Created the second Job Ticket line with Qty {0}.", [(r.message || {}).second_qty]), indicator: "green"}); frm.reload_doc(); },
+			});
+		},
+	});
+	d.show();
+}
+
 // "Get Finished Goods for Manufacture" — list FGs with editable qty, then populate the
 // planning table (print data computed from each item's cost calculation).
 function _get_manufacture_fg_dialog(frm) {
@@ -136,11 +171,10 @@ function _get_manufacture_fg_dialog(frm) {
 					+ "<td style='text-align:center'><input type='checkbox' class='fg-sel' data-idx='" + i + "' checked></td>"
 					+ "<td>" + frappe.utils.escape_html(it.item_name || it.fg_item || "") + "</td>"
 					+ "<td><input type='number' min='0' class='fg-qty' data-idx='" + i + "' value='" + (it.qty || 0) + "' style='width:110px'></td>"
-					+ "<td><input type='number' min='0' class='fg-tolerance-qty' data-idx='" + i + "' value='0' style='width:110px'></td>"
 					+ "</tr>";
 			}).join("");
 			var html = "<table class='table table-bordered' style='font-size:12px;margin-bottom:0'>"
-				+ "<thead><tr><th style='width:40px'></th><th>Item</th><th style='width:120px'>Order Qty</th><th style='width:120px'>Tolerance Qty</th></tr></thead>"
+				+ "<thead><tr><th style='width:40px'></th><th>Item</th><th style='width:120px'>Order Qty</th></tr></thead>"
 				+ "<tbody>" + rows + "</tbody></table>";
 			var fields = [];
 			if (is_offset) {
@@ -159,13 +193,15 @@ function _get_manufacture_fg_dialog(frm) {
 					$w.find(".fg-sel:checked").each(function () {
 						var idx = parseInt($(this).attr("data-idx"), 10);
 						var qty = parseFloat($w.find(".fg-qty[data-idx='" + idx + "']").val()) || 0;
-						var tolerance_qty = parseFloat($w.find(".fg-tolerance-qty[data-idx='" + idx + "']").val()) || 0;
 						if (qty <= 0) { frappe.msgprint(__("Order Qty must be greater than zero.")); return false; }
-						if (tolerance_qty < 0) { frappe.msgprint(__("Tolerance Qty cannot be negative.")); return false; }
 						var it = items[idx];
 						sel.push({
 							fg_item: it.fg_item, item_name: it.item_name, cost_item: it.cost_item,
-							calculation_breakdown: it.calculation_breakdown, qty: qty, tolerance_qty: tolerance_qty
+							calculation_breakdown: it.calculation_breakdown, qty: qty,
+							size: it.size, pack_date: it.pack_date, exp_date: it.exp_date,
+							batch_no: it.batch_no, product_code: it.product_code,
+							reel_length: it.reel_length, reel_width: it.reel_width,
+							reel_area: it.reel_area, slit_width: it.slit_width
 						});
 					});
 					if (!sel.length) { frappe.msgprint(__("Select at least one item.")); return; }
