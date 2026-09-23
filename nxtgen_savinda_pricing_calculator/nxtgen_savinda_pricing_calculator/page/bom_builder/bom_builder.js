@@ -52,6 +52,7 @@ function bb_mount_app(el) {
 				itemQty: 0,
 				globalCB: '',
 				isDefault: false,
+				sfgItemGroup: 'WIP',
 				qtyChanged: false,   // true when mfgQty changed but not recalculated
 				operations: [],
 				extraMaterials: [],
@@ -97,6 +98,12 @@ function bb_mount_app(el) {
 		mounted() { this.loadFromUrl(); },
 		methods: {
 			fmt, fmtq, fmtN,
+			selectSfgItemGroup() {
+				var self = this;
+				frappe.prompt([{fieldtype: 'Link', fieldname: 'item_group', label: 'SFG Item Group', options: 'Item Group', reqd: 1, default: self.sfgItemGroup || 'WIP'}], function (v) {
+					self.sfgItemGroup = v.item_group;
+				}, 'Select SFG Item Group', 'Set');
+			},
 
 			// A spec name is not a safe identity: it can be repeated and a manually-added
 			// operation does not exist in the calculation at all. Keep a stable key so saved
@@ -636,6 +643,16 @@ function bb_mount_app(el) {
 				}, 'Select ERPNext Operation', 'Set');
 			},
 
+			pickWorkstation(op) {
+				frappe.prompt([{
+					fieldtype: 'Link', fieldname: 'workstation', label: 'Workstation',
+					options: 'Workstation', reqd: 0, default: op.workstation || '',
+					description: 'Select the machine/workstation that will run this operation.',
+				}], function (v) {
+					op.workstation = v.workstation || '';
+				}, 'Select Workstation', 'Set');
+			},
+
 			pickQITemplate(op) {
 				frappe.prompt([{
 					fieldtype: 'Link', fieldname: 'template', label: 'Quality Inspection Template',
@@ -773,6 +790,7 @@ function bb_mount_app(el) {
 							operations:      JSON.stringify(self.operations),
 							extra_materials: JSON.stringify(self.extraMaterials),
 							is_default:      self.isDefault ? 1 : 0,
+							sfg_item_group: self.sfgItemGroup || '',
 							submit:          0,
 						},
 						freeze: true,
@@ -817,6 +835,7 @@ function bb_mount_app(el) {
 							operations:       JSON.stringify(self.operations),
 							extra_materials:  JSON.stringify(self.extraMaterials),
 							is_default:       self.isDefault ? 1 : 0,
+							sfg_item_group:  self.sfgItemGroup || '',
 							submit:           0,
 						},
 						freeze: true,
@@ -904,6 +923,10 @@ function bb_mount_app(el) {
         <div class="bb-field" style="flex:0.8">
           <label>Manufacturing Qty</label>
           <input type="number" v-model.number="mfgQty" min="1" class="bb-inp" />
+        </div>
+        <div class="bb-field" style="flex:1">
+          <label>SFG Item Group</label>
+          <div style="display:flex;gap:4px"><input type="text" v-model="sfgItemGroup" class="bb-inp" readonly /><button class="bb-btn bb-btn-sm" @click="selectSfgItemGroup" title="Select Item Group">🔍</button></div>
         </div>
         <div class="bb-field" style="flex:1.5">
           <label>
@@ -1092,6 +1115,12 @@ function bb_mount_app(el) {
                 style="width:84px;padding:2px 5px;font-size:10px"
                 :placeholder="op.spec_name.substring(0,12)" />
               <button class="bb-btn-link" @click="pickOperation(op)" title="Pick from ERPNext Operations">🔍</button>
+            </div>
+            <div class="bb-op-erp-row" style="margin-top:2px">
+              <span style="font-size:9px;color:#888;flex-shrink:0">WS:</span>
+              <input type="text" v-model="op.workstation" class="bb-inp"
+                style="width:84px;padding:2px 5px;font-size:10px" placeholder="Workstation" />
+              <button class="bb-btn-link" @click="pickWorkstation(op)" title="Pick from ERPNext Workstations">🔍</button>
             </div>
             <!-- Split to item unit button -->
             <button :class="['bb-split-btn', op.split_to_item_unit ? 'bb-split-on' : '']"

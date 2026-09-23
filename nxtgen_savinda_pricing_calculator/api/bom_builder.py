@@ -665,7 +665,7 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item="", overrides=None):
 # ─────────────────────────────────────────────────────────────
 
 @frappe.whitelist()
-def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0, variant_suffix="", submit=1):
+def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0, variant_suffix="", submit=1, sfg_item_group=""):
 	"""
 	Create the full SFG chain + FG BOM:
 	1. Create ERPNext Items for each SFG (if not existing)
@@ -764,7 +764,7 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 		if not sfg_code:
 			continue
 		if not frappe.db.exists("Item", sfg_code):
-			_create_sfg_item(sfg_code, sfg_name, fg_item=fg_item)
+			_create_sfg_item(sfg_code, sfg_name, fg_item=fg_item, item_group=sfg_item_group)
 		# Set Quality Inspection Template on the SFG Item if required
 		if op.get("has_quality_inspection") and op.get("quality_inspection_template"):
 			try:
@@ -931,16 +931,18 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 	return {"created_boms": created_boms, "fg_bom": fg_bom.name}
 
 
-def _create_sfg_item(item_code, item_name, fg_item=""):
+def _create_sfg_item(item_code, item_name, fg_item="", item_group=""):
 	"""
 	Create a Semi-Finished Good ERPNext Item.
 	Inherits Department and Item Group abbreviations from the FG item
 	(or falls back to system defaults) to satisfy mandatory custom fields.
 	"""
 	# ── Resolve item group ───────────────────────────────────
-	item_group = "Semi Finished Goods"
+	item_group = item_group or "WIP" or "Semi Finished Goods"
 	if not frappe.db.exists("Item Group", item_group):
-		item_group = frappe.db.get_value("Item", fg_item, "item_group") or "All Item Groups"
+		item_group = (frappe.db.get_value("Item Group", {"item_group_name": "WIP"}, "name")
+			or frappe.db.get_value("Item Group", {"item_group_name": "Semi Finished Goods"}, "name")
+			or frappe.db.get_value("Item", fg_item, "item_group") or "All Item Groups")
 
 	ig_abbr = frappe.db.get_value("Item Group", item_group, "custom_abbr") or ""
 
@@ -1310,7 +1312,7 @@ def _per_unit_mats(op):
 
 
 @frappe.whitelist()
-def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, is_default=0, submit=1):
+def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, is_default=0, submit=1, sfg_item_group=""):
 	"""Build BOMs for several FGs of one family in one pass.
 
 	Operations up to the 🧩 Final-Common-SFG marker build ONE shared SFG chain
@@ -1326,7 +1328,7 @@ def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, 
 		frappe.throw("Select at least one FG item.")
 	if len(fg_items) == 1:
 		return create_bom_chain(fg_items[0], mfg_qty, json.dumps(operations),
-		                        json.dumps(extra_materials), is_default, submit=submit)
+		                        json.dumps(extra_materials), is_default, submit=submit, sfg_item_group=sfg_item_group)
 	if not operations:
 		frappe.throw("No operations defined.")
 	operations = _normalise_operation_chain(operations)
@@ -1354,7 +1356,7 @@ def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, 
 		code = f"{subj}-{_bb_code(op.get('spec_name'))}-SFG"
 		name = op.get("sfg_name") or code
 		if not frappe.db.exists("Item", code):
-			_create_sfg_item(code, name, fg_item=fg_items[0])
+			_create_sfg_item(code, name, fg_item=fg_items[0], item_group=sfg_item_group)
 		out_qty = flt(op.get("output_qty")) or 1
 		in_code = first_in if i == 0 else last_code
 		in_name = first_inn if i == 0 else last_name
@@ -1388,7 +1390,7 @@ def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, 
 			is_fg_op = bool(op.get("output_is_fg"))
 			target = fg if is_fg_op else f"{_bb_code(fg)}-{_bb_code(op.get('spec_name'))}-SFG"
 			if not is_fg_op and not frappe.db.exists("Item", target):
-				_create_sfg_item(target, op.get("sfg_name") or target, fg_item=fg)
+				_create_sfg_item(target, op.get("sfg_name") or target, fg_item=fg, item_group=sfg_item_group)
 			out_qty = flt(op.get("output_qty")) or 1
 			per_in  = (flt(op.get("input_qty") or 0) / out_qty) if out_qty else 1.0
 			bn, _ = _mk_qty1_bom(target, p_code, p_name, per_in, _per_unit_mats(op), op,
