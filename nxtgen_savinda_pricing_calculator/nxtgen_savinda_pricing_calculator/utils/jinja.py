@@ -296,6 +296,9 @@ def get_ticket_print_data(production_plan_name):
 	# It includes the separately recorded tolerance rows and its calculated sheet quantities.
 	if plan_rows:
 		for p in plan_rows:
+			# Assembly is managed by its own Work Order, not by a print-process job card.
+			if p.get("planning_type") == "Assembly":
+				continue
 			# Ignore tolerance rows created by the former planning feature.
 			if p.get("is_tolerance"):
 				continue

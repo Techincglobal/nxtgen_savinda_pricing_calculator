@@ -114,7 +114,7 @@ def create_npd_request_from_cost_sheet(cost_sheet):
 # Labels / fieldtypes / options come from the Product Library meta (see _pl_field_schema),
 # so this stays a single source of truth for both popups.
 _PL_REVIEW = [
-	("customer_product_code", ""), ("category", ""), ("department", ""),
+	("customer", ""), ("customer_product_code", ""), ("category", ""), ("department", ""),
 	("artwork_no", ""), ("artwork_version", ""),
 	("full_sheet_size", "Offset"), ("cut_sheet_size", "Offset"),
 	("product_size", ""), ("pasting_type", "Offset"),
@@ -127,6 +127,16 @@ _PL_REVIEW = [
 	("lamination", ""),("die_cut_code", "")
 ]
 _PL_KEYS = [fn for fn, _ in _PL_REVIEW]
+
+def _customer_from_name(customer_name):
+	"""Resolve a Customer link from its document name or display name."""
+	if not customer_name:
+		return ""
+	return (
+		frappe.db.exists("Customer", customer_name)
+		or frappe.db.get_value("Customer", {"customer_name": customer_name}, "name")
+		or ""
+	)
 
 
 def _pl_field_schema():
@@ -161,6 +171,7 @@ def _fg_detail_defaults(row, npd, ig, dept):
 		"customer_ref": "",
 		"cost_item": row.cost_item or "",
 		# Product Library fields (pl_<fieldname>)
+		"pl_customer": npd.customer or _customer_from_name(npd.customer_name),
 		"pl_department": npd.pricing_type or "",
 		"pl_flexo_type": "Reel" if is_flexo else "",
 		"pl_customer_product_code": row.product_code or "",
@@ -269,6 +280,7 @@ def _cost_sheet_fg_defaults(ci, cost_sheet, ig):
 	cbd = jt_api._cb_fields(cb) if cb else {}
 	pricing = (cbd.get("pricing_type") or "Offset")
 	is_flexo = pricing == "Flexo"
+	cs = frappe.db.get_value("Cost Sheet", cost_sheet, "customer_name") or ""
 	return {
 		"cost_item": ci,
 		"item_name": ci_doc.get("cost_item_name") or ci,
@@ -276,6 +288,7 @@ def _cost_sheet_fg_defaults(ci, cost_sheet, ig):
 		"department": _dept_for_pricing(pricing),
 		"stock_uom": "Nos",
 		"customer_ref": "",
+		"pl_customer": _customer_from_name(cs),
 		"pl_department": pricing,
 		"pl_flexo_type": "Reel" if is_flexo else "",
 		"pl_customer_product_code": "",
@@ -422,7 +435,9 @@ def get_cost_item_fg_defaults(cost_item, quotation=None):
 		return {"defaults": {}, "pl_fields": _pl_field_schema(), "is_flexo": False}
 	d = _pl_defaults_from_cost_item(cost_item)
 	if quotation:
-		cs = frappe.db.get_value("Savinda Quotation", quotation, "cost_sheet")
+		q = frappe.db.get_value("Savinda Quotation", quotation, ["cost_sheet", "customer", "customer_name"], as_dict=True) or {}
+		d["pl_customer"] = q.get("customer") or _customer_from_name(q.get("customer_name"))
+		cs = q.get("cost_sheet")
 		if cs:
 			d["pl_artwork_no"] = frappe.db.get_value("Cost Sheet", cs, "artwork_no") or ""
 			d["pl_artwork_version"] = frappe.db.get_value("Cost Sheet", cs, "artwork_version") or ""
@@ -1074,6 +1089,73 @@ def add_planning_items(production_plan, selections, consolidate=0):
 
 	pp.save(ignore_permissions=True)
 	return {"added": len(selections), "field": field, "pricing_type": pricing}
+
+
+def _active_bom_for_item(item_code):
+	return (
+		frappe.db.get_value("BOM", {"item": item_code, "is_active": 1, "is_default": 1}, "name")
+		or frappe.db.get_value("BOM", {"item": item_code, "is_active": 1}, "name", order_by="modified desc")
+		or ""
+	)
+
+
+def _bom_manufacturing_components(item_code, required_qty, trail=None):
+	"""Return all BOM children that are themselves manufactured sub-assemblies."""
+	trail = trail or set()
+	bom_name = _active_bom_for_item(item_code)
+	if not bom_name or bom_name in trail:
+		return []
+	trail = trail | {bom_name}
+	bom_qty = flt(frappe.db.get_value("BOM", bom_name, "quantity")) or 1
+	rows = []
+	for part in frappe.get_all("BOM Item", filters={"parent": bom_name}, fields=["item_code", "qty"], order_by="idx asc"):
+		child_bom = _active_bom_for_item(part.item_code)
+		if not child_bom:
+			continue
+		child_qty = flt(required_qty) * flt(part.qty) / bom_qty
+		rows.append({"item_code": part.item_code, "qty": child_qty, "bom_no": child_bom})
+		rows.extend(_bom_manufacturing_components(part.item_code, child_qty, trail))
+	return rows
+
+
+@frappe.whitelist()
+def add_bom_items_for_manufacture(production_plan):
+	"""Replace the planning table with SFG manufacture rows and final assembly rows."""
+	pp = frappe.get_doc("Production Plan", production_plan)
+	if pp.docstatus != 0:
+		frappe.throw("BOM manufacturing items can only be prepared while the plan is a draft.")
+	pricing = pp.get("custom_pricing_type") or "Offset"
+	is_flexo = pricing == "Flexo"
+	field = "custom_flexo_planning" if is_flexo else "custom_offset_planning"
+	rows = []
+	for ticket in pp.get("custom_ticket_items") or []:
+		fg, qty = ticket.get("fg_item"), flt(ticket.get("qty")) or 1
+		components = _bom_manufacturing_components(fg, qty)
+		if components:
+			rows.append({"fg_item": fg, "item_name": ticket.get("description") or fg, "qty": qty,
+				"planning_type": "Assembly", "bom_no": _active_bom_for_item(fg)})
+		else:
+			components = [{"item_code": fg, "qty": qty, "bom_no": _active_bom_for_item(fg)}]
+		for component in components:
+			item_code, component_qty = component["item_code"], component["qty"]
+			ctx = jt_api._fg_context(item_code)
+			cb = ctx.get("calculation_breakdown") or ""
+			pd = _plan_print_data(cb, component_qty, pricing)
+			row = {"fg_item": item_code, "item_name": frappe.db.get_value("Item", item_code, "item_name") or item_code,
+				"qty": component_qty, "planning_type": "Manufacture", "bom_no": component["bom_no"],
+				"cost_item": ctx.get("cost_item") or "", "calculation_breakdown": cb,
+				"ups": pd["ups"], "cuts": pd["cuts"]}
+			if is_flexo:
+				row.update({"reel_length": pd["reel_length"], "reel_width": pd["reel_width"],
+					"reel_area": pd["reel_area"], "slit_width": pd["slit_width"]})
+			else:
+				row.update({"full_sheet_qty": pd["full_sheet_qty"], "cut_sheet_qty": pd["cut_sheet_qty"], "wastage": pd["wastage"]})
+			rows.append(row)
+	pp.set(field, [])
+	for row in rows:
+		pp.append(field, row)
+	pp.save(ignore_permissions=True)
+	return {"added": len(rows), "assembly_rows": sum(1 for row in rows if row.get("planning_type") == "Assembly")}
 
 
 def _ensure_planning(pp):

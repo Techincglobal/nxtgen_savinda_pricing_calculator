@@ -159,6 +159,9 @@ def _upsert_product_library(fg_item_code, cost_item=None, customer_ref=None, ove
 			# PL already exists — keep the reviewed fields, but refresh the finishings from the
 			# finishings saved in the cost item's calculation, and the BOM remark from the cost item.
 			_sync_pl_finishings_from_cost_item(_existing_pl, cost_item)
+			# Customer is selected/reviewed in the FG popup and may be corrected later.
+			if overrides and isinstance(overrides, dict) and overrides.get("customer"):
+				frappe.db.set_value("Product Library", _existing_pl, "customer", overrides["customer"])
 			if cost_item and frappe.db.exists("cost Item", cost_item):
 				_rmk = frappe.db.get_value("cost Item", cost_item, "bom_remark")
 				if _rmk:

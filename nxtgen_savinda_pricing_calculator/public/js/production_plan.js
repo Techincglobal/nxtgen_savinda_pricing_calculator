@@ -86,6 +86,19 @@ frappe.ui.form.on("Production Plan", {
 			frm.add_custom_button(__("Get Finished Goods for Manufacture"), function () {
 				_get_manufacture_fg_dialog(frm);
 			}, __("Actions"));
+			frm.add_custom_button(__("Get BOM Items for Manufacture"), function () {
+				frappe.confirm(__("This replaces current Manufacturing Planning rows with BOM sub-assemblies and final assembly rows. Continue?"), function () {
+					frappe.call({
+						method: "nxtgen_savinda_pricing_calculator.api.production_plan.add_bom_items_for_manufacture",
+						args: { production_plan: frm.doc.name }, freeze: true, freeze_message: __("Expanding BOMs…"),
+						callback: function (r) {
+							var m = r.message || {};
+							frappe.show_alert({ message: __("Added {0} planning rows, including {1} assembly row(s).", [m.added || 0, m.assembly_rows || 0]), indicator: "green" });
+							frm.reload_doc();
+						},
+					});
+				});
+			}, __("Actions"));
 		}
 
 		// Supply Chain: create purchasing demand only in Stock/Supply validation.

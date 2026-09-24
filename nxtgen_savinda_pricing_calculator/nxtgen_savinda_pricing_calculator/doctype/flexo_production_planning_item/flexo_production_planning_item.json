@@ -4,13 +4,15 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
-  "fg_item", "item_name", "qty", "size", "pack_date", "exp_date", "batch_no", "product_code",
+  "fg_item", "item_name", "planning_type", "bom_no", "qty", "size", "pack_date", "exp_date", "batch_no", "product_code",
   "reel_length", "reel_width", "reel_area", "slit_width", "col_refs", "cost_item",
   "calculation_breakdown", "legacy_planning_row"
  ],
  "fields": [
   {"fieldname": "fg_item", "fieldtype": "Link", "label": "FG Item", "options": "Item", "in_list_view": 1, "columns": 2, "read_only": 1},
   {"fieldname": "item_name", "fieldtype": "Data", "label": "Description", "in_list_view": 1, "columns": 3, "read_only": 1},
+  {"fieldname": "planning_type", "fieldtype": "Select", "label": "Type", "options": "Manufacture\nAssembly", "default": "Manufacture", "in_list_view": 1, "columns": 1, "read_only": 1},
+  {"fieldname": "bom_no", "fieldtype": "Link", "label": "BOM", "options": "BOM", "read_only": 1},
   {"fieldname": "qty", "fieldtype": "Float", "label": "Qty", "in_list_view": 1, "columns": 1, "read_only": 1},
   {"fieldname": "size", "fieldtype": "Data", "label": "Size", "in_list_view": 1, "columns": 1},
   {"fieldname": "pack_date", "fieldtype": "Date", "label": "Pack Date", "in_list_view": 1, "columns": 1},
