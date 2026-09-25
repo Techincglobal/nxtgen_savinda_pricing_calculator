@@ -50,6 +50,8 @@ function oc_mount_app(el) {
 		getSwitcher: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.get_calc_switcher',
 		createVariant: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.create_variant_for_switcher',
 		deleteVariant: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.delete_calc_variant',
+		getCalcCostItems: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.get_calculation_cost_items',
+		isolateCalculation: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.isolate_calculation_for_cost_item',
 	};
 
 	function debounce(fn, ms) {
@@ -148,6 +150,7 @@ function oc_mount_app(el) {
 
 				calc: { sheet: null, cost_rows: [], group_totals: {}, pricing: null },
 				additionalBreakdowns: [],
+				boardCountMode: 'Required',
 				newBreakdownQty: '',
 				manualCosts: [],   // ad-hoc user cost lines: {name, qty, rate, cost_group}
 				collapsedGroups: {},
@@ -405,6 +408,7 @@ function oc_mount_app(el) {
 				var qtys = bqtys.split(',').map(function (q) { return parseFloat(q) || 0; }).filter(function (q) { return q > 0; });
 				if (qtys.length > 0) {
 					this.additionalBreakdowns = qtys;
+					this.boardCountMode = 'Breakdown';
 					// Total order qty = sum of all splits
 					this.form.item_qty = qtys.reduce(function (s, q) { return s + q; }, 0);
 				}
@@ -915,12 +919,25 @@ function oc_mount_app(el) {
 			toggleSpecCollapse(name) {
 				this.collapsedSpecs[name] = !this.collapsedSpecs[name];
 			},
+			ensureManualBreakdown(done) {
+				var self = this;
+				self.boardCountMode = 'Breakdown';
+				if (!self.savedDocName) { done(); return; }
+				frappe.call({ method: API.getCalcCostItems, args: { calculation_breakdown: self.savedDocName }, callback: function (r) {
+					var rows = r.message || [];
+					if (rows.length <= 1) { done(); return; }
+					var options = rows.map(function (x) { return x.cost_item; }).join('\n');
+					frappe.prompt([{ fieldtype: 'Select', fieldname: 'cost_item', label: 'Cost Item for this manual breakdown', options: options, reqd: 1 }], function (v) {
+						frappe.call({ method: API.isolateCalculation, args: { calculation_breakdown: self.savedDocName, cost_item: v.cost_item }, freeze: true, callback: function (x) {
+							self.savedDocName = x.message.calculation_breakdown; done();
+						} });
+					}, 'Manual Board Breakdown');
+				} });
+			},
 			addBreakdown() {
-				var q = parseFloat(this.newBreakdownQty);
+				var self = this, q = parseFloat(this.newBreakdownQty);
 				if (!q || q <= 0) return;
-				this.additionalBreakdowns.push(q);
-				this.newBreakdownQty = '';
-				this.scheduleCalc();
+				this.ensureManualBreakdown(function () { self.additionalBreakdowns.push(q); self.newBreakdownQty = ''; self.scheduleCalc(); });
 			},
 			removeBreakdown(idx) {
 				this.additionalBreakdowns.splice(idx, 1);
@@ -1078,6 +1095,10 @@ function oc_mount_app(el) {
 			// ── Save ──
 			saveCosting() {
 				var self = this;
+				if (self.boardCountMode === 'Breakdown') {
+					var total = self.additionalBreakdowns.reduce(function (a, q) { return a + (parseFloat(q) || 0); }, 0);
+					if (!self.additionalBreakdowns.length || Math.abs(total - (parseFloat(self.form.item_qty) || 0)) > 0.0001) { frappe.msgprint({ title: 'Breakdown total required', message: 'Breakdown quantities must total the Order Quantity.', indicator: 'orange' }); return; }
+				}
 				if (!self.form.customer_name && !self.form.ref) {
 					frappe.msgprint({ title: 'Required', message: 'Enter Customer Name or Ref.', indicator: 'orange' });
 					return;
@@ -1088,7 +1109,7 @@ function oc_mount_app(el) {
 					args: {
 						payload: JSON.stringify({
 							// merge manual cost lines into the saved form so they persist + restore
-							form: Object.assign({}, self.form, { manual_costs: self.calcPayload.form.manual_costs }),
+							form: Object.assign({}, self.form, { manual_costs: self.calcPayload.form.manual_costs, board_count_mode: self.boardCountMode }),
 							selected_specs: self.calcPayload.selected_specs,
 							machine_spec: self.calcPayload.machine_spec,
 							finishing: self.selectedFinishings.slice(),
@@ -1865,9 +1886,16 @@ function oc_mount_app(el) {
               <label class="oc-lbl">Order Quantity <span v-if="hasBreakdowns" class="oc-total-badge">Splits: {{ fmtNum(additionalBreakdowns.reduce(function(s,q){return s+(parseFloat(q)||0);},0)) }}</span></label>
               <input v-model.number="form.item_qty" type="number" min="1" class="oc-inp" @change="scheduleCalc" />
             </div>
-            <!-- Breakdown splits — only shown when splits are loaded (combined group items) -->
-            <div v-if="hasBreakdowns" class="oc-breakdown-wrap">
-              <div class="oc-chips-label">Sheet splits:</div>
+            <div v-if="isOffset" class="oc-field" style="margin-top:8px">
+              <label class="oc-lbl">Board Count Mode</label>
+              <select v-model="boardCountMode" class="oc-inp" @change="scheduleCalc">
+                <option value="Required">Calculate Required Board Count</option>
+                <option value="Breakdown">Calculate Board Count by Breakdown</option>
+              </select>
+            </div>
+            <!-- Manual and automatic board splits. They affect sheets/wastage only. -->
+            <div v-if="isOffset && boardCountMode === 'Breakdown'" class="oc-breakdown-wrap">
+              <div class="oc-chips-label">Sheet splits (must total Order Quantity):</div>
               <div class="oc-chips-row">
                 <span v-for="(q, i) in additionalBreakdowns" :key="i" class="oc-chip-extra">
                   {{ fmtNum(q) }}<button class="oc-chip-x" @click="removeBreakdown(i)" title="Remove">×</button>

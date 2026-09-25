@@ -1823,6 +1823,35 @@ def _build_rows_for_cf(cf_row, spec_name, form, sheet, item_qty, no_of_colors,
 
 
 @frappe.whitelist()
+def get_calculation_cost_items(calculation_breakdown):
+    """Cost Items linked to a calculation; used before a manual board split is saved."""
+    return frappe.get_all("Cost Item Calculation", filters={"calculation_breakdown": calculation_breakdown},
+        fields=["parent as cost_item"], order_by="parent")
+
+
+@frappe.whitelist()
+def isolate_calculation_for_cost_item(calculation_breakdown, cost_item):
+    """Give one Cost Item a private CB so its manual board split cannot alter peers."""
+    if not (calculation_breakdown and cost_item):
+        frappe.throw("Calculation Breakdown and Cost Item are required.")
+    row = frappe.db.get_value("Cost Item Calculation",
+        {"parent": cost_item, "calculation_breakdown": calculation_breakdown}, "name")
+    if not row:
+        frappe.throw("The selected Cost Item is not linked to this calculation.")
+    links = frappe.get_all("Cost Item Calculation", filters={"calculation_breakdown": calculation_breakdown}, pluck="name")
+    if len(links) <= 1:
+        return {"calculation_breakdown": calculation_breakdown, "copied": False}
+    source = frappe.get_doc("Calculation Breakdown", calculation_breakdown)
+    clone = frappe.copy_doc(source)
+    clone.insert(ignore_permissions=True)
+    frappe.db.set_value("Cost Item Calculation", row, "calculation_breakdown", clone.name)
+    ci = frappe.get_doc("cost Item", cost_item)
+    ci.save(ignore_permissions=True)
+    frappe.db.commit()
+    return {"calculation_breakdown": clone.name, "copied": True}
+
+
+@frappe.whitelist()
 def sync_cost_item_unit_cost(calculation_breakdown):
     """
     Called after calculator saves a Calculation Breakdown.
