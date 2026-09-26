@@ -1099,13 +1099,11 @@ def _active_bom_for_item(item_code):
 	)
 
 
-def _bom_manufacturing_components(item_code, required_qty, trail=None):
-	"""Return all BOM children that are themselves manufactured sub-assemblies."""
-	trail = trail or set()
+def _bom_manufacturing_components(item_code, required_qty):
+	"""Return direct, first-level BOM children that are manufactured sub-assemblies."""
 	bom_name = _active_bom_for_item(item_code)
-	if not bom_name or bom_name in trail:
+	if not bom_name:
 		return []
-	trail = trail | {bom_name}
 	bom_qty = flt(frappe.db.get_value("BOM", bom_name, "quantity")) or 1
 	rows = []
 	for part in frappe.get_all("BOM Item", filters={"parent": bom_name}, fields=["item_code", "qty"], order_by="idx asc"):
@@ -1114,7 +1112,6 @@ def _bom_manufacturing_components(item_code, required_qty, trail=None):
 			continue
 		child_qty = flt(required_qty) * flt(part.qty) / bom_qty
 		rows.append({"item_code": part.item_code, "qty": child_qty, "bom_no": child_bom})
-		rows.extend(_bom_manufacturing_components(part.item_code, child_qty, trail))
 	return rows
 
 
