@@ -291,6 +291,7 @@ def get_ticket_print_data(production_plan_name):
 	lines = []
 	ticket_rows = doc.get("custom_ticket_items") or []
 	plan_rows = doc.get(plan_field) or []
+	plan_rows_1 = doc.get(plan_field) or []
 	ticket_by_fg = {r.get("fg_item"): r for r in ticket_rows if r.get("fg_item")}
 	# Manufacturing Planning is the authoritative item breakdown for the job card.
 	# It includes the separately recorded tolerance rows and its calculated sheet quantities.
@@ -306,20 +307,45 @@ def get_ticket_print_data(production_plan_name):
 			is_tolerance = 0
 			shown_qty = _num(p.get("qty"))
 			item_name = p.get("item_name") or r.get("description") or p.get("fg_item") or ""
-			lines.append({
-				"item_code": p.get("fg_item") or "", "item_name": item_name,
-				"description": item_name, "qty": shown_qty,
-				"order_qty": shown_qty, "tolerance_qty": 0,
-				"is_tolerance": is_tolerance, "has_bom": 1 if r.get("has_bom") else 0,
-				"product_code": p.get("product_code") or r.get("product_code") or "", "size": p.get("size") or r.get("size") or "",
-				"variant_value": (frappe.db.get_value("Item", p.get("fg_item"), "custom_variant_value") if p.get("fg_item") else "") or "",
-				"batch_no": p.get("batch_no") or r.get("batch_no") or "", "pack_date": p.get("pack_date") or r.get("pack_date"), "exp_date": p.get("exp_date") or r.get("exp_date"),
-				"full_sheets": _num(p.get("full_sheet_qty")), "cut_sheets": _num(p.get("cut_sheet_qty")),
-				"wastage": _num(p.get("wastage")), "cuts": int(p.get("cuts") or 0), "ups": int(p.get("ups") or 0),
-				"full_sheet_size": r.get("full_sheet_size") or "", "cut_sheet_size": r.get("cut_sheet_size") or "",
-				"reel_length": _num(p.get("reel_length") or r.get("reel_length")), "reel_width": _num(p.get("reel_width") or r.get("reel_width")),
-				"reel_area": _num(p.get("reel_area") or r.get("reel_area")), "slit_width": p.get("slit_width") or r.get("slit_width") or "",
-			})
+			if p.get("is_group"):
+				if not p.get("parent_item"):
+					item_code = p.get("fg_item") or ""
+					filtered_p = [ppl for ppl in plan_rows_1 if ppl.get("parent_item") == item_code]
+					line_item_bk=[]
+					for ppl in filtered_p:
+						line_item_bk.append({
+							"full_sheets": _num(ppl.get("full_sheet_qty")), "cut_sheets": _num(ppl.get("cut_sheet_qty")),
+								"wastage": _num(ppl.get("wastage")), "cuts": int(ppl.get("cuts") or 0), "ups": int(ppl.get("ups") or 0),
+								"full_sheet_size": r.get("full_sheet_size") or "", "cut_sheet_size": r.get("cut_sheet_size") or "",
+								"reel_length": _num(ppl.get("reel_length") or r.get("reel_length")), "reel_width": _num(ppl.get("reel_width") or r.get("reel_width")),
+								"reel_area": _num(ppl.get("reel_area") or r.get("reel_area")), "slit_width": ppl.get("slit_width") or r.get("slit_width") or "",
+						})
+					lines.append({
+								"is_group": 1,
+								"item_code": p.get("fg_item") or "", "item_name": item_name,
+								"description": item_name, "qty": shown_qty,
+								"order_qty": shown_qty, "tolerance_qty": 0,
+								"is_tolerance": is_tolerance, "has_bom": 1 if r.get("has_bom") else 0,
+								"product_code": p.get("product_code") or r.get("product_code") or "", "size": p.get("size") or r.get("size") or "",
+								"variant_value": (frappe.db.get_value("Item", p.get("fg_item"), "custom_variant_value") if p.get("fg_item") else "") or "",
+								"batch_no": p.get("batch_no") or r.get("batch_no") or "", "pack_date": p.get("pack_date") or r.get("pack_date"), "exp_date": p.get("exp_date") or r.get("exp_date"),
+								"line_item_bk": line_item_bk
+					})
+			else:
+				lines.append({
+					"item_code": p.get("fg_item") or "", "item_name": item_name,
+					"description": item_name, "qty": shown_qty,
+					"order_qty": shown_qty, "tolerance_qty": 0,
+					"is_tolerance": is_tolerance, "has_bom": 1 if r.get("has_bom") else 0,
+					"product_code": p.get("product_code") or r.get("product_code") or "", "size": p.get("size") or r.get("size") or "",
+					"variant_value": (frappe.db.get_value("Item", p.get("fg_item"), "custom_variant_value") if p.get("fg_item") else "") or "",
+					"batch_no": p.get("batch_no") or r.get("batch_no") or "", "pack_date": p.get("pack_date") or r.get("pack_date"), "exp_date": p.get("exp_date") or r.get("exp_date"),
+					"full_sheets": _num(p.get("full_sheet_qty")), "cut_sheets": _num(p.get("cut_sheet_qty")),
+					"wastage": _num(p.get("wastage")), "cuts": int(p.get("cuts") or 0), "ups": int(p.get("ups") or 0),
+					"full_sheet_size": r.get("full_sheet_size") or "", "cut_sheet_size": r.get("cut_sheet_size") or "",
+					"reel_length": _num(p.get("reel_length") or r.get("reel_length")), "reel_width": _num(p.get("reel_width") or r.get("reel_width")),
+					"reel_area": _num(p.get("reel_area") or r.get("reel_area")), "slit_width": p.get("slit_width") or r.get("slit_width") or "",
+				})
 	elif ticket_rows:
 		for r in ticket_rows:
 			item_name = r.get("description") or (frappe.db.get_value("Item", r.fg_item, "item_name") if r.get("fg_item") else "") or r.get("fg_item") or ""
