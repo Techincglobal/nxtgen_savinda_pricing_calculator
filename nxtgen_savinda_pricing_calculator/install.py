@@ -84,7 +84,8 @@ def after_migrate():
 	_ensure_quotation_workflow()
 	_ensure_npd_request_workflow()
 	_retire_sales_order_npd_workflow()
-	_sync_code_print_formats()
+	# Do not sync code-managed print formats on app updates. Live sites may have
+	# approved local print-format changes that must never be overwritten by migrate.
 
 
 def _migrate_flexo_planning_rows():
