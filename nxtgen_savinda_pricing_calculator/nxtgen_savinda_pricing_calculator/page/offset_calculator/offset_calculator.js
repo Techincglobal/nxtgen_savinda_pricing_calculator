@@ -923,16 +923,20 @@ function oc_mount_app(el) {
 				var self = this;
 				self.boardCountMode = 'Breakdown';
 				if (!self.savedDocName) { done(); return; }
-				frappe.call({ method: API.getCalcCostItems, args: { calculation_breakdown: self.savedDocName }, callback: function (r) {
-					var rows = r.message || [];
-					if (rows.length <= 1) { done(); return; }
-					var options = rows.map(function (x) { return x.cost_item; }).join('\n');
-					frappe.prompt([{ fieldtype: 'Select', fieldname: 'cost_item', label: 'Cost Item for this manual breakdown', options: options, reqd: 1 }], function (v) {
-						frappe.call({ method: API.isolateCalculation, args: { calculation_breakdown: self.savedDocName, cost_item: v.cost_item }, freeze: true, callback: function (x) {
-							self.savedDocName = x.message.calculation_breakdown; done();
-						} });
-					}, 'Manual Board Breakdown');
-				} });
+				frappe.call({
+					method: API.getCalcCostItems, args: { calculation_breakdown: self.savedDocName }, callback: function (r) {
+						var rows = r.message || [];
+						if (rows.length <= 1) { done(); return; }
+						var options = rows.map(function (x) { return x.cost_item; }).join('\n');
+						frappe.prompt([{ fieldtype: 'Select', fieldname: 'cost_item', label: 'Cost Item for this manual breakdown', options: options, reqd: 1 }], function (v) {
+							frappe.call({
+								method: API.isolateCalculation, args: { calculation_breakdown: self.savedDocName, cost_item: v.cost_item }, freeze: true, callback: function (x) {
+									self.savedDocName = x.message.calculation_breakdown; done();
+								}
+							});
+						}, 'Manual Board Breakdown');
+					}
+				});
 			},
 			addBreakdown() {
 				var self = this, q = parseFloat(this.newBreakdownQty);
@@ -1143,7 +1147,7 @@ function oc_mount_app(el) {
 				}
 				var url = '/api/method/frappe.utils.print_format.download_pdf?doctype=Calculation+Breakdown&name='
 					+ encodeURIComponent(this.savedDocName)
-					+ '&format=Product+Costing+Summary&no_letterhead=1';
+					+ '&format=Product+Costing+Summary-new&no_letterhead=1';
 				window.open(frappe.urllib.get_full_url(url));
 			},
 
@@ -1234,17 +1238,25 @@ function oc_mount_app(el) {
 				var d = new frappe.ui.Dialog({
 					title: 'Add / Duplicate Calculation',
 					fields: [
-						{ fieldtype: 'Select', fieldname: 'kind', label: 'Create', reqd: 1,
-							options: 'New Qty Break\nNew Finishing Variant', default: 'New Qty Break' },
-						{ fieldtype: 'Float', fieldname: 'new_qty', label: 'Order Qty', reqd: 1,
+						{
+							fieldtype: 'Select', fieldname: 'kind', label: 'Create', reqd: 1,
+							options: 'New Qty Break\nNew Finishing Variant', default: 'New Qty Break'
+						},
+						{
+							fieldtype: 'Float', fieldname: 'new_qty', label: 'Order Qty', reqd: 1,
 							default: (self.switcher.qty_breaks.find(function (r) { return r.is_current; }) || {}).order_qty || self.form.item_qty || 0,
-							description: 'The new calculation is recomputed for this quantity.' },
-						{ fieldtype: 'Data', fieldname: 'new_name', label: 'Quotation Item Name',
+							description: 'The new calculation is recomputed for this quantity.'
+						},
+						{
+							fieldtype: 'Data', fieldname: 'new_name', label: 'Quotation Item Name',
 							depends_on: "eval:doc.kind=='New Finishing Variant'",
-							description: 'Required for a finishing variant. It becomes a separate quotation item.' },
-						{ fieldtype: 'Currency', fieldname: 'new_selling_unit_price', label: 'Unit Selling Price (LKR)',
+							description: 'Required for a finishing variant. It becomes a separate quotation item.'
+						},
+						{
+							fieldtype: 'Currency', fieldname: 'new_selling_unit_price', label: 'Unit Selling Price (LKR)',
 							default: (self.switcher.qty_breaks.find(function (r) { return r.is_current; }) || {}).final_price || '',
-							description: 'Optional. Leave the copied calculation price, or enter the agreed selling price.' },
+							description: 'Optional. Leave the copied calculation price, or enter the agreed selling price.'
+						},
 					],
 					primary_action_label: 'Create & Open',
 					primary_action: function (v) {

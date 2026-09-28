@@ -130,7 +130,7 @@ frappe.ui.form.on("Cost Sheet", {
 		frm.add_custom_button(__("Print / PDF"), function () {
 			var url = "/printview?doctype=Cost+Sheet&name="
 				+ encodeURIComponent(frm.doc.name)
-				+ "&format=Cost+Sheet+Summary&trigger_print=1&no_letterhead=0";
+				+ "&format=Cost+Sheet+Summary-new&trigger_print=1&no_letterhead=0";
 			var w = window.open(frappe.urllib.get_full_url(url));
 			if (!w) frappe.msgprint(__("Please allow pop-ups to open the print view."));
 		});
@@ -435,7 +435,7 @@ function render_panel(frm, cdt, cdn) {
 							+ "&view_only=1";
 						var print_url = "/api/method/frappe.utils.print_format.download_pdf?doctype=Calculation+Breakdown&name="
 							+ encodeURIComponent(c.calculation_breakdown || "")
-							+ "&format=Product+Costing+Summary&no_letterhead=1";
+							+ "&format=Product+Costing+Summary-new&no_letterhead=1";
 						action_td = "<td style='padding:5px 8px;text-align:center;white-space:nowrap'>"
 							+ "<a href='" + view_url + "' target='_blank' "
 							+ "class='btn btn-xs btn-default' style='font-size:10.5px;margin-right:3px'>View</a>"
@@ -1841,8 +1841,10 @@ function _cs_create_npd_sample(frm) {
 	frappe.prompt(
 		[
 			{ fieldtype: "Int", fieldname: "sample_qty", label: __("Sample Qty"), reqd: 1, default: 1 },
-			{ fieldtype: "Date", fieldname: "required_date", label: __("Required Date"),
-			  default: frappe.datetime.add_days(frappe.datetime.get_today(), 7) },
+			{
+				fieldtype: "Date", fieldname: "required_date", label: __("Required Date"),
+				default: frappe.datetime.add_days(frappe.datetime.get_today(), 7)
+			},
 		],
 		function (v) {
 			frappe.call({
