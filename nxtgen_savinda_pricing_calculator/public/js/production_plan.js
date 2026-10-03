@@ -79,6 +79,19 @@ frappe.ui.form.on("Production Plan", {
 		// CS Team defines runs in Draft. A System Manager can recover a plan that was
 		// sent to BOM Validation before the runs were added, without exposing the
 		// planning action to ordinary BOM users.
+		if (is_draft && is_ticket_plan) {
+			frm.add_custom_button(__("Refresh Planning Calculations"), function () {
+				frappe.call({
+					method: "nxtgen_savinda_pricing_calculator.api.production_plan.refresh_planning_calculations",
+					args: { production_plan: frm.doc.name }, freeze: true, freeze_message: __("Refreshing planning data…"),
+					callback: function (r) {
+						frappe.show_alert({ message: __("Refreshed {0} planning row(s).", [(r.message || {}).rows || 0]), indicator: "green" });
+						frm.reload_doc();
+					},
+				});
+			}, __("Actions"));
+		}
+
 		if (is_cs_stage || (is_bom_stage && is_system_manager)) {
 			frm.add_custom_button(__("Break Down Job Ticket Item"), function () {
 				_show_job_ticket_breakdown_dialog(frm);
@@ -134,7 +147,19 @@ frappe.ui.form.on("Production Plan", {
 				window.open(frappe.urllib.get_full_url(url));
 			});
 		}
+
+
 	},
+	custom_ticket_type: function (frm, cdt, cdn) {
+		// alert("Ticket Type changed — clearing planning rows and resetting source document.");
+		if (frm.doc.custom_ticket_type == "Job") {
+			frm.set_value('get_items_from', 'Sales Order');
+			// frm.doc.get_items_from = "Sale Order";
+
+		} else if (frm.doc.custom_ticket_type == "NPD") {
+			frm.set_value('get_items_from', 'Material Request');
+		}
+	}
 });
 
 function _show_job_ticket_breakdown_dialog(frm) {
@@ -145,9 +170,11 @@ function _show_job_ticket_breakdown_dialog(frm) {
 	var d = new frappe.ui.Dialog({
 		title: __("Break Down Job Ticket Item"),
 		fields: [
-			{fieldtype: "Select", fieldname: "ticket_item", label: "Job Ticket Item", options: labels.join("\n"), reqd: 1},
-			{fieldtype: "Float", fieldname: "first_qty", label: "First Line Qty", reqd: 1,
-				description: "The remaining quantity is automatically added as a new line with the same item details."},
+			{ fieldtype: "Select", fieldname: "ticket_item", label: "Job Ticket Item", options: labels.join("\n"), reqd: 1 },
+			{
+				fieldtype: "Float", fieldname: "first_qty", label: "First Line Qty", reqd: 1,
+				description: "The remaining quantity is automatically added as a new line with the same item details."
+			},
 		],
 		primary_action_label: __("Split into Two Lines"),
 		primary_action: function (v) {
@@ -160,9 +187,9 @@ function _show_job_ticket_breakdown_dialog(frm) {
 			}
 			frappe.call({
 				method: "nxtgen_savinda_pricing_calculator.api.production_plan.split_job_ticket_item",
-				args: {production_plan: frm.doc.name, ticket_item: name, first_qty: q},
+				args: { production_plan: frm.doc.name, ticket_item: name, first_qty: q },
 				freeze: true, freeze_message: __("Splitting item…"),
-				callback: function (r) { d.hide(); frappe.show_alert({message: __("Created the second Job Ticket line with Qty {0}.", [(r.message || {}).second_qty]), indicator: "green"}); frm.reload_doc(); },
+				callback: function (r) { d.hide(); frappe.show_alert({ message: __("Created the second Job Ticket line with Qty {0}.", [(r.message || {}).second_qty]), indicator: "green" }); frm.reload_doc(); },
 			});
 		},
 	});

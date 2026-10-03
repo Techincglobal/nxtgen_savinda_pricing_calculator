@@ -6,7 +6,10 @@
  "field_order": [
   "cost_fact",
   "is_primary",
-  "manual_select"
+  "manual_select",
+  "column_break_rate",
+  "rate_source",
+  "machine_source"
  ],
  "fields": [
   {
@@ -35,6 +38,28 @@
    "fieldtype": "Check",
    "in_list_view": 1,
    "label": "Manual Select"
+  },
+  {
+   "fieldname": "column_break_rate",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "rate_source",
+   "fieldtype": "Select",
+   "label": "Rate Source",
+   "options": "Standard Rate\nSelected Machine Rate",
+   "default": "Standard Rate",
+   "in_list_view": 1,
+   "description": "Selected Machine Rate matches an active Cost Fact Machine Rate record."
+  },
+  {
+   "fieldname": "machine_source",
+   "fieldtype": "Select",
+   "label": "Machine Source",
+   "options": "Current Spec\nParent Spec",
+   "default": "Current Spec",
+   "depends_on": "eval:doc.rate_source=='Selected Machine Rate'",
+   "description": "Use the selected machine on this Cost Spec, or on its configured Parent Spec."
   }
  ],
  "istable": 1,

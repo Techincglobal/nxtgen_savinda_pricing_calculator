@@ -316,7 +316,7 @@ def get_ticket_print_data(production_plan_name):
 						line_item_bk.append({
 							"full_sheets": _num(ppl.get("full_sheet_qty")), "cut_sheets": _num(ppl.get("cut_sheet_qty")),
 								"wastage": _num(ppl.get("wastage")), "cuts": int(ppl.get("cuts") or 0), "ups": int(ppl.get("ups") or 0),
-								"full_sheet_size": r.get("full_sheet_size") or "", "cut_sheet_size": r.get("cut_sheet_size") or "",
+								"full_sheet_size": ppl.get("full_sheet_size") or r.get("full_sheet_size") or "", "cut_sheet_size": ppl.get("cut_sheet_size") or r.get("cut_sheet_size") or "",
 								"reel_length": _num(ppl.get("reel_length") or r.get("reel_length")), "reel_width": _num(ppl.get("reel_width") or r.get("reel_width")),
 								"reel_area": _num(ppl.get("reel_area") or r.get("reel_area")), "slit_width": ppl.get("slit_width") or r.get("slit_width") or "",
 						})
@@ -342,7 +342,8 @@ def get_ticket_print_data(production_plan_name):
 					"batch_no": p.get("batch_no") or r.get("batch_no") or "", "pack_date": p.get("pack_date") or r.get("pack_date"), "exp_date": p.get("exp_date") or r.get("exp_date"),
 					"full_sheets": _num(p.get("full_sheet_qty")), "cut_sheets": _num(p.get("cut_sheet_qty")),
 					"wastage": _num(p.get("wastage")), "cuts": int(p.get("cuts") or 0), "ups": int(p.get("ups") or 0),
-					"full_sheet_size": r.get("full_sheet_size") or "", "cut_sheet_size": r.get("cut_sheet_size") or "",
+					"full_sheet_size": p.get("full_sheet_size") or r.get("full_sheet_size") or "", "cut_sheet_size": p.get("cut_sheet_size") or r.get("cut_sheet_size") or "",
+					"bom_no": p.get("bom_no") or "",
 					"reel_length": _num(p.get("reel_length") or r.get("reel_length")), "reel_width": _num(p.get("reel_width") or r.get("reel_width")),
 					"reel_area": _num(p.get("reel_area") or r.get("reel_area")), "slit_width": p.get("slit_width") or r.get("slit_width") or "",
 				})
@@ -465,9 +466,9 @@ def get_ticket_print_data(production_plan_name):
 			_bom_by_fg[_r.item_code] = _r.get("bom_no")
 	for l in lines:
 		_fg = l.get("item_code")
-		bomc = _fg_bom_calc(_fg, _bom_by_fg.get(_fg))
+		l["bom_no"] = l.get("bom_no") or _bom_by_fg.get(_fg) or ""
+		bomc = _fg_bom_calc(_fg, l["bom_no"])
 		plv = _fg_pl(_fg)
-		l["bom_no"] = _bom_by_fg.get(_fg) or ""
 		if plv.get("customer_product_code"):
 			l["product_code"] = plv["customer_product_code"]
 		if plv.get("product_size") or bomc.get("custom_carton_size"):
