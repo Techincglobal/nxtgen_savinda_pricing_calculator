@@ -8,6 +8,9 @@
   "fg_item",
   "item_name",
   "qty",
+  "cut_sheet_size",
+  "full_sheet_size",
+  "bom_no",
   "ups",
   "cuts",
   "full_sheet_qty",
@@ -42,8 +45,7 @@
    "fieldname": "qty",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Order Qty",
-   "read_only": 1
+   "label": "Order Qty"
   },
   {
    "columns": 1,
@@ -120,6 +122,25 @@
    "fieldtype": "Link",
    "label": "Parent Item",
    "options": "Item"
+  },
+  {
+   "fieldname": "bom_no",
+   "fieldtype": "Link",
+   "label": "BOM",
+   "options": "BOM",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "full_sheet_size",
+   "fieldtype": "Data",
+   "label": "Full Sheet Size",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cut_sheet_size",
+   "fieldtype": "Data",
+   "label": "Cut Sheet Size",
+   "read_only": 1
   }
  ],
  "istable": 1,

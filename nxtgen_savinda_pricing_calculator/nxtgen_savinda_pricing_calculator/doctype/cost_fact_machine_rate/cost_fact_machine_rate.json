@@ -1,0 +1,133 @@
+{
+ "actions": [],
+ "doctype": "DocType",
+ "autoname": "hash",
+ "engine": "InnoDB",
+ "field_order": [
+  "cost_fact",
+  "offset_spec",
+  "offset_machine",
+  "column_break_rate",
+  "rate",
+  "priority",
+  "section_break_validity",
+  "valid_from",
+  "valid_to",
+  "active"
+ ],
+ "fields": [
+  {
+   "fieldname": "cost_fact",
+   "fieldtype": "Link",
+   "label": "Cost Fact",
+   "options": "Cost Fact",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "offset_spec",
+   "fieldtype": "Link",
+   "label": "Cost Spec",
+   "options": "Offset Spec",
+   "description": "Optional. Leave blank as a machine rate for this Cost Fact in every Cost Spec.",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "offset_machine",
+   "fieldtype": "Link",
+   "label": "Offset Machine",
+   "options": "Offset Machine",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break_rate",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "rate",
+   "fieldtype": "Currency",
+   "label": "Rate per Unit (LKR)",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "priority",
+   "fieldtype": "Int",
+   "label": "Priority",
+   "default": "0",
+   "description": "Higher priority wins when more than one active rule matches."
+  },
+  {
+   "fieldname": "section_break_validity",
+   "fieldtype": "Section Break",
+   "label": "Validity"
+  },
+  {
+   "fieldname": "valid_from",
+   "fieldtype": "Date",
+   "label": "Valid From",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "valid_to",
+   "fieldtype": "Date",
+   "label": "Valid To",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "active",
+   "fieldtype": "Check",
+   "label": "Active",
+   "default": "1",
+   "in_list_view": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "name": "Cost Fact Machine Rate",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "print": 1,
+   "email": 1,
+   "report": 1,
+   "export": 1,
+   "share": 1
+  },
+  {
+   "role": "Savinda Pricing Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "print": 1,
+   "email": 1,
+   "report": 1,
+   "export": 1,
+   "share": 1
+  },
+  {
+   "role": "Savinda Estimator",
+   "read": 1,
+   "print": 1,
+   "email": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Savinda Pricing Viewer",
+   "read": 1,
+   "print": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

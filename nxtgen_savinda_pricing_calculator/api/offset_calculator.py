@@ -15,7 +15,7 @@ Uses only these DocTypes:
 import json
 import math
 import frappe
-from frappe.utils import flt, cint
+from frappe.utils import flt, cint, getdate, today
 
 
 
@@ -99,6 +99,8 @@ def _enrich_spec(spec):
                 "cost_fact":     row.cost_fact,
                 "is_primary":    cint(row.is_primary),
                 "manual_select": cint(getattr(row, "manual_select", 0)),
+                "rate_source":   getattr(row, "rate_source", "Standard Rate") or "Standard Rate",
+                "machine_source": getattr(row, "machine_source", "Current Spec") or "Current Spec",
                 "master":        _get_cf_data(row.cost_fact),
             }
             for row in (doc.cost_facts or [])
@@ -114,6 +116,37 @@ def _enrich_spec(spec):
             if row.foil_name
         ],
     }
+
+
+def _get_machine_cost_fact_rate(cost_fact, spec_name, machine, effective_date=None):
+    """Return the best effective-dated rate for one Cost Fact and selected machine.
+    A rule tied to the current Cost Spec wins over a blank/general Cost Spec rule."""
+    if not (cost_fact and machine):
+        return {"rate": 0.0, "rule": ""}
+    effective_date = getdate(effective_date or today())
+    rows = frappe.get_all(
+        "Cost Fact Machine Rate",
+        filters={"cost_fact": cost_fact, "offset_machine": machine, "active": 1},
+        fields=["name", "offset_spec", "rate", "priority", "valid_from", "valid_to"],
+    )
+    matches = []
+    for row in rows:
+        if row.offset_spec and row.offset_spec != spec_name:
+            continue
+        if row.valid_from and getdate(row.valid_from) > effective_date:
+            continue
+        if row.valid_to and getdate(row.valid_to) < effective_date:
+            continue
+        matches.append(row)
+    if not matches:
+        return {"rate": 0.0, "rule": ""}
+    matches.sort(key=lambda r: (
+        1 if r.offset_spec == spec_name else 0,
+        cint(r.priority),
+        getdate(r.valid_from) if r.valid_from else getdate("1900-01-01"),
+    ), reverse=True)
+    selected = matches[0]
+    return {"rate": flt(selected.rate), "rule": selected.name}
 
 
 def _get_unit_qty(units, form, sheet):
@@ -427,7 +460,12 @@ def calculate(payload):
         cost_rows.extend(rows)
         mat_total += mt; prep_total += pp; prod_total += pr
 
-    # 3. Selected specs — build machine dependency map first
+    # 3. Selected specs — build machine dependency map first.
+    # Parent machine is kept separately so a child Cost Fact can use it as a rate source.
+    selected_by_name = {s.get("name"): s for s in selected_specs if s.get("name")}
+    for spec in selected_specs:
+        parent = selected_by_name.get(spec.get("parent_spec")) or {}
+        spec["_parent_machine"] = (parent.get("machine_assignment") or {}).get("machine", "")
     all_selected_spec_names = [s.get("spec_name", "") for s in selected_specs]
     machine_count_map = {}
     for spec in selected_specs:
@@ -1468,6 +1506,22 @@ def _process_spec(spec, form, sheet, item_qty, no_of_colors, material_rate,
                 extra_ctx[k] = v
 
     for cf_row in spec.get("cost_facts", []):
+        cf_row = dict(cf_row)
+        if cf_row.get("rate_source") == "Selected Machine Rate":
+            machine = machine_assignment.get("machine", "")
+            rate_spec = spec.get("name") or spec.get("spec_name")
+            if cf_row.get("machine_source") == "Parent Spec":
+                machine = spec.get("_parent_machine", "")
+                # A child Cost Fact inherits both the selected parent machine and
+                # the parent's rate rule, so its rate can be configured on Print.
+                rate_spec = spec.get("parent_spec") or rate_spec
+            matched = _get_machine_cost_fact_rate(
+                cf_row.get("cost_fact"), rate_spec, machine,
+                form.get("calculation_date") or form.get("transaction_date") or today(),
+            )
+            cf_row["matched_machine_rate"] = matched["rate"]
+            cf_row["matched_machine"] = machine
+            cf_row["matched_machine_rate_rule"] = matched["rule"]
         for row, mt, pp, pr in _build_rows_for_cf(
             cf_row, spec.get("spec_name", ""), form, sheet,
             item_qty, no_of_colors, material_rate,
@@ -1673,6 +1727,7 @@ def _build_row(cf_row, spec_name, form, sheet, item_qty, no_of_colors,
         "hot_foil_count":  0,
         "plate_count":     cint(form.get("plate_count", 0)),
         "machine_capacity": cint(form.get("machine_capacity", 8)),
+        "machine_rate": flt(cf_row.get("matched_machine_rate", 0)),
     }
     if extra_ctx:
         eval_ctx.update(extra_ctx)
@@ -1699,7 +1754,9 @@ def _build_row(cf_row, spec_name, form, sheet, item_qty, no_of_colors,
             rq = flt(attr["qty"])
 
     rate = 0.0
-    if rate_formula:
+    if cf_row.get("rate_source") == "Selected Machine Rate":
+        rate = flt(cf_row.get("matched_machine_rate", 0))
+    elif rate_formula:
         rate = _safe_eval(rate_formula, eval_ctx)
     elif user_rate:
         rate = user_rate
@@ -1720,7 +1777,7 @@ def _build_row(cf_row, spec_name, form, sheet, item_qty, no_of_colors,
     return {
         "spec_name": spec_name, "cost_fact": cf_name, "cost_group": grp_str,
         "selected_item": sel_item, "selected_item_name": sel_name,
-        "attribute_values": attr, "req_qty": round(rq, 4),
+        "attribute_values": dict(attr, **({"machine": cf_row.get("matched_machine"), "machine_rate_rule": cf_row.get("matched_machine_rate_rule")} if cf_row.get("rate_source") == "Selected Machine Rate" else {})), "req_qty": round(rq, 4),
         "rate": round(rate, 4), "amount": amount,
         "uom": cf.get("uom", ""),
         "is_auto": False, "section": "Spec",

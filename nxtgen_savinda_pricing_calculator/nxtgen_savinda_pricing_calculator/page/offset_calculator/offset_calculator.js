@@ -310,10 +310,13 @@ function oc_mount_app(el) {
 					}).map(function (cf) {
 						var cfst = st[cf.cost_fact] || {};
 						var hasItems = cf.master && cf.master.items && cf.master.items.length > 0;
-						var rate = parseFloat(cfst.rate || 0);
-						if (!rate && !hasItems) rate = parseFloat(self.form.material_rate || 0);
+						var usesMachineRate = cf.rate_source === 'Selected Machine Rate';
+						var rate = usesMachineRate ? 0 : parseFloat(cfst.rate || 0);
+						if (!rate && !hasItems && !usesMachineRate) rate = parseFloat(self.form.material_rate || 0);
 						var out = {
 							cost_fact: cf.cost_fact, is_primary: cf.is_primary,
+							rate_source: cf.rate_source || 'Standard Rate',
+							machine_source: cf.machine_source || 'Current Spec',
 							selected_item: cfst.selected_item || '',
 							attribute_values: cfst.attr_values || {},
 							rate: rate, req_qty: parseFloat(cfst.req_qty || 0),
@@ -326,6 +329,8 @@ function oc_mount_app(el) {
 						return out;
 					});
 					return {
+						name: spec.name || '',
+						parent_spec: spec.parent_spec || '',
 						spec_name: spec.spec_name,
 						group: spec.group || '',
 						has_machine: spec.has_machine || 0,
@@ -358,6 +363,8 @@ function oc_mount_app(el) {
 						var mst = self.machineSpecState[cf.cost_fact] || {};
 						return {
 							cost_fact: cf.cost_fact, is_primary: cf.is_primary,
+							rate_source: cf.rate_source || 'Standard Rate',
+							machine_source: cf.machine_source || 'Current Spec',
 							selected_item: mst.selected_item || '',
 							attribute_values: mst.attr_values || {},
 							rate: parseFloat(mst.rate || 0),

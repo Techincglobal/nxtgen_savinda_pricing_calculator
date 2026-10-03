@@ -12,11 +12,13 @@ Production Plan as the printed Job Ticket + NPD Request → FG → BOM → Produ
 Reuses the source populators / context helpers from api.job_ticket.
 """
 import json
+import math
 
 import frappe
 from frappe.utils import add_days, cint, flt, now, now_datetime, today
 
 from nxtgen_savinda_pricing_calculator.api import job_ticket as jt_api
+from nxtgen_savinda_pricing_calculator.api.offset_calculator import _get_config
 
 
 # ── small helpers ────────────────────────────────────────────────────────────
@@ -830,6 +832,68 @@ def validate_ticket_item_exp_dates(doc, method=None):
 			title="Exp Date Required")
 
 
+def _refresh_manual_planning_rows(doc):
+	"""Recalculate Offset/Flexo Manufacturing Planning rows before a draft plan is saved.
+	This makes manual FG, qty and BOM edits use the current item/BOM calculation data."""
+	if doc.docstatus != 0:
+		return
+	pricing = doc.get("custom_pricing_type") or "Offset"
+	is_flexo = pricing == "Flexo"
+	field = "custom_flexo_planning" if is_flexo else "custom_offset_planning"
+	for row in (doc.get(field) or []):
+		fg = row.get("fg_item")
+		if not fg or not frappe.db.exists("Item", fg):
+			continue
+		ctx = jt_api._fg_context(fg)
+		row.item_name = frappe.db.get_value("Item", fg, "item_name") or fg
+		row.cost_item = ctx.get("cost_item") or ""
+		row.calculation_breakdown = ctx.get("calculation_breakdown") or row.get("calculation_breakdown") or ""
+		bom = row.get("bom_no") or _active_bom_for_item(fg)
+		if bom and frappe.db.exists("BOM", bom):
+			row.bom_no = bom
+		else:
+			bom = ""
+			row.bom_no = ""
+		qty = flt(row.get("qty"))
+		data = _plan_print_data(row.get("calculation_breakdown"), qty, pricing)
+		row.ups, row.cuts = data["ups"], data["cuts"]
+		if is_flexo:
+			row.reel_area = data["reel_area"]
+			row.reel_length = data["reel_length"]
+			row.reel_width = data["reel_width"]
+			row.slit_width = data["slit_width"]
+			continue
+		row.full_sheet_qty = data["full_sheet_qty"]
+		row.cut_sheet_qty = data["cut_sheet_qty"]
+		row.wastage = data["wastage"]
+		if not bom:
+			continue
+		geom = frappe.db.get_value("BOM", bom, ["custom_no_of_ups", "custom_no_of_cuts", "custom_cut_sheet_ups", "custom_full_sheet_size", "custom_cut_sheet_size"], as_dict=True) or {}
+		no_ups, cuts = cint(geom.get("custom_no_of_ups")), max(cint(geom.get("custom_no_of_cuts")) or 1, 1)
+		cut_ups = cint(geom.get("custom_cut_sheet_ups")) or (max(no_ups // cuts, 1) if no_ups else 0)
+		if no_ups:
+			row.ups, row.cuts = no_ups, cuts
+			if cut_ups and qty:
+				cut_qty = math.ceil(qty / cut_ups)
+				cfg = _get_config()
+				waste = max(math.ceil(cut_qty * flt(cfg.get("offset_wastage_pct"))), cint(cfg.get("offset_wastage_min")))
+				row.cut_sheet_qty, row.wastage = cut_qty, waste
+				row.full_sheet_qty = math.ceil((cut_qty + waste) / cuts)
+		row.full_sheet_size = geom.get("custom_full_sheet_size") or ""
+		row.cut_sheet_size = geom.get("custom_cut_sheet_size") or ""
+
+
+@frappe.whitelist()
+def refresh_planning_calculations(production_plan):
+	"""Save a draft plan after refreshing every manual planning row."""
+	pp = frappe.get_doc("Production Plan", production_plan)
+	if pp.docstatus != 0:
+		frappe.throw("Planning calculations can only be refreshed while the Production Plan is a draft.")
+	_refresh_manual_planning_rows(pp)
+	pp.save(ignore_permissions=True)
+	return {"rows": len(pp.get("custom_flexo_planning" if (pp.get("custom_pricing_type") == "Flexo") else "custom_offset_planning") or [])}
+
+
 def on_production_plan_before_save(doc, method=None):
 	"""Auto-fetch Job Ticket header + item list as soon as a source (SO / NPD) is set."""
 	try:
@@ -838,6 +902,7 @@ def on_production_plan_before_save(doc, method=None):
 		frappe.log_error(frappe.get_traceback(), "production_plan auto-populate failed")
 	try:
 		_stamp_planning_line_fields(doc)
+		_refresh_manual_planning_rows(doc)
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "production_plan stamp planning line fields failed")
 
