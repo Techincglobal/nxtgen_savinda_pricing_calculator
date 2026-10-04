@@ -7,10 +7,12 @@
  "field_order": [
   "fg_item",
   "item_name",
+  "planning_type",
   "qty",
   "cut_sheet_size",
   "full_sheet_size",
   "bom_no",
+  "base_material",
   "ups",
   "cuts",
   "full_sheet_qty",
@@ -39,6 +41,15 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Item Name"
+  },
+  {
+   "default": "Manufacture",
+   "fieldname": "planning_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Type",
+   "options": "Manufacture\nAssembly",
+   "read_only": 1
   },
   {
    "columns": 1,
@@ -141,6 +152,14 @@
    "fieldtype": "Data",
    "label": "Cut Sheet Size",
    "read_only": 1
+  },
+  {
+   "fieldname": "base_material",
+   "fieldtype": "Link",
+   "label": "Base Material",
+   "options": "Item",
+   "read_only": 1,
+   "in_list_view": 1
   }
  ],
  "istable": 1,

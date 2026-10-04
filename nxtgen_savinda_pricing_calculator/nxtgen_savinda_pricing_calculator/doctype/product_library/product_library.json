@@ -7,6 +7,12 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "approval_section",
+  "approval_required",
+  "approval_status",
+  "approval_remarks",
+  "approved_by",
+  "approved_on",
   "section_general",
   "product_name",
   "product_code",
@@ -60,9 +66,16 @@
   "lamination",
   "die_cut_code",
   "section_finishings",
-  "finishings"
+  "finishings",
+  "finishings_reviewed"
  ],
  "fields": [
+  {"fieldname": "approval_section", "fieldtype": "Section Break", "label": "FG Approval", "depends_on": "eval:doc.approval_required"},
+  {"fieldname": "approval_required", "fieldtype": "Check", "label": "FG Approval Required", "default": "0", "read_only": 1, "hidden": 1},
+  {"fieldname": "approval_status", "fieldtype": "Select", "label": "Approval Status", "options": "\nPending Validation\nReturned for Correction\nApproved", "read_only": 1, "in_list_view": 1, "no_copy": 1},
+  {"fieldname": "approval_remarks", "fieldtype": "Small Text", "label": "Approval / Correction Remarks", "read_only": 1},
+  {"fieldname": "approved_by", "fieldtype": "Link", "options": "User", "label": "Approved By", "read_only": 1, "no_copy": 1},
+  {"fieldname": "approved_on", "fieldtype": "Datetime", "label": "Approved On", "read_only": 1, "no_copy": 1},
   {
    "fieldname": "section_general",
    "fieldtype": "Section Break",
@@ -360,6 +373,14 @@
    "fieldtype": "Table",
    "label": "Finishings",
    "options": "Product Library Finishing"
+  },
+  {
+   "default": "0",
+   "fieldname": "finishings_reviewed",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Finishings Reviewed",
+   "read_only": 1
   }
  ],
  "links": [],
@@ -369,7 +390,13 @@
  "name": "Product Library",
  "naming_rule": "Expression",
  "owner": "Administrator",
- "permissions": [],
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "report": 1},
+  {"role": "BOM Team", "read": 1, "write": 1, "report": 1},
+  {"role": "CS Team", "read": 1, "write": 1, "report": 1},
+  {"role": "Sales User", "if_owner": 1, "read": 1, "write": 1}
+ ],
+ "track_changes": 1,
  "row_format": "Dynamic",
  "search_fields": "product_code,customer_product_code,customer",
  "sort_field": "modified",

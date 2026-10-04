@@ -1,0 +1,82 @@
+{
+ "doctype": "DocType",
+ "name": "FG Approval Settings",
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "issingle": 1,
+ "engine": "InnoDB",
+ "track_changes": 1,
+ "field_order": [
+  "validator_role",
+  "approver_role",
+  "send_system_notification",
+  "send_email",
+  "pending_template",
+  "returned_template",
+  "approved_template",
+  "help"
+ ],
+ "fields": [
+  {
+   "fieldname": "validator_role",
+   "fieldtype": "Link",
+   "options": "Role",
+   "label": "Validation Team Role",
+   "default": "BOM Team",
+   "reqd": 1
+  },
+  {
+   "fieldname": "approver_role",
+   "fieldtype": "Link",
+   "options": "Role",
+   "label": "Approve and Enable Role",
+   "default": "BOM Team",
+   "reqd": 1
+  },
+  {
+   "fieldname": "send_system_notification",
+   "fieldtype": "Check",
+   "label": "Send In-System Notifications",
+   "default": "1"
+  },
+  {
+   "fieldname": "send_email",
+   "fieldtype": "Check",
+   "label": "Send Email",
+   "default": "1"
+  },
+  {
+   "fieldname": "pending_template",
+   "fieldtype": "Link",
+   "options": "Email Template",
+   "label": "Pending Validation Email Template",
+   "reqd": 1
+  },
+  {
+   "fieldname": "returned_template",
+   "fieldtype": "Link",
+   "options": "Email Template",
+   "label": "Returned for Correction Email Template",
+   "reqd": 1
+  },
+  {
+   "fieldname": "approved_template",
+   "fieldtype": "Link",
+   "options": "Email Template",
+   "label": "Approved Email Template",
+   "reqd": 1
+  },
+  {
+   "fieldname": "help",
+   "fieldtype": "HTML",
+   "options": "<p>Only pricing-app-created FGs require approval. Pending notifications go to enabled users in the validation/approval roles. Return and approval notifications go to the creator. Manage template content in Email Template; standard Role Permission Manager controls who can edit settings/templates. Template variables: doc, fg_item, product_library_url, actor, remarks.</p>"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1
+  }
+ ]
+}

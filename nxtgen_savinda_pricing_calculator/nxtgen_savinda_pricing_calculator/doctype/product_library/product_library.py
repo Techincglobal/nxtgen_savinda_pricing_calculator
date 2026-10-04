@@ -3,4 +3,10 @@ from frappe.model.document import Document
 
 
 class ProductLibrary(Document):
-	pass
+	def validate(self):
+		from nxtgen_savinda_pricing_calculator.api.fg_approval import validate_product_library
+		validate_product_library(self)
+
+	def on_update(self):
+		from nxtgen_savinda_pricing_calculator.api.fg_approval import on_product_library_update
+		on_product_library_update(self)

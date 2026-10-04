@@ -117,12 +117,48 @@ def validate_base_material_transfer_cap(doc, method=None):
 			title="Base Material Transfer Limit")
 
 
+def _reviewed_pl_overrides(overrides):
+	"""Validate the popup's finishing rows before creating any FG Items."""
+	if isinstance(overrides, str):
+		overrides = json.loads(overrides or "{}")
+	if overrides is None:
+		return {}
+	if not isinstance(overrides, dict):
+		frappe.throw("Product Library details must be an object.")
+	overrides = dict(overrides)
+	if "finishings" not in overrides:
+		return overrides
+	rows = overrides["finishings"]
+	if not isinstance(rows, list):
+		frappe.throw("Finishings must be a list.")
+	finishings, seen = [], set()
+	for idx, row in enumerate(rows, 1):
+		if not isinstance(row, dict) or not (row.get("process_name") or "").strip():
+			frappe.throw(f"Select a Finishing in row {idx}.")
+		name = row["process_name"].strip()
+		if name in seen:
+			frappe.throw(f"Finishing {name} is selected more than once.")
+		seen.add(name)
+		finishings.append({
+			"process_name": name,
+			"machine_name": row.get("machine_name") or "",
+			"remarks": row.get("remarks") or "",
+		})
+	overrides["finishings"] = finishings
+	overrides["finishings_reviewed"] = 1
+	return overrides
+
+
 def _sync_pl_finishings_from_cost_item(pl_name, cost_item):
 	"""Refresh an existing Product Library's finishings from the finishings saved on the cost
 	item's Calculation Breakdown (the finishing multi-select). Best-effort; only replaces when
 	the calculation has finishings, so it never wipes hand-added ones."""
 	try:
 		if not pl_name:
+			return
+		pl = frappe.get_doc("Product Library", pl_name)
+		# An explicitly reviewed empty table is also a deliberate FG selection.
+		if pl.get("finishings_reviewed"):
 			return
 		cb_name = None
 		if cost_item and frappe.db.exists("cost Item", cost_item):
@@ -137,7 +173,6 @@ def _sync_pl_finishings_from_cost_item(pl_name, cost_item):
 		fins = get_cb_finishings(cb_name)
 		if not fins:
 			return
-		pl = frappe.get_doc("Product Library", pl_name)
 		pl.set("finishings", [{"process_name": f} for f in fins])
 		pl.flags.ignore_permissions = True
 		pl.save(ignore_permissions=True)
@@ -146,11 +181,11 @@ def _sync_pl_finishings_from_cost_item(pl_name, cost_item):
 		                 message=frappe.get_traceback())
 
 
-def _upsert_product_library(fg_item_code, cost_item=None, customer_ref=None, overrides=None):
+def _upsert_product_library(fg_item_code, cost_item=None, customer_ref=None, overrides=None, require_approval=False):
 	"""Create a Product Library record for a new FG, pre-filled from the (final) cost Item
 	and its Calculation Breakdown. `overrides` (a dict keyed by Product Library fieldname)
 	wins over the computed defaults — used when the user reviews/edits the details in the
-	FG-creation popup. Non-fatal — never blocks FG creation."""
+	FG-creation popup. Approval-managed FGs fail atomically if their library cannot be created."""
 	try:
 		if not fg_item_code or not frappe.db.exists("DocType", "Product Library"):
 			return
@@ -251,12 +286,17 @@ def _upsert_product_library(fg_item_code, cost_item=None, customer_ref=None, ove
 				if v in (None, "") or not meta.has_field(k):
 					continue
 				pl_data[k] = v
+		if require_approval:
+			pl_data.update(approval_required=1, approval_status="Pending Validation", approved_by=None, approved_on=None, approval_remarks="")
 		pl = frappe.get_doc(pl_data)
 		pl.flags.ignore_permissions = True
 		pl.insert(ignore_permissions=True)
 		if frappe.db.has_column("Item", "custom_product_library"):
 			frappe.db.set_value("Item", fg_item_code, "custom_product_library", pl.name)
+		return pl.name
 	except Exception:
+		if require_approval:
+			raise  # Roll back the FG too; never leave it without its approval record.
 		frappe.log_error(
 			title="pricing_calculator: product library upsert failed",
 			message=frappe.get_traceback(),
@@ -279,6 +319,7 @@ def create_fg_item(item_name, description, item_group, department, stock_uom="No
 		frappe.throw("Item Group is required")
 	if not department:
 		frappe.throw("Department is required")
+	pl_overrides = _reviewed_pl_overrides(pl_overrides)
 
 	# Resolve abbreviations from the linked masters
 	item_group_abbr = frappe.db.get_value("Item Group", item_group, "custom_abbr") or ""
@@ -301,13 +342,10 @@ def create_fg_item(item_name, description, item_group, department, stock_uom="No
 		doc.custom_cost_item = cost_item
 	if customer_ref and frappe.db.has_column("Item", "customer_ref"):
 		doc.customer_ref = customer_ref
-	doc.insert(ignore_permissions=True)
-	if isinstance(pl_overrides, str):
-		pl_overrides = json.loads(pl_overrides or "{}")
-	_upsert_product_library(doc.name, cost_item, customer_ref, overrides=pl_overrides)
-	frappe.db.commit()
+	from nxtgen_savinda_pricing_calculator.api.fg_approval import insert_pending_fg
+	pl_name = insert_pending_fg(doc, cost_item, customer_ref, pl_overrides)
 
-	return {"item_code": doc.name, "item_name": doc.item_name}
+	return {"item_code": doc.name, "item_name": doc.item_name, "product_library": pl_name, "approval_status": "Pending Validation"}
 
 
 def _variant_abbr(value):
@@ -373,9 +411,7 @@ def create_fg_variants(template_name, description, item_group, department,
 	if isinstance(variants, str):
 		variants = json.loads(variants or "[]")
 	variants = variants or []
-	if isinstance(pl_overrides, str):
-		pl_overrides = json.loads(pl_overrides or "{}")
-	pl_overrides = pl_overrides or {}
+	pl_overrides = _reviewed_pl_overrides(pl_overrides)
 	rows = [v for v in variants if (v.get("value") or v.get("item_name") or "").strip()]
 	if not rows:
 		frappe.throw("Add at least one variation (a value like S/M/L or an item name).")
@@ -417,12 +453,12 @@ def create_fg_variants(template_name, description, item_group, department,
 		# All variants link to the one shared Cost Item (→ its calculation breakdown)
 		if cost_item and frappe.db.has_column("Item", "custom_cost_item"):
 			doc.custom_cost_item = cost_item
-		doc.insert(ignore_permissions=True)
 		# Shared reviewed PL values, but each variant keeps its own customer product code.
 		row_over = dict(pl_overrides)
 		if r.get("customer_ref"):
 			row_over["customer_product_code"] = r.get("customer_ref")
-		_upsert_product_library(doc.name, cost_item, r.get("customer_ref"), overrides=row_over)
+		from nxtgen_savinda_pricing_calculator.api.fg_approval import insert_pending_fg
+		insert_pending_fg(doc, cost_item, r.get("customer_ref"), row_over)
 		created.append({"item_code": doc.name, "item_name": doc.item_name,
 		                "value": val, "customer_ref": r.get("customer_ref") or ""})
 
@@ -432,7 +468,6 @@ def create_fg_variants(template_name, description, item_group, department,
 		if base_ref:
 			frappe.db.set_value("cost Item", cost_item, "customer_ref", base_ref)
 
-	frappe.db.commit()
 	return {"items": created}
 
 

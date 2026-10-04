@@ -1,6 +1,6 @@
 // Copyright (c) 2026, Techincglobal.com
-// Production Plan — "Add Wastage" to raw material rows.
-// BOMs are built net (no wastage); wastage is layered in here at planning level.
+// Production Plan workflow, Manufacturing Planning, and material-request actions.
+// Base-material quantities come from Manufacturing Planning sheet/reel calculations.
 
 frappe.ui.form.on("Production Plan", {
 	refresh: function (frm) {
@@ -17,12 +17,8 @@ frappe.ui.form.on("Production Plan", {
 			"Supply Chain Validation", "Approved", "Submitted"
 		].indexOf(workflow_state) !== -1;
 
-		// Supply Chain: wastage and purchasing happen only after CS artwork approval.
-		if (is_supply_stage && (frm.doc.mr_items || []).length) {
-			frm.add_custom_button(__("Add Wastage"), function () {
-				_show_wastage_dialog(frm);
-			}, __("Actions"));
-		}
+		// Base-material wastage is calculated from Manufacturing Planning when raw
+		// materials are fetched. Do not offer the former percentage Add Wastage action.
 
 		// CS Team: prepare and verify the source details before handing off to BOM.
 		if (is_cs_stage && (frm.doc.po_items || []).length) {
@@ -135,6 +131,22 @@ frappe.ui.form.on("Production Plan", {
 					},
 				});
 			}, __("Actions"));
+		}
+
+		// Re-request is available only after the initial ERPNext Material Request was
+		// submitted. Assembly rows are deliberately excluded by the API.
+		if (is_ticket_plan && frm.doc.docstatus === 1) {
+			frappe.call({
+				method: "nxtgen_savinda_pricing_calculator.api.production_plan.can_re_request_base_material",
+				args: { production_plan: frm.doc.name },
+				callback: function (r) {
+					if (r.message) {
+						frm.add_custom_button(__("Re-Request Base Material"), function () {
+							_show_base_material_request_dialog(frm);
+						}, __("Create"));
+					}
+				},
+			});
 		}
 
 		// The approved production document is relevant from Artwork Approval onward.
@@ -335,4 +347,125 @@ function _show_wastage_dialog(frm) {
 			render(d.get_value("tolerance"));
 		});
 	});
+}
+
+function _show_base_material_request_dialog(frm) {
+	frappe.call({
+		method: "nxtgen_savinda_pricing_calculator.api.production_plan.get_base_material_request_rows",
+		args: { production_plan: frm.doc.name },
+		freeze: true,
+		freeze_message: __("Loading Manufacturing Planning…"),
+		callback: function (r) {
+			var rows = r.message || [];
+			if (!rows.length) {
+				frappe.msgprint(__("There are no Manufacture rows with a Base Material in Manufacturing Planning."));
+				return;
+			}
+			var d = new frappe.ui.Dialog({
+				title: __("Re-Request Base Material"),
+				size: "large",
+				fields: [
+					{ fieldtype: "HTML", fieldname: "manufacture_rows" },
+				],
+				primary_action_label: __("Calculate Materials"),
+				primary_action: function () {
+					var selections = [];
+					d.fields_dict.manufacture_rows.$wrapper.find("tr.base-material-row").each(function () {
+						var $tr = $(this);
+						if (!$tr.find(".base-material-select").prop("checked")) return;
+						var index = parseInt($tr.attr("data-index"), 10);
+						var fg_qty = parseFloat($tr.find(".base-material-fg-qty").val()) || 0;
+						if (fg_qty <= 0) return;
+						selections.push({ planning_row: rows[index].planning_row, fg_qty: fg_qty });
+					});
+					if (!selections.length) {
+						frappe.msgprint(__("Select at least one item and enter a manufacture quantity."));
+						return;
+					}
+					frappe.call({
+						method: "nxtgen_savinda_pricing_calculator.api.production_plan.preview_base_material_request",
+						args: { production_plan: frm.doc.name, selections: selections },
+						freeze: true,
+						freeze_message: __("Calculating base materials…"),
+						callback: function (preview) {
+							d.hide();
+							_show_base_material_request_review(frm, selections, preview.message || []);
+						},
+					});
+				},
+			});
+
+			var html = '<p class="text-muted">Enter the Finished Good quantity to manufacture. '
+				+ 'Only Manufacture rows are shown; assembly rows do not consume base material directly.</p>'
+				+ '<div style="max-height:52vh;overflow:auto"><table class="table table-bordered" style="font-size:12px;margin:0">'
+				+ '<thead><tr><th></th><th>FG Item</th><th class="text-right">Planned Qty</th>'
+				+ '<th class="text-right">Manufacture Qty</th><th>Base Material</th></tr></thead><tbody>';
+			rows.forEach(function (row, index) {
+				html += '<tr class="base-material-row" data-index="' + index + '">'
+					+ '<td><input class="base-material-select" type="checkbox" checked></td>'
+					+ '<td>' + frappe.utils.escape_html(row.item_name || row.fg_item || "")
+					+ '<br><span class="text-muted">' + frappe.utils.escape_html(row.fg_item || "") + '</span></td>'
+					+ '<td class="text-right">' + row.planned_qty + '</td>'
+					+ '<td><input class="form-control input-sm text-right base-material-fg-qty" type="number" min="0" max="'
+					+ row.planned_qty + '" step="0.0001" value="' + row.planned_qty + '" style="width:130px"></td>'
+					+ '<td>' + frappe.utils.escape_html(row.base_material_name || row.base_material || "")
+					+ '<br><span class="text-muted">' + frappe.utils.escape_html(row.base_material || "") + '</span></td></tr>';
+			});
+			html += '</tbody></table></div>';
+			d.fields_dict.manufacture_rows.$wrapper.html(html);
+			d.show();
+		},
+	});
+}
+
+function _show_base_material_request_review(frm, selections, materials) {
+	var d = new frappe.ui.Dialog({
+		title: __("Confirm Base Material Re-Request"),
+		size: "large",
+		fields: [
+			{ fieldtype: "HTML", fieldname: "material_rows" },
+		],
+		primary_action_label: __("Create Draft Re-Request"),
+		primary_action: function () {
+			var request_items = [];
+			d.fields_dict.material_rows.$wrapper.find(".base-material-request-qty").each(function () {
+				request_items.push({
+					item_code: $(this).attr("data-item-code"),
+					qty: parseFloat($(this).val()) || 0,
+				});
+			});
+			frappe.call({
+				method: "nxtgen_savinda_pricing_calculator.api.production_plan.create_base_material_request",
+				args: { production_plan: frm.doc.name, selections: selections, request_items: request_items },
+				freeze: true,
+				freeze_message: __("Creating Material Request…"),
+				callback: function (r) {
+					var material_request = (r.message || {}).material_request;
+					d.hide();
+					frappe.msgprint({
+						title: __("Base Material Re-Request Created"),
+						message: __("Draft Material Request: <a href='/app/material-request/{0}' target='_blank'>{0}</a>", [material_request]),
+						indicator: "green",
+					});
+					frm.reload_doc();
+				},
+			});
+		},
+	});
+	var html = '<p class="text-muted">Required Qty is calculated from Manufacturing Planning. '
+		+ 'You may change Request Qty before creating the draft Material Request.</p>'
+		+ '<div style="max-height:52vh;overflow:auto"><table class="table table-bordered" style="font-size:12px;margin:0">'
+		+ '<thead><tr><th>Base Material</th><th>UOM</th><th class="text-right">Calculated Qty</th>'
+		+ '<th class="text-right">Request Qty</th></tr></thead><tbody>';
+	materials.forEach(function (row) {
+		html += '<tr><td>' + frappe.utils.escape_html(row.item_name || row.item_code || "")
+			+ '<br><span class="text-muted">' + frappe.utils.escape_html(row.item_code || "") + '</span></td>'
+			+ '<td>' + frappe.utils.escape_html(row.uom || "") + '</td>'
+			+ '<td class="text-right">' + row.calculated_qty + '</td>'
+			+ '<td><input class="form-control input-sm text-right base-material-request-qty" type="number" min="0.000001" '
+			+ 'step="0.0001" data-item-code="' + frappe.utils.escape_html(row.item_code || "") + '" value="' + row.calculated_qty + '" style="width:130px"></td></tr>';
+	});
+	html += '</tbody></table></div>';
+	d.fields_dict.material_rows.$wrapper.html(html);
+	d.show();
 }

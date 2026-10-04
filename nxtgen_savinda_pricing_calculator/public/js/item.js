@@ -5,7 +5,11 @@ frappe.ui.form.on("Item", {
 		// Only costing-created finished goods use the guarded qty-pricing flow.
 		if (frm.is_new() || !frm.doc.custom_cost_item || !window.nxtgen_pricing) return;
 
-		frm.add_custom_button(__("Manage Qty Pricing Rules"), function () {
+		if (frm.doc.custom_fg_approval_required) {
+			frm.add_custom_button(__("Open Product Library Review"), function () {
+				frappe.set_route("Form", "Product Library", frm.doc.custom_product_library);
+			});
+		} else frm.add_custom_button(__("Manage Qty Pricing Rules"), function () {
 			nxtgen_pricing.showForFGs({
 			doc: {
 				currency: "LKR",

@@ -780,13 +780,8 @@ function _create_fg_for_item(frm, pending_rows, idx, ig_default, created) {
 	created = created || [];
 	if (idx >= pending_rows.length) {
 		frm.save(null, function () {
-			frappe.show_alert({ message: "All FG items created and linked.", indicator: "green" });
+			frappe.show_alert({ message: "FG items created disabled and sent for Product Library validation.", indicator: "blue" });
 			frm.refresh();
-			// After the FGs are created, open the qty-pricing popup to review/edit the tiers
-			// and write the Pricing Rules used when the Sales Order is created.
-			if (created.length && window.nxtgen_pricing) {
-				nxtgen_pricing.showForFGs(frm, created, function () {});
-			}
 		});
 		return;
 	}
@@ -892,9 +887,8 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) 
 			_create_fg_for_item(frm, pending_rows, idx + 1, ig_default, created);
 		},
 		primary_action: function (vals) {
-			d.hide();
-
 			if (vals.existing_item) {
+				d.hide();
 				// Link existing item
 				_link_fg_to_rows(frm, _fg_product_key(row), vals.existing_item);
 				created.push({ item_code: vals.existing_item, item_name: row.item_name, cost_item: row.cost_item || "" });
@@ -915,6 +909,7 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) 
 					d.show();
 					return;
 				}
+				d.disable_primary_action();
 				frappe.call({
 					method: "nxtgen_savinda_pricing_calculator.api.manufacturing.create_fg_variants",
 					args: {
@@ -932,6 +927,7 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) 
 					freeze_message: "Creating template + variant items...",
 					callback: function (r) {
 						if (!r.message) return;
+						d.hide();
 						var items = r.message.items || [];
 						frappe.show_alert({
 							message: "Created " + items.length + " FG item(s): "
@@ -948,11 +944,13 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) 
 						});
 						_create_fg_for_item(frm, pending_rows, idx + 1, ig_default, created);
 					},
+					always: function () { d.enable_primary_action(); },
 				});
 				return;
 			}
 
 			// Create new Item via backend API — resolves abbreviation fields automatically
+			d.disable_primary_action();
 			frappe.call({
 				method: "nxtgen_savinda_pricing_calculator.api.manufacturing.create_fg_item",
 				args: {
@@ -968,11 +966,13 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) 
 				freeze_message: "Creating FG item...",
 				callback: function (r) {
 					if (!r.message) return;
+					d.hide();
 					frappe.show_alert({ message: "Created: " + r.message.item_code, indicator: "green" });
 					_link_fg_to_rows(frm, _fg_product_key(row), r.message.item_code);
 					created.push({ item_code: r.message.item_code, item_name: vals.item_name_field, cost_item: row.cost_item || "" });
 					_create_fg_for_item(frm, pending_rows, idx + 1, ig_default, created);
 				},
+				always: function () { d.enable_primary_action(); },
 			});
 		},
 	});

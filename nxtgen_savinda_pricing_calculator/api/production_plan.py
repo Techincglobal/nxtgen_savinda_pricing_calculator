@@ -15,13 +15,96 @@ import json
 import math
 
 import frappe
-from frappe.utils import add_days, cint, flt, now, now_datetime, today
+from frappe.utils import add_days, cint, flt, getdate, now, now_datetime, today
 
 from nxtgen_savinda_pricing_calculator.api import job_ticket as jt_api
 from nxtgen_savinda_pricing_calculator.api.offset_calculator import _get_config
 
 
 # ── small helpers ────────────────────────────────────────────────────────────
+# ── base material planning helpers ───────────────────────────────────────────
+def _base_material_for_calculation(calculation_breakdown):
+	"""Stock Item selected as Base Material on a saved Calculation Breakdown."""
+	if not calculation_breakdown:
+		return ""
+	return frappe.db.get_value("Calculation Breakdown", calculation_breakdown, "base_material") or ""
+
+
+def _planning_base_material_requirements(doc):
+	"""Required base-material quantities from the relevant Manufacturing Planning table.
+
+	Offset: calculate gross full sheets from Cut Sheets + Wastage / Cuts.
+	Flexo: the calculated reel area already includes its reel wastage.
+	"""
+	pricing = doc.get("custom_pricing_type") or "Offset"
+	is_flexo = pricing == "Flexo"
+	field = "custom_flexo_planning" if is_flexo else "custom_offset_planning"
+	required = {}
+	for row in (doc.get(field) or []):
+		if row.get("planning_type") == "Assembly":
+			continue
+		base_material = row.get("base_material") or _base_material_for_calculation(row.get("calculation_breakdown"))
+		if not base_material:
+			continue
+		if is_flexo:
+			qty = flt(row.get("reel_area"))
+		else:
+			cuts = max(cint(row.get("cuts")) or 1, 1)
+			cut_sheets = flt(row.get("cut_sheet_qty"))
+			wastage = flt(row.get("wastage"))
+			qty = math.ceil((cut_sheets + wastage) / cuts) if (cut_sheets or wastage) else flt(row.get("full_sheet_qty"))
+		if qty > 0:
+			required[base_material] = required.get(base_material, 0) + qty
+	return required
+
+
+def _base_material_mr_row(item_code, quantity, template, doc):
+	"""Use an ERPNext raw-material row as a template, or build a safe fallback row."""
+	# Warehouse and request type are supplied by the ERPNext result/template or the
+	# Production Plan.  They are not fields on Item in all ERPNext v15 versions.
+	item = frappe.db.get_value("Item", item_code,
+		["item_name", "description", "stock_uom", "purchase_uom"], as_dict=True) or {}
+	row = dict(template or {})
+	row.update({
+		"item_code": item_code,
+		"item_name": item.get("item_name") or item_code,
+		"description": item.get("description") or row.get("description") or "",
+		"stock_uom": item.get("stock_uom") or row.get("stock_uom") or "",
+		"uom": row.get("uom") or item.get("purchase_uom") or item.get("stock_uom") or "",
+		"warehouse": row.get("warehouse") or doc.get("for_warehouse") or "",
+		"quantity": quantity,
+		"required_bom_qty": quantity,
+	})
+	if not row.get("material_request_type"):
+		row["material_request_type"] = "Purchase"
+	return row
+
+
+@frappe.whitelist()
+def get_items_for_material_requests(doc, warehouses=None, get_parent_warehouse_data=None):
+	"""ERPNext raw-material explosion plus calculator base-material requirements.
+
+	Only Base Material rows use Manufacturing Planning quantities; all other BOM materials
+	remain exactly as ERPNext calculated them.  This replacement is registered through
+	override_whitelisted_methods, so ERPNext source is never modified.
+	"""
+	from erpnext.manufacturing.doctype.production_plan.production_plan import get_items_for_material_requests as erpnext_get_items
+
+	rows = erpnext_get_items(doc, warehouses=warehouses, get_parent_warehouse_data=get_parent_warehouse_data) or []
+	plan = frappe._dict(json.loads(doc)) if isinstance(doc, str) else frappe._dict(doc or {})
+	requirements = _planning_base_material_requirements(plan)
+	if not requirements:
+		return rows
+
+	# Replace each base-material result with ONE planning-driven quantity. This prevents
+	# ERPNext BOM qty and the old percentage-wastage process from being added again.
+	for item_code, quantity in requirements.items():
+		matches = [row for row in rows if row.get("item_code") == item_code]
+		rows = [row for row in rows if row.get("item_code") != item_code]
+		rows.append(_base_material_mr_row(item_code, quantity, matches[0] if matches else {}, plan))
+	return rows
+
+
 def _fullname(user=None):
 	user = user or frappe.session.user
 	return frappe.db.get_value("User", user, "full_name") or user
@@ -125,8 +208,7 @@ _PL_REVIEW = [
 	("flexo_type", "Flexo"), ("width_mm", "Flexo"), ("length_mm", "Flexo"),
 	("core_size", "Flexo"), ("pcs_per_roll", "Flexo"),
 	("winding_direction", "Flexo"), ("tolerance", "Flexo"), ("remark", ""),
-	("cold_foil", ""), ("hot_foil", ""), ("foil_details", "Flexo"), ("embossing", ""),
-	("lamination", ""),("die_cut_code", "")
+	("foil_details", "Flexo"), ("die_cut_code", ""), ("finishings", "")
 ]
 _PL_KEYS = [fn for fn, _ in _PL_REVIEW]
 
@@ -291,6 +373,7 @@ def _cost_sheet_fg_defaults(ci, cost_sheet, ig):
 		"stock_uom": "Nos",
 		"customer_ref": "",
 		"pl_customer": _customer_from_name(cs),
+		"pl_finishings": _finishing_defaults_from_cb(cb),
 		"pl_department": pricing,
 		"pl_flexo_type": "Reel" if is_flexo else "",
 		"pl_customer_product_code": "",
@@ -396,6 +479,11 @@ def _foil_defaults_from_cb(cb_name):
 	return {"pl_cold_foil": cold, "pl_hot_foil": hot, "pl_foil_details": ", ".join(details)}
 
 
+def _finishing_defaults_from_cb(cb):
+	from nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.utils.jinja import get_cb_finishings
+	return [{"process_name": name} for name in get_cb_finishings(cb)]
+
+
 def _pl_defaults_from_cost_item(ci):
 	"""pl_* defaults derived from a cost Item and its Calculation Breakdown, for the
 	quotation FG popup. Fields we can't derive are left blank for the user to fill."""
@@ -412,6 +500,7 @@ def _pl_defaults_from_cost_item(ci):
 		or (frappe.db.get_value("Calculation Breakdown", cb, "carton_size") if cb else "") or ""
 	defaults = {
 		"item_name": ci_doc.get("cost_item_name") or ci,
+		"pl_finishings": _finishing_defaults_from_cb(cb),
 		"pricing": pricing, "is_flexo": is_flexo,
 		"department": _dept_for_pricing(pricing),
 		"pl_department": pricing,
@@ -848,6 +937,7 @@ def _refresh_manual_planning_rows(doc):
 		row.item_name = frappe.db.get_value("Item", fg, "item_name") or fg
 		row.cost_item = ctx.get("cost_item") or ""
 		row.calculation_breakdown = ctx.get("calculation_breakdown") or row.get("calculation_breakdown") or ""
+		row.base_material = _base_material_for_calculation(row.calculation_breakdown)
 		bom = row.get("bom_no") or _active_bom_for_item(fg)
 		if bom and frappe.db.exists("BOM", bom):
 			row.bom_no = bom
@@ -1124,6 +1214,7 @@ def add_planning_items(production_plan, selections, consolidate=0):
 			"item_name": sel.get("item_name") or sel.get("fg_item") or "",
 			"cost_item": sel.get("cost_item") or "",
 			"calculation_breakdown": cb or "",
+			"base_material": _base_material_for_calculation(cb),
 			"qty": qty,
 			"ups": pd["ups"], "cuts": pd["cuts"],
 		}
@@ -1206,6 +1297,7 @@ def add_bom_items_for_manufacture(production_plan):
 			row = {"fg_item": item_code, "item_name": frappe.db.get_value("Item", item_code, "item_name") or item_code,
 				"qty": component_qty, "planning_type": "Manufacture", "bom_no": component["bom_no"],
 				"cost_item": ctx.get("cost_item") or "", "calculation_breakdown": cb,
+				"base_material": _base_material_for_calculation(cb),
 				"ups": pd["ups"], "cuts": pd["cuts"]}
 			if is_flexo:
 				row.update({"reel_length": pd["reel_length"], "reel_width": pd["reel_width"],
@@ -1248,6 +1340,171 @@ def _ensure_planning(pp):
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "auto _ensure_planning failed")
 		return False
+
+
+# ── Post-submit base-material requests ──────────────────────────────────────
+def _submitted_ticket_plan(production_plan):
+	pp = frappe.get_doc("Production Plan", production_plan)
+	if pp.docstatus != 1:
+		frappe.throw("Submit the Production Plan before creating a Base Material Request.")
+	return pp
+
+
+def _has_submitted_material_request(pp):
+	"""A re-request is permitted only after the initial ERPNext request was submitted."""
+	parents = frappe.get_all(
+		"Material Request Item", filters={"production_plan": pp.name}, pluck="parent", distinct=True,
+	)
+	return bool(parents and frappe.db.exists("Material Request", {"name": ["in", parents], "docstatus": 1}))
+
+
+def _base_material_request_rows(pp):
+	"""Manufacture rows that a user may request after the Production Plan is submitted."""
+	pricing = pp.get("custom_pricing_type") or "Offset"
+	field = "custom_flexo_planning" if pricing == "Flexo" else "custom_offset_planning"
+	rows = []
+	for row in pp.get(field) or []:
+		if row.get("planning_type") == "Assembly":
+			continue
+		base_material = row.get("base_material") or _base_material_for_calculation(row.get("calculation_breakdown"))
+		if not base_material or flt(row.get("qty")) <= 0:
+			continue
+		rows.append({
+			"planning_row": row.name,
+			"fg_item": row.get("fg_item"),
+			"item_name": row.get("item_name") or row.get("fg_item"),
+			"planned_qty": flt(row.get("qty")),
+			"base_material": base_material,
+			"base_material_name": frappe.db.get_value("Item", base_material, "item_name") or base_material,
+		})
+	return rows
+
+
+def _base_material_request_preview(pp, selections):
+	"""Calculate requestable base materials from user-entered FG quantities."""
+	if isinstance(selections, str):
+		selections = frappe.parse_json(selections) or []
+	if not selections:
+		frappe.throw("Select at least one Manufacture item and enter a quantity.")
+
+	pricing = pp.get("custom_pricing_type") or "Offset"
+	is_flexo = pricing == "Flexo"
+	field = "custom_flexo_planning" if is_flexo else "custom_offset_planning"
+	planning_rows = {row.name: row for row in (pp.get(field) or [])}
+	materials = {}
+	for selected in selections:
+		row = planning_rows.get(selected.get("planning_row"))
+		if not row or row.get("planning_type") == "Assembly":
+			frappe.throw("One selected Manufacturing Planning row is no longer valid.")
+		fg_qty = flt(selected.get("fg_qty"))
+		planned_qty = flt(row.get("qty"))
+		if fg_qty <= 0 or fg_qty > planned_qty:
+			frappe.throw("Manufacture quantity for {0} must be greater than zero and cannot exceed {1}.".format(
+				row.get("fg_item") or "the item", planned_qty))
+		base_material = row.get("base_material") or _base_material_for_calculation(row.get("calculation_breakdown"))
+		if not base_material:
+			frappe.throw("Set Base Material on Manufacturing Planning row {0}.".format(row.idx))
+		factor = fg_qty / planned_qty
+		if is_flexo:
+			qty = flt(row.get("reel_area")) * factor
+		else:
+			cuts = max(cint(row.get("cuts")) or 1, 1)
+			qty = math.ceil(((flt(row.get("cut_sheet_qty")) + flt(row.get("wastage"))) * factor) / cuts)
+			if not qty:
+				qty = math.ceil(flt(row.get("full_sheet_qty")) * factor)
+		# Older submitted plans can predate the planning refresh and therefore have
+		# zero print figures. Rebuild only that row from its linked calculation so a
+		# valid request can still be created; current plans use the table values above.
+		if not qty and row.get("calculation_breakdown"):
+			data = _plan_print_data(row.get("calculation_breakdown"), fg_qty, pricing)
+			if is_flexo:
+				qty = flt(data.get("reel_area"))
+			else:
+				data_cuts = max(cint(data.get("cuts")) or 1, 1)
+				qty = math.ceil((flt(data.get("cut_sheet_qty")) + flt(data.get("wastage"))) / data_cuts)
+				if not qty:
+					qty = math.ceil(flt(data.get("full_sheet_qty")))
+		if qty <= 0:
+			frappe.throw("No base material quantity could be calculated for {0}.".format(row.get("fg_item")))
+		entry = materials.setdefault(base_material, {
+			"item_code": base_material,
+			"item_name": frappe.db.get_value("Item", base_material, "item_name") or base_material,
+			"calculated_qty": 0.0,
+			"uom": frappe.db.get_value("Item", base_material, "stock_uom") or "",
+		})
+		entry["calculated_qty"] += qty
+
+	for entry in materials.values():
+		entry["calculated_qty"] = round(entry["calculated_qty"], 6)
+	return list(materials.values())
+
+
+@frappe.whitelist()
+def get_base_material_request_rows(production_plan):
+	pp = _submitted_ticket_plan(production_plan)
+	if not _has_submitted_material_request(pp):
+		frappe.throw("Submit the initial Material Request created through ERPNext before making a Base Material Re-Request.")
+	return _base_material_request_rows(pp)
+
+
+@frappe.whitelist()
+def can_re_request_base_material(production_plan):
+	return _has_submitted_material_request(_submitted_ticket_plan(production_plan))
+
+
+@frappe.whitelist()
+def preview_base_material_request(production_plan, selections):
+	pp = _submitted_ticket_plan(production_plan)
+	if not _has_submitted_material_request(pp):
+		frappe.throw("Submit the initial Material Request before making a Base Material Re-Request.")
+	return _base_material_request_preview(pp, selections)
+
+
+@frappe.whitelist()
+def create_base_material_request(production_plan, selections, request_items):
+	"""Create a draft Material Transfer request from approved post-submit quantities."""
+	pp = _submitted_ticket_plan(production_plan)
+	if not _has_submitted_material_request(pp):
+		frappe.throw("Submit the initial Material Request before making a Base Material Re-Request.")
+	calculated = _base_material_request_preview(pp, selections)
+	if isinstance(request_items, str):
+		request_items = frappe.parse_json(request_items) or []
+	requested_by_item = {row.get("item_code"): flt(row.get("qty")) for row in request_items if row.get("item_code")}
+	if set(requested_by_item) != {row["item_code"] for row in calculated}:
+		frappe.throw("Base Material Request items changed. Preview the request again before confirming.")
+
+	# Keep warehouse choices consistent with standard Get Raw Materials results.
+	standard_rows = {row.get("item_code"): row for row in (pp.get("mr_items") or [])}
+	mr = frappe.new_doc("Material Request")
+	mr.material_request_type = "Material Transfer"
+	mr.company = pp.company
+	mr.transaction_date = today()
+	# A historical PP Required Date is valid as planning information, but ERPNext
+	# does not permit a new Material Request whose required-by date is in the past.
+	required_date = pp.get("custom_req_date") or today()
+	mr.schedule_date = required_date if getdate(required_date) >= getdate(today()) else today()
+	mr.set_warehouse = pp.get("for_warehouse") or ""
+	for row in calculated:
+		qty = requested_by_item.get(row["item_code"])
+		if qty <= 0:
+			frappe.throw("Request Qty for {0} must be greater than zero.".format(row["item_code"]))
+		standard = standard_rows.get(row["item_code"]) or {}
+		mr.append("items", {
+			"item_code": row["item_code"],
+			"qty": qty,
+			"uom": row["uom"] or None,
+			"schedule_date": mr.schedule_date,
+			"warehouse": standard.get("warehouse") or pp.get("for_warehouse") or "",
+			"from_warehouse": standard.get("from_warehouse") or "",
+			"production_plan": pp.name,
+		})
+	mr.insert()
+	frappe.get_doc({
+		"doctype": "Comment", "comment_type": "Info", "reference_doctype": "Production Plan",
+		"reference_name": pp.name,
+		"content": "Base Material Request created: <a href='/app/material-request/{0}'>{0}</a>".format(mr.name),
+	}).insert(ignore_permissions=True)
+	return {"material_request": mr.name}
 
 
 # ── Procurement: create a Purchase Request (Material Request) from raw materials ─
