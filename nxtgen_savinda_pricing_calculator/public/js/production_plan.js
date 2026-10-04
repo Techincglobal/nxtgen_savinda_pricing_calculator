@@ -152,7 +152,7 @@ frappe.ui.form.on("Production Plan", {
 		// The approved production document is relevant from Artwork Approval onward.
 		if (can_view_ticket) {
 			frm.add_custom_button(__("View/Download Job Ticket"), function () {
-				var fmt = (frm.doc.custom_pricing_type === "Flexo") ? "Flexo Job Ticket" : "Offset Job Ticket";
+				var fmt = (frm.doc.custom_pricing_type === "Flexo") ? "Flexo Job Ticket - 1" : "Offset Job Ticket - 1";
 				var url = "/api/method/frappe.utils.print_format.download_pdf?doctype=Production+Plan&name="
 					+ encodeURIComponent(frm.doc.name)
 					+ "&format=" + encodeURIComponent(fmt) + "&no_letterhead=1";
