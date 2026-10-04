@@ -267,6 +267,20 @@ def _sheet_counts_from_bom(bomc, qty, cfg):
 	        "ups": no_ups, "cuts": no_cuts}
 
 
+def _ticket_base_materials(plan_rows):
+	"""Unique base materials in planning-row order, including grouped components."""
+	codes = list(dict.fromkeys(
+		(row.get("base_material") or "").strip() for row in plan_rows
+		if (row.get("base_material") or "").strip()
+	))
+	if not codes:
+		return []
+	names = {item.name: item.item_name for item in frappe.get_all(
+		"Item", filters={"name": ["in", codes]}, fields=["name", "item_name"]
+	)}
+	return [{"item_code": code, "item_name": names.get(code) or code} for code in codes]
+
+
 def get_ticket_print_data(production_plan_name):
 	"""Data for the Job Ticket print (from a Production Plan). Header falls back to the cost
 	sheet / Product Library / Calculation Breakdown; the line-table sheet figures come from
@@ -558,6 +572,7 @@ def get_ticket_print_data(production_plan_name):
 		"job_title": doc.get("custom_job_title") or (lines[0]["item_name"] if lines else ""),
 		"job_board": doc.get("custom_job_board") or doc.get("custom_material") or "",
 		"material": doc.get("custom_material") or "",
+		"base_materials": _ticket_base_materials(plan_rows),
 		"colors": doc.get("custom_colors") or pl.get("no_of_colors") or cb.get("no_of_colors") or 0,
 		"art_no": doc.get("custom_art_no") or pl.get("artwork_no") or "",
 		"art_version": doc.get("custom_art_version") or pl.get("artwork_version") or "",
