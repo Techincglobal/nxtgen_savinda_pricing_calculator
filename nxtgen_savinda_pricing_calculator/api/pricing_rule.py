@@ -100,6 +100,8 @@ def create_qty_pricing_rules(fg_item, tiers, customer=None, currency=None,
 		tiers = json.loads(tiers or "[]")
 	if not fg_item or not frappe.db.exists("Item", fg_item):
 		frappe.throw("FG item not found: %s" % fg_item)
+	from nxtgen_savinda_pricing_calculator.api.fg_approval import require_pricing_reviewer
+	require_pricing_reviewer(fg_item)
 	cost_item = cost_item or frappe.db.get_value("Item", fg_item, "custom_cost_item") or ""
 
 	priority = max(1, min(20, int(flt(priority) or 10)))

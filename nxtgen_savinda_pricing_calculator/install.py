@@ -63,9 +63,12 @@ def after_install():
 	_migrate_artwork_approval_plans_to_supply_chain()
 	_ensure_quotation_workflow()
 	_ensure_npd_request_workflow()
+	_ensure_packing_workflow()
 	_retire_sales_order_npd_workflow()
 	_seed_install_only_fixtures()
 	_sync_code_print_formats()
+	from nxtgen_savinda_pricing_calculator.api.fg_approval import setup_fg_approval
+	setup_fg_approval()
 
 
 def after_migrate():
@@ -83,9 +86,12 @@ def after_migrate():
 	_migrate_artwork_approval_plans_to_supply_chain()
 	_ensure_quotation_workflow()
 	_ensure_npd_request_workflow()
+	_ensure_packing_workflow()
 	_retire_sales_order_npd_workflow()
 	# Do not sync code-managed print formats on app updates. Live sites may have
 	# approved local print-format changes that must never be overwritten by migrate.
+	from nxtgen_savinda_pricing_calculator.api.fg_approval import setup_fg_approval
+	setup_fg_approval()
 
 
 def _migrate_flexo_planning_rows():
@@ -544,6 +550,53 @@ def _ensure_npd_request_workflow():
 		frappe.log_error(title="pricing_calculator: ensure NPD Request workflow failed", message=frappe.get_traceback())
 
 
+PACKING_WORKFLOW_NAME = "Packing Approval"
+
+
+def _ensure_packing_workflow():
+	"""Packing: prepare -> locked pending approval -> approve/submit or return to edit."""
+	if not frappe.db.table_exists("Workflow"):
+		return
+	try:
+		states = [
+			("Packing Draft", "0", "Stock User", ""),
+			# System Manager only: it is locked for the preparer and approver while
+			# they make the workflow decision (admin recovery remains possible).
+			("Pending Packing Approval", "0", "System Manager", "Warning"),
+			("Packing Approved", "1", "Stock Manager", "Success"),
+		]
+		for state, _ds, _role, style in states:
+			if not frappe.db.exists("Workflow State", state):
+				frappe.get_doc({"doctype": "Workflow State", "workflow_state_name": state, "style": style}).insert(ignore_permissions=True)
+		for action in ["Send for Packing Approval", "Approve Packing", "Reject & Reopen Packing"]:
+			if not frappe.db.exists("Workflow Action Master", action):
+				frappe.get_doc({"doctype": "Workflow Action Master", "workflow_action_name": action}).insert(ignore_permissions=True)
+		transitions = [
+			("Packing Draft", "Send for Packing Approval", "Pending Packing Approval", "Stock User"),
+			("Pending Packing Approval", "Approve Packing", "Packing Approved", "Stock Manager"),
+			("Pending Packing Approval", "Reject & Reopen Packing", "Packing Draft", "Stock Manager"),
+		]
+		wf = (frappe.get_doc("Workflow", PACKING_WORKFLOW_NAME)
+		      if frappe.db.exists("Workflow", PACKING_WORKFLOW_NAME) else frappe.new_doc("Workflow"))
+		wf.workflow_name = PACKING_WORKFLOW_NAME
+		wf.document_type = "Packing"
+		wf.workflow_state_field = "workflow_state"
+		wf.is_active = 1
+		wf.send_email_alert = 0
+		wf.override_status = 0
+		wf.set("states", [])
+		wf.set("transitions", [])
+		for state, ds, role, _style in states:
+			wf.append("states", {"state": state, "doc_status": ds, "allow_edit": role})
+		for frm_state, action, to_state, role in transitions:
+			wf.append("transitions", {"state": frm_state, "action": action, "next_state": to_state, "allowed": role, "allow_self_approval": 1})
+			wf.append("transitions", {"state": frm_state, "action": action, "next_state": to_state, "allowed": "System Manager", "allow_self_approval": 1})
+		wf.save(ignore_permissions=True)
+		frappe.db.commit()
+	except Exception:
+		frappe.log_error(title="pricing_calculator: ensure Packing workflow failed", message=frappe.get_traceback())
+
+
 def _retire_sales_order_npd_workflow():
 	"""Deactivate the superseded Sales Order NPD approval workflow so Sales Orders return to the
 	normal one-click submit (NPD is now handled by the NPD Request sample flow)."""
@@ -556,11 +609,9 @@ def _retire_sales_order_npd_workflow():
 		frappe.log_error(frappe.get_traceback(), "pricing_calculator: retire SO NPD workflow failed")
 
 
-def _ensure_custom_fields():
-	"""Custom fields this app adds to standard doctypes (idempotent)."""
-	try:
-		from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
-		create_custom_fields({
+def _custom_field_definitions():
+	"""Schema owned by this app; shared by installation, upgrades and verification."""
+	return {
 			# Traceability for the qty-tier Pricing Rules auto-generated on FG creation, so they
 			# can be found / refreshed / cleaned up without touching hand-made rules.
 			"Pricing Rule": [
@@ -570,6 +621,7 @@ def _ensure_custom_fields():
 				{"fieldname": "custom_cost_item", "label": "Source Cost Item", "fieldtype": "Link", "options": "cost Item", "insert_after": "custom_source_fg", "read_only": 1},
 			],
 			"Item": [
+				{"fieldname": "custom_fg_approval_required", "label": "Pricing FG Approval Required", "fieldtype": "Check", "default": "0", "read_only": 1, "hidden": 1, "no_copy": 1},
 				{
 					"fieldname":    "customer_ref",
 					"label":        "Customer Reference Code",
@@ -865,8 +917,8 @@ def _ensure_custom_fields():
 				{"fieldname": "custom_req_date", "label": "Required Date", "fieldtype": "Date", "insert_after": "custom_po_no"},
 				{"fieldname": "custom_quote_no", "label": "Quote No", "fieldtype": "Data", "insert_after": "custom_req_date"},
 				# Planning list attributes (user-set): New / Repeat job, and the callout flag.
-				{"fieldname": "custom_repeat_or_new", "label": "Repeat / New", "fieldtype": "Select", "options": "\nNew\nRepeat\nRepeat w/c", "insert_after": "custom_quote_no", "in_standard_filter": 1, "allow_on_submit": 1},
-				{"fieldname": "custom_is_callout", "label": "Callout", "fieldtype": "Check", "insert_after": "custom_repeat_or_new", "allow_on_submit": 1},
+				{"fieldname": "custom_repeat_or_new", "label": "Repeat / New", "fieldtype": "Select", "options": "\nNew\nRepeat\nRepeat w/c", "insert_after": "custom_quote_no", "in_standard_filter": 1, "allow_on_submit": 1, "hidden": 0},
+				{"fieldname": "custom_is_callout", "label": "Callout", "fieldtype": "Check", "insert_after": "custom_repeat_or_new", "allow_on_submit": 1, "hidden": 0},
 				{"fieldname": "custom_ticket_sec2", "label": "Specifications", "fieldtype": "Section Break", "insert_after": "custom_is_callout"},
 				{"fieldname": "custom_job_board", "label": "Job Board", "fieldtype": "Data", "insert_after": "custom_ticket_sec2"},
 				{"fieldname": "custom_material", "label": "Material", "fieldtype": "Data", "insert_after": "custom_job_board"},
@@ -912,6 +964,9 @@ def _ensure_custom_fields():
 				{"fieldname": "custom_bom_on", "label": "BOM On", "fieldtype": "Datetime", "insert_after": "custom_bom_by", "read_only": 1, "allow_on_submit": 1},
 				{"fieldname": "custom_preprint_by", "label": "Pre-Print Validated By", "fieldtype": "Data", "insert_after": "custom_bom_on", "read_only": 1, "allow_on_submit": 1},
 				{"fieldname": "custom_preprint_on", "label": "Pre-Print Validated On", "fieldtype": "Datetime", "insert_after": "custom_preprint_by", "read_only": 1, "allow_on_submit": 1},
+				# Layout fields formerly created only through local Customize Form.
+				{"fieldname": "custom_tab_3", "label": "More Details", "fieldtype": "Tab Break", "insert_after": "amended_from"},
+				{"fieldname": "custom_manufacturing_planning_flexo", "label": "Manufacturing Planning (Flexo)", "fieldtype": "Section Break", "insert_after": "material_requests"},
 			],
 			# Per-line geometry for the Job Ticket print (mirrors Job Ticket Item).
 			"Production Plan Item": [
@@ -946,13 +1001,44 @@ def _ensure_custom_fields():
 				# allow_on_submit so it can be raised during production (Full Sheets stays locked).
 				{"fieldname": "custom_reissue_count", "label": "Re-Issue Count", "fieldtype": "Float", "insert_after": "custom_finishings", "allow_on_submit": 1, "description": "Extra base-material sheets that may be issued/re-issued beyond Full Sheets. Material Transfer for Manufacture limit = Full Sheets + Re-Issue Count."},
 			],
-		}, ignore_validate=True)
-		frappe.db.commit()
-	except Exception:
-		frappe.log_error(
-			title="pricing_calculator: ensure custom fields failed",
-			message=frappe.get_traceback(),
-		)
+	}
+
+
+def _ensure_custom_fields():
+	"""Reconcile schema on existing sites too; never silently accept partial upgrades.
+
+	Only the declared Custom Field definitions are updated. Document values, unrelated
+	custom fields, master data and live print formats are not imported or replaced.
+	"""
+	from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
+
+	definitions = _custom_field_definitions()
+	create_custom_fields(definitions, ignore_validate=True, update=True)
+	_verify_production_plan_fields(definitions)
+
+
+def _verify_production_plan_fields(definitions=None):
+	from frappe.model import no_value_fields, table_fields
+
+	definitions = definitions or _custom_field_definitions()
+	missing = []
+	for doctype in ("Production Plan", "Production Plan Item"):
+		frappe.clear_cache(doctype=doctype)
+		meta = frappe.get_meta(doctype)
+		for field in definitions[doctype]:
+			if not meta.has_field(field["fieldname"]):
+				missing.append(doctype + "." + field["fieldname"])
+		# Repair an interrupted prior upgrade where Custom Field metadata exists
+		# but the corresponding database columns were never synchronized.
+		stored_fields = [field["fieldname"] for field in definitions[doctype]
+			if field["fieldtype"] not in no_value_fields + table_fields]
+		if any(not frappe.db.has_column(doctype, name) for name in stored_fields):
+			frappe.db.updatedb(doctype)
+			for name in stored_fields:
+				if not frappe.db.has_column(doctype, name):
+					missing.append(doctype + "." + name + " (database column)")
+	if missing:
+		frappe.throw("Pricing app custom-field upgrade is incomplete. Missing: " + ", ".join(missing))
 
 
 def _ensure_item_group_tree():

@@ -11,6 +11,7 @@
   "column_break_sefb",
   "item",
   "is_deliverd",
+  "workflow_state",
   "section_break_aoby",
   "order_qty",
   "delivered_qty",
@@ -58,6 +59,16 @@
    "fieldname": "is_deliverd",
    "fieldtype": "Check",
    "label": "is Deliverd"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "workflow_state",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Workflow State",
+   "no_copy": 1,
+   "options": "Workflow State",
+   "read_only": 1
   },
   {
    "fieldname": "section_break_asha",
@@ -129,6 +140,7 @@
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
+ "is_submittable": 1,
  "links": [],
  "modified": "2026-07-21 17:19:44.989214",
  "modified_by": "Administrator",
@@ -147,6 +159,33 @@
    "report": 1,
    "role": "System Manager",
    "share": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock User",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock Manager",
+   "share": 1,
+   "submit": 1,
+   "cancel": 1,
    "write": 1
   }
  ],

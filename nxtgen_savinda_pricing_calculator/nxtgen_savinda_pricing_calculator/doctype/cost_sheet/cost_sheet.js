@@ -288,7 +288,7 @@ function _cs_fg_create_popup(frm) {
 						callback: function (r2) {
 							d.hide();
 							var mm = r2.message || {};
-							frappe.show_alert({ message: __("FG created: ") + ((mm.created || []).join(", ") || "—"), indicator: "green" });
+							frappe.show_alert({ message: __("FG created disabled; pending Product Library validation: ") + ((mm.created || []).join(", ") || "—"), indicator: "blue" });
 						},
 					});
 				},

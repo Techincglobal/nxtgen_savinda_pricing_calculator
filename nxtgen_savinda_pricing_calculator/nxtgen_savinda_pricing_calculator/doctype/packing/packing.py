@@ -83,7 +83,7 @@ def get_available_packings(sales_order):
 	out = []
 	for pk in frappe.get_all(
 		"Packing",
-		filters={"job__npd_number": ["in", pps], "is_deliverd": 0},
+		filters={"job__npd_number": ["in", pps], "is_deliverd": 0, "docstatus": 1},
 		fields=["name", "item", "packed_qty", "extra"],
 		order_by="creation",
 	):
@@ -104,7 +104,7 @@ def dispatchable_sales_orders():
 	ready to dispatch. Used to restrict the Sales Order picker on the Delivery Note 'Get from
 	Packing' popup so it only lists orders that actually have something to dispatch."""
 	pps = set()
-	for p in frappe.get_all("Packing", filters={"is_deliverd": 0}, fields=["job__npd_number"]):
+	for p in frappe.get_all("Packing", filters={"is_deliverd": 0, "docstatus": 1}, fields=["job__npd_number"]):
 		if p.job__npd_number:
 			pps.add(p.job__npd_number)
 	if not pps:
@@ -145,8 +145,8 @@ def get_delivery_items_from_packings(sales_order, packings):
 
 	rows = []
 	for pk in packings:
-		d = frappe.db.get_value("Packing", pk, ["item", "packed_qty"], as_dict=True)
-		if not d:
+		d = frappe.db.get_value("Packing", pk, ["item", "packed_qty", "docstatus", "is_deliverd"], as_dict=True)
+		if not d or d.docstatus != 1 or d.is_deliverd:
 			continue
 		tmpl = so_item.get(d.item)
 		if tmpl:
@@ -227,7 +227,7 @@ def get_packing_quantities(production_plan, item, packing_type=None, current_pac
 	available = _sum("Bin", {"item_code": item}, field="actual_qty")
 	earmarked = _sum(
 		"Packing",
-		{"item": item, "is_deliverd": 0, "name": ["!=", current_packing or "__none__"]},
+		{"item": item, "is_deliverd": 0, "docstatus": 1, "name": ["!=", current_packing or "__none__"]},
 		field="packed_qty",
 	)
 	out["new_qty"] = max(available - earmarked, 0.0)

@@ -70,6 +70,9 @@ jinja = {
 }
 
 doc_events = {
+	"Item": {
+		"validate": "nxtgen_savinda_pricing_calculator.api.fg_approval.validate_item_approval",
+	},
 	"Sales Order": {
 		# Costing-created finished goods may only use an active qty Pricing Rule. A missing,
 		# expired, or out-of-range rule results in a zero rate instead of a fallback Item Price.
@@ -244,9 +247,10 @@ after_migrate = "nxtgen_savinda_pricing_calculator.install.after_migrate"
 # Overriding Methods
 # ------------------------------
 #
-# override_whitelisted_methods = {
-# 	"frappe.desk.doctype.event.event.get_events": "nxtgen_savinda_pricing_calculator.event.get_events"
-# }
+override_whitelisted_methods = {
+	"erpnext.manufacturing.doctype.production_plan.production_plan.get_items_for_material_requests":
+		"nxtgen_savinda_pricing_calculator.api.production_plan.get_items_for_material_requests",
+}
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
