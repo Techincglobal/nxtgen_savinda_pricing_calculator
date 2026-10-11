@@ -1176,6 +1176,8 @@ def _plan_print_data(cb_name, qty, pricing_type):
 		out["full_sheet_qty"] = flt(sheet.get("full_sheet_qty"))
 		out["cut_sheet_qty"] = flt(sheet.get("cut_sheet_qty"))
 		out["wastage"] = flt(sheet.get("wastage"))
+		out["full_sheet_size"] = f"{flt(form.get('full_sheet_l')):g} x {flt(form.get('full_sheet_w')):g}"
+		out["cut_sheet_size"] = f"{flt(form.get('cut_sheet_l')):g} x {flt(form.get('cut_sheetw') or form.get('cut_sheet_w')):g}"
 	return out
 
 
@@ -1262,11 +1264,11 @@ def _bom_manufacturing_components(item_code, required_qty):
 		return []
 	bom_qty = flt(frappe.db.get_value("BOM", bom_name, "quantity")) or 1
 	rows = []
-	for part in frappe.get_all("BOM Item", filters={"parent": bom_name}, fields=["item_code", "qty"], order_by="idx asc"):
+	for part in frappe.get_all("BOM Item", filters={"parent": bom_name}, fields=["item_code", "qty", "conversion_factor"], order_by="idx asc"):
 		child_bom = _active_bom_for_item(part.item_code)
 		if not child_bom:
 			continue
-		child_qty = flt(required_qty) * flt(part.qty) / bom_qty
+		child_qty = flt(required_qty) * flt(part.qty) * (flt(part.conversion_factor) or 1) / bom_qty
 		rows.append({"item_code": part.item_code, "qty": child_qty, "bom_no": child_bom})
 	return rows
 
@@ -1275,6 +1277,7 @@ def _bom_manufacturing_components(item_code, required_qty):
 def add_bom_items_for_manufacture(production_plan):
 	"""Replace the planning table with SFG manufacture rows and final assembly rows."""
 	pp = frappe.get_doc("Production Plan", production_plan)
+	pp.check_permission("write")
 	if pp.docstatus != 0:
 		frappe.throw("BOM manufacturing items can only be prepared while the plan is a draft.")
 	pricing = pp.get("custom_pricing_type") or "Offset"
@@ -1283,22 +1286,38 @@ def add_bom_items_for_manufacture(production_plan):
 	rows = []
 	for ticket in pp.get("custom_ticket_items") or []:
 		fg, qty = ticket.get("fg_item"), flt(ticket.get("qty")) or 1
+		bundle_source = frappe.db.get_value("Item", fg, "custom_costing_bundle") if fg else None
+		bundle = frappe.get_doc("Cost Sheet", bundle_source) if bundle_source else None
+		if bundle:
+			from nxtgen_savinda_pricing_calculator.api.costing_bundle import validate_assembly_bom
+			validate_assembly_bom(bundle, _active_bom_for_item(fg))
+			if bundle.pricing_type != pricing:
+				frappe.throw("Production Plan type must match the bundle Cost Sheet's production type.")
 		components = _bom_manufacturing_components(fg, qty)
+		if bundle and not {r.fg_item for r in bundle.custom_bundle_components}.issubset({r["item_code"] for r in components}):
+			frappe.throw("Every bundle component needs its own active BOM before manufacturing planning.")
+		if bundle and any(not frappe.db.exists("BOM", {"name": r["bom_no"], "docstatus": 1, "is_active": 1}) for r in components):
+			frappe.throw("Submit the active BOM of each manufactured bundle component before planning.")
 		if components:
 			rows.append({"fg_item": fg, "item_name": ticket.get("description") or fg, "qty": qty,
-				"planning_type": "Assembly", "bom_no": _active_bom_for_item(fg)})
+				"planning_type": "Assembly", "bom_no": _active_bom_for_item(fg), "is_group": 1 if bundle and not is_flexo else 0})
 		else:
 			components = [{"item_code": fg, "qty": qty, "bom_no": _active_bom_for_item(fg)}]
 		for component in components:
 			item_code, component_qty = component["item_code"], component["qty"]
 			ctx = jt_api._fg_context(item_code)
 			cb = ctx.get("calculation_breakdown") or ""
+			if bundle:
+				cb = next((r.calculation_breakdown for r in bundle.custom_bundle_components if r.fg_item == item_code), cb)
 			pd = _plan_print_data(cb, component_qty, pricing)
 			row = {"fg_item": item_code, "item_name": frappe.db.get_value("Item", item_code, "item_name") or item_code,
 				"qty": component_qty, "planning_type": "Manufacture", "bom_no": component["bom_no"],
 				"cost_item": ctx.get("cost_item") or "", "calculation_breakdown": cb,
 				"base_material": _base_material_for_calculation(cb),
-				"ups": pd["ups"], "cuts": pd["cuts"]}
+				"ups": pd["ups"], "cuts": pd["cuts"],
+				"full_sheet_size": pd.get("full_sheet_size") or "", "cut_sheet_size": pd.get("cut_sheet_size") or ""}
+			if bundle and not is_flexo:
+				row.update(is_group=1, parent_item=fg)
 			if is_flexo:
 				row.update({"reel_length": pd["reel_length"], "reel_width": pd["reel_width"],
 					"reel_area": pd["reel_area"], "slit_width": pd["slit_width"]})

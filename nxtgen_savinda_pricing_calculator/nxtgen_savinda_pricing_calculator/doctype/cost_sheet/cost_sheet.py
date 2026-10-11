@@ -16,6 +16,8 @@ class CostSheet(Document):
 			self._copy_inquiry_child_tables()
 
 	def validate(self):
+		from nxtgen_savinda_pricing_calculator.api.costing_bundle import validate_bundle
+		validate_bundle(self)
 		self._fill_row_dimensions()
 		self._calc_pricing_list_amounts()
 		self._sync_bom_remarks()
@@ -260,6 +262,10 @@ def _amend_linked_cbs(new_doc):
 
 			# Point this Cost Item calculation row to the new CB
 			calc.calculation_breakdown = new_cb.name
+			for component in new_doc.get("custom_bundle_components") or []:
+				if component.cost_item == ci.name and component.calculation_breakdown == old_cb_name:
+					component.calculation_breakdown = new_cb.name
+					frappe.db.set_value("Costing Bundle Component", component.name, "calculation_breakdown", new_cb.name)
 			calc.unit_cost = flt(old_cb.unit_cost)
 			ci_dirty = True
 			amended_count += 1

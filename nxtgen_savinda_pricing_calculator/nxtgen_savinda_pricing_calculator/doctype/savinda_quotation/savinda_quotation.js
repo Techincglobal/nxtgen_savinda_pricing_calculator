@@ -369,6 +369,16 @@ function _do_load_from_cost_sheet(frm, cost_sheet_name, on_done) {
 				return;
 			}
 			var cs = r.message;
+			if (cs.custom_quote_as_bundle) {
+				frappe.call({method: "nxtgen_savinda_pricing_calculator.api.costing_bundle.get_quote_rows",
+					args: {cost_sheet: cs.name, currency: frm.doc.currency, conversion_rate: frm.doc.conversion_rate || 1},
+					callback: function (bundles) {
+						(bundles.message || []).forEach(function (row) {frm.add_child("items", row);});
+						frm.refresh_field("items");
+						if (typeof on_done === "function") on_done((bundles.message || []).length);
+					}});
+				return;
+			}
 
 			// Update header fields from cost sheet
 			if (!frm.doc.inquiry && cs.inquiry)
@@ -726,6 +736,16 @@ function _fg_product_key(row) {
 }
 
 function _show_create_fg_dialog(frm) {
+	var bundle_row = (frm.doc.items || []).find(function (row) {return row.custom_costing_bundle;});
+	if (bundle_row) {
+		if (!bundle_row.finish_good) {
+			frappe.msgprint(__("Create the assembled FG using Bundle → Create / Open Bundle FG on the Cost Sheet. Create component FGs there using the existing Create FG Items action."));
+			frappe.set_route("Form", "Cost Sheet", bundle_row.custom_costing_bundle);
+		} else if (window.nxtgen_pricing) {
+			nxtgen_pricing.showForFGs(frm, [{item_code: bundle_row.finish_good, item_name: bundle_row.item_name, cost_item: ""}], function () {});
+		}
+		return;
+	}
 	// Build a unique product list by quotation item name, not Cost Item. A Cost Item
 	// is deliberately duplicated for each quantity tier, but those tiers are one
 	// sellable product and must not produce one FG popup per tier.

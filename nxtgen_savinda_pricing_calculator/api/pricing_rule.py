@@ -42,6 +42,11 @@ def get_qty_price_tiers(fg_item):
 		"item_name": frappe.db.get_value("Item", fg_item, "item_name") or fg_item,
 		"cost_item": "", "cb": "", "tiers": [],
 	}
+	bundle = frappe.db.get_value("Item", fg_item, "custom_costing_bundle")
+	if bundle:
+		from nxtgen_savinda_pricing_calculator.api.costing_bundle import pricing_tiers
+		out["tiers"] = pricing_tiers(bundle)
+		return out
 	cost_item = frappe.db.get_value("Item", fg_item, "custom_cost_item")
 	if not cost_item or not frappe.db.exists("cost Item", cost_item):
 		return out
@@ -208,7 +213,7 @@ def enforce_sales_order_pricing(doc, method=None):
 	changed = False
 	conversion_rate = flt(doc.get("conversion_rate")) or 1
 	for row in doc.get("items") or []:
-		if not row.item_code or not frappe.db.get_value("Item", row.item_code, "custom_cost_item"):
+		if not row.item_code or not (frappe.db.get_value("Item", row.item_code, "custom_cost_item") or frappe.db.get_value("Item", row.item_code, "custom_costing_bundle")):
 			continue
 		rule = _active_auto_rule(
 			row.item_code, row.qty, doc.get("customer"), doc.get("currency"), doc.get("transaction_date"))

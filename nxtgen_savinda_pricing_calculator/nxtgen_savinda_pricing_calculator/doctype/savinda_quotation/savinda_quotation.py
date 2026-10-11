@@ -104,9 +104,25 @@ class SavindaQuotation(Document):
 			self.currency = _customer_currency(self.customer)
 		if not self.conversion_rate:
 			self.conversion_rate = 1
+		if self.cost_sheet and frappe.db.get_value("Cost Sheet", self.cost_sheet, "custom_quote_as_bundle"):
+			from nxtgen_savinda_pricing_calculator.api.costing_bundle import quote_rows
+			cs = frappe.get_doc("Cost Sheet", self.cost_sheet)
+			cs.check_permission("read")
+			if cs.docstatus != 1:
+				frappe.throw("Submit the bundle Cost Sheet before creating its quotation.")
+			self.set("items", quote_rows(cs, self.currency, self.conversion_rate))
 
 	def validate(self):
 		self._check_single_live_quotation()
+		if self.cost_sheet and frappe.db.get_value("Cost Sheet", self.cost_sheet, "custom_quote_as_bundle"):
+			if not self.items or any(r.get("custom_costing_bundle") != self.cost_sheet or r.cost_item or r.calculation_breakdown for r in self.items):
+				frappe.throw("A bundle quotation must contain only bundle price rows, not separate component rows.")
+			parent_fg = frappe.db.get_value("Cost Sheet", self.cost_sheet, "custom_bundle_fg")
+			for row in self.items:
+				if row.finish_good and row.finish_good != parent_fg:
+					frappe.throw("Bundle quotation FG links must point to the assembled bundle FG, not a component.")
+				if parent_fg:
+					row.finish_good = parent_fg
 		if not self.date:
 			self.date = today()
 		self._validate_currency()
@@ -125,6 +141,11 @@ class SavindaQuotation(Document):
 		"""Copy the cost item's BOM remark and finishing ('XX Colors + finishings') onto each
 		quotation item. Filled only when the field is empty, so manual edits are preserved."""
 		for row in (self.items or []):
+			if row.get("custom_costing_bundle"):
+				if not (row.get("finishing") or "").strip():
+					from nxtgen_savinda_pricing_calculator.api.costing_bundle import bundle_finishings
+					row.finishing = " + ".join(bundle_finishings(frappe.get_doc("Cost Sheet", row.custom_costing_bundle)))
+				continue
 			ci = row.get("cost_item")
 			if not ci or not frappe.db.exists("cost Item", ci):
 				continue
@@ -178,6 +199,20 @@ class SavindaQuotation(Document):
 			return
 		margins = []
 		for it in (self.items or []):
+			if it.get("custom_costing_bundle"):
+				from nxtgen_savinda_pricing_calculator.api.costing_bundle import price_bundle
+				if it.custom_costing_bundle != self.cost_sheet:
+					frappe.throw("Quotation bundle must match its Cost Sheet.")
+				result = price_bundle(frappe.get_doc("Cost Sheet", it.custom_costing_bundle), it.qty)
+				it.unit_cost = result["unit_cost"]
+				if not it.is_manually_set:
+					it.base_selling_price = result["rate"]
+				if flt(it.base_selling_price) <= 0:
+					frappe.throw("Bundle quotations require a positive selling price.")
+				margins.append(result["profit_margin"])
+				if flt(it.base_selling_price) > 0:
+					margins.append((flt(it.base_selling_price) - result["unit_cost"]) / flt(it.base_selling_price) * 100)
+				continue
 			if not it.calculation_breakdown:
 				continue
 			pm = frappe.db.get_value(
@@ -186,7 +221,9 @@ class SavindaQuotation(Document):
 			if pm is not None:
 				margins.append(flt(pm))
 		if margins:
-			self.profit_margin = min(margins)
+			# Float columns persist nine decimal places. Keep repeated validation
+			# stable when a submitted quotation is marked Won/Lost.
+			self.profit_margin = flt(min(margins), 9)
 
 	def _validate_currency(self):
 		"""Costing is in company base (LKR); the quotation may be presented in another
@@ -373,6 +410,8 @@ def amend_cost_sheet(cost_sheet):
 	if existing:
 		return {"cost_sheet": existing}
 	new_cs = frappe.copy_doc(old_cs)
+	if new_cs.get("custom_quote_as_bundle"):
+		new_cs.custom_bundle_fg = ""
 	new_cs.amended_from = old_cs.name
 	new_cs.docstatus = 0
 	new_cs.insert(ignore_permissions=True)  # after_insert clones the cancelled CBs as drafts

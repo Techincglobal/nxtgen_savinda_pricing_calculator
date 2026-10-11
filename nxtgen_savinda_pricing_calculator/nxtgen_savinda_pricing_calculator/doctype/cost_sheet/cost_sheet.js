@@ -36,6 +36,32 @@ frappe.call({
 frappe.ui.form.on("Cost Sheet", {
 
 	refresh: function (frm) {
+		if (frm.doc.custom_quote_as_bundle && !frm.is_new() && frm.doc.docstatus !== 2) {
+			if (frm.doc.docstatus === 0) {
+				frm.add_custom_button(__("Load Bundle Components"), function () {
+					frappe.confirm(__("Load all saved Cost Items with Qty per Bundle = 1? This replaces the bundle component list."), function () {
+						frappe.call({method: "nxtgen_savinda_pricing_calculator.api.costing_bundle.component_defaults",
+							args: {cost_sheet: frm.doc.name}, callback: function (r) {
+								frm.clear_table("custom_bundle_components");
+								(r.message || []).forEach(function (row) {frm.add_child("custom_bundle_components", row);});
+								frm.refresh_field("custom_bundle_components");
+							}});
+					});
+				}, __("Bundle"));
+			} else {
+				frm.add_custom_button(__("Sync Component FG Links"), function () {
+					frappe.call({method: "nxtgen_savinda_pricing_calculator.api.costing_bundle.sync_component_fgs",
+						args: {cost_sheet: frm.doc.name}, callback: function (r) {
+							frm.reload_doc();
+							if ((r.message.missing || []).length) frappe.msgprint(__("Some components have no unique FG. Select their Component FG links manually: ") + r.message.missing.join(", "));
+						}});
+				}, __("Bundle"));
+				frm.add_custom_button(__("Create / Open Bundle FG"), function () {_cs_bundle_fg(frm);}, __("Bundle"));
+			}
+		}
+		frm.set_query("cost_item", "custom_bundle_components", function () {
+			return {filters: {name: ["in", (frm.doc.pricing_list || []).map(function (r) {return r.item;}).filter(Boolean)]}};
+		});
 		// ── Draft-only actions ─────────────────────────────────
 		if (frm.doc.docstatus === 0) {
 			frm.add_custom_button(__("Create Breakdown"), function () {
@@ -207,6 +233,30 @@ frappe.ui.form.on("Cost Sheet", {
 		});
 	},
 });
+
+frappe.ui.form.on("Cost Sheet", {
+	custom_quote_as_bundle: function (frm) {frm.refresh();}
+});
+
+function _cs_bundle_fg(frm) {
+	if (frm.doc.custom_bundle_fg) {
+		frappe.set_route("Form", "Item", frm.doc.custom_bundle_fg);
+		return;
+	}
+	frappe.prompt([
+		{fieldname: "item_group", label: __("Item Group"), fieldtype: "Link", options: "Item Group", reqd: 1, default: "Finished Goods"},
+		{fieldname: "department", label: __("Department"), fieldtype: "Link", options: "Department", reqd: 1},
+		{fieldname: "customer", label: __("Customer"), fieldtype: "Link", options: "Customer"}
+	], function (values) {
+		frappe.call({method: "nxtgen_savinda_pricing_calculator.api.costing_bundle.create_bundle_fg",
+			args: Object.assign({cost_sheet: frm.doc.name}, values), freeze: true,
+			callback: function (r) {
+				frm.reload_doc();
+				frappe.msgprint(__("Bundle FG created disabled. Open Product Library to review its details and combined pricing, then Approve & Enable FG."));
+				if (r.message.product_library) frappe.set_route("Form", "Product Library", r.message.product_library);
+			}});
+	}, __("Create Assembled Bundle FG"), __("Create"));
+}
 
 // ── Child table events ────────────────────────────────────────
 frappe.ui.form.on("Cost Sheet Items", {
@@ -971,6 +1021,11 @@ function show_duplicate_item_popup(frm, cdt, cdn, item_name) {
 						vat: srow.vat,
 						profit_margin: srow.profit_margin,
 					});
+					if (frm.doc.custom_quote_as_bundle) {
+						frm.add_child("custom_bundle_components", {cost_item: m.new_cost_item,
+							calculation_breakdown: (m.new_cbs || [])[0], qty_per_bundle: 1});
+						frm.refresh_field("custom_bundle_components");
+					}
 					frm.save().then(function () {
 						frappe.show_alert({ message: "Duplicated → " + m.new_cost_item_name, indicator: "green" });
 						if (vals.open_calc && (m.new_cbs || []).length) {

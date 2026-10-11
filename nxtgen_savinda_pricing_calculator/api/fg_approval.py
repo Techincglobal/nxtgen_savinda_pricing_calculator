@@ -8,7 +8,7 @@ _TOKEN = object()
 PENDING = "Pending Validation"
 RETURNED = "Returned for Correction"
 APPROVED = "Approved"
-PROTECTED = ("approval_required", "approval_status", "approved_by", "approved_on", "approval_remarks", "fg_item")
+PROTECTED = ("approval_required", "approval_status", "approved_by", "approved_on", "approval_remarks", "fg_item", "custom_costing_bundle")
 
 
 @contextmanager
@@ -91,6 +91,8 @@ def validate_item_approval(doc, method=None):
 		return  # Standard Items, raw materials and legacy FGs are completely unaffected.
 	if old and (not doc.get("custom_fg_approval_required") or doc.get("custom_product_library") != old.get("custom_product_library")):
 		frappe.throw("The pricing FG approval link/requirement cannot be changed manually.")
+	if old and doc.get("custom_costing_bundle") != old.get("custom_costing_bundle"):
+		frappe.throw("The FG's bundle costing link cannot be changed manually.")
 	if doc.is_new() and not _authorized():
 		frappe.throw("Pricing FG approval is assigned only by the pricing-app FG creation process.")
 	if not cint(doc.disabled):
@@ -166,6 +168,13 @@ def get_review_actions(product_library):
 def check_pricing_for_approval(doc):
 	from nxtgen_savinda_pricing_calculator.api.pricing_rule import _active_auto_rule, _tier_qtys_for_cost_item
 	qtys = _tier_qtys_for_cost_item(doc.cost_item) if doc.cost_item else []
+	if doc.get("custom_costing_bundle"):
+		from nxtgen_savinda_pricing_calculator.api.costing_bundle import bundle_quantities, validate_bundle
+		cs = frappe.get_doc("Cost Sheet", doc.custom_costing_bundle)
+		validate_bundle(cs)
+		if frappe.db.get_value("Item", doc.fg_item, "custom_costing_bundle") != cs.name:
+			frappe.throw("Product Library and FG bundle links do not match.")
+		qtys = bundle_quantities(cs)
 	if not qtys:
 		frappe.throw("The linked Cost Item has no order quantities to validate pricing against.")
 	missing = [qty for qty in qtys if not (rule := _active_auto_rule(doc.fg_item, qty, customer=doc.customer, transaction_date=today())) or flt(rule.rate) <= 0]
@@ -187,7 +196,7 @@ def review_fg(product_library, action, remarks=None):
 		if doc.approval_status != PENDING:
 			frappe.throw("Only a Pending Validation FG can be reviewed.")
 		if action == "approve":
-			for key in ("fg_item", "product_name", "department", "cost_item"):
+			for key in ("fg_item", "product_name", "department", "custom_costing_bundle" if doc.get("custom_costing_bundle") else "cost_item"):
 				if not doc.get(key):
 					frappe.throw(f"Complete {frappe.get_meta('Product Library').get_label(key)} before approval.")
 			check_pricing_for_approval(doc)

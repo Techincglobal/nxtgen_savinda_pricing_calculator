@@ -10,6 +10,12 @@ from frappe.utils import flt, cint
 from nxtgen_savinda_pricing_calculator.api import job_ticket as jt_api
 
 
+@frappe.whitelist()
+def get_uoms():
+	"""UOM master names for the builder; respect the user's normal read permissions."""
+	return frappe.get_list("UOM", pluck="name", order_by="name asc", limit_page_length=0)
+
+
 def _bom_calc_field_values(fg_item):
 	"""Costing/planning variables (from the FG's Calculation Breakdown) to stamp on the BOM's
 	Calculation Details section — used to compute sheet counts in the Production Plan."""
@@ -76,6 +82,11 @@ def get_bom_context(source_type, source_name):
 			if not row.item_code or row.item_code in seen:
 				continue
 			seen.add(row.item_code)
+			bundle = frappe.db.get_value("Item", row.item_code, "custom_costing_bundle")
+			if bundle:
+				from nxtgen_savinda_pricing_calculator.api.costing_bundle import builder_components
+				fg_items.extend(builder_components(frappe.get_doc("Cost Sheet", bundle), row.qty))
+				continue
 			iname = frappe.db.get_value("Item", row.item_code, "item_name") or row.item_code
 			cb    = _find_cb_for_fg(row.item_code)
 			fg_items.append({
@@ -90,6 +101,9 @@ def get_bom_context(source_type, source_name):
 		# FGs behind a Cost Sheet's cost items (used for the NPD → BOM Builder path).
 		cs = frappe.get_doc("Cost Sheet", source_name)
 		customer = cs.get("customer_name") or ""
+		if cs.get("custom_quote_as_bundle"):
+			from nxtgen_savinda_pricing_calculator.api.costing_bundle import builder_components
+			return {"fg_items": builder_components(cs), "customer": customer, "source_type": source_type, "source_name": source_name}
 		seen = set()
 		for row in (cs.get("pricing_list") or []):
 			ci = row.get("item")
@@ -113,6 +127,10 @@ def get_bom_context(source_type, source_name):
 	elif source_type == "Savinda Quotation":
 		sq = frappe.get_doc("Savinda Quotation", source_name)
 		customer = sq.customer_name or ""
+		if any(r.get("custom_costing_bundle") for r in sq.items):
+			from nxtgen_savinda_pricing_calculator.api.costing_bundle import builder_components
+			cs = frappe.get_doc("Cost Sheet", sq.cost_sheet)
+			return {"fg_items": builder_components(cs), "customer": customer, "source_type": source_type, "source_name": source_name}
 		seen = set()
 		for row in sq.items:
 			# FG(s) for this line: the direct finish_good link when set, otherwise the FG
@@ -261,6 +279,21 @@ def _to_stock_uom(item_code, qty, from_uom):
 	if factor:
 		return qty * factor, stock_uom, True
 	return qty, stock_uom, False
+
+
+def _bom_material_row(material, quantity):
+	"""Keep the user's UOM, with the real Item stock UOM and conversion factor."""
+	code = material["item_code"]
+	uom = material.get("uom") or frappe.db.get_value("Item", code, "stock_uom") or "Nos"
+	if not frappe.db.exists("UOM", uom):
+		frappe.throw(f"Select a valid UOM for material {code}: {uom}")
+	factor, stock_uom, converted = _to_stock_uom(code, 1, uom)
+	if not converted or factor <= 0:
+		frappe.throw(f"Set a UOM conversion for {code}: {uom} to {stock_uom}, or select its stock UOM.")
+	return {"item_code": code, "item_name": material.get("item_name") or code,
+		"qty": flt(quantity), "uom": uom, "stock_uom": stock_uom,
+		"conversion_factor": factor, "stock_qty": flt(quantity) * factor,
+		"rate": flt(material.get("rate", 0))}
 
 
 @frappe.whitelist()
@@ -434,7 +467,7 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item="", overrides=None):
 			# Base material is shown in the Input column — NOT repeated in materials list
 			# (removing duplication as per user feedback)
 
-			# 2. Inks from machine_assignment (actual items selected in calculator)
+			# Inks supply consumption only; users select the actual Item in the builder.
 			ma_inks = ma.get("inks", [])
 			if ma_inks:
 				for ci, ink_row in enumerate(ma_inks):
@@ -467,15 +500,14 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item="", overrides=None):
 						consumption = flt(frappe.db.get_value("Offset Ink", ink_name, "consumption_per_sqm") or 0)
 						if consumption:
 							ink_qty = flt(sheet.get("reel_area", 0)) * consumption * (ink_pct / 100)
-					_iq, _iu, _iok = _to_stock_uom(ink_erp_item, ink_qty, "KG")
 					op_materials.append({
-						"item_code": ink_erp_item,
-						"item_name": ink_name,
-						"qty":       round(_iq, 8),
-						"uom":       _iu,
+						"item_code": "",
+						"item_name": "",
+						"qty":       round(ink_qty, 8),
+						"uom":       "KG",
 						"cost_fact": f"Ink - {ink_name}",
 						"include":   True,
-						"label":     f"🎨 Color {ci+1}: {ink_name} ({ink_pct}%)" + ("" if _iok else f"  ⚠ UOM not converted (KG→{_iu})"),
+						"label":     f"🎨 Color {ci+1}: {ink_name} ({ink_pct}%)",
 					})
 			elif no_of_colors > 0:
 				# No inks assigned → generate N empty color slots
@@ -491,10 +523,9 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item="", overrides=None):
 					})
 
 		else:
-			# Non-print: materials come from the spec's cost_fact items/selected items in the CB
+			# Cost Facts supply quantities/labels only; actual Items are selected in the builder.
 			for cf_row in spec.get("cost_facts", []):
 				cf_name  = cf_row.get("cost_fact", "")
-				sel_item = cf_row.get("selected_item", "")
 				if not cf_name:
 					continue
 				# Only Material-group cost facts contribute physical raw materials
@@ -509,33 +540,11 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item="", overrides=None):
 						cf_qty = flt(cr.get("req_qty", 0))
 						cf_uom = cr.get("uom") or "Nos"
 						break
-				if sel_item:
-					_q, _u, _ok = _to_stock_uom(sel_item, cf_qty, cf_uom)
-					op_materials.append({
-						"item_code": sel_item,
-						"item_name": frappe.db.get_value("Item", sel_item, "item_name") or sel_item,
-						"qty":       round(_q, 6),
-						"uom":       _u,
-						"cost_fact": cf_name,
-						"include":   True,
-						"label":     cf_name + ("" if _ok else f"  ⚠ UOM not converted ({cf_uom}→{_u})"),
-					})
-				else:
-					# No item selected; show available items from cost fact as options
-					cf_items = frappe.get_all("Cost Fact Item",
-						filters={"parent": cf_name}, fields=["item", "rate"])
-					for cfi in cf_items:
-						if not cfi.item: continue
-						_q, _u, _ok = _to_stock_uom(cfi.item, cf_qty, cf_uom)
-						op_materials.append({
-							"item_code": cfi.item,
-							"item_name": frappe.db.get_value("Item", cfi.item, "item_name") or cfi.item,
-							"qty":       round(_q, 6),
-							"uom":       _u,
-							"cost_fact": cf_name,
-							"include":   False,  # not auto-selected; user picks
-							"label":     cf_name + ("" if _ok else f"  ⚠ UOM not converted ({cf_uom}→{_u})"),
-						})
+				op_materials.append({
+					"item_code": "", "item_name": "",
+					"qty": round(cf_qty, 6), "uom": cf_uom,
+					"cost_fact": cf_name, "include": True, "label": cf_name,
+				})
 
 			# Non-print ops: also include inks from Production Assignment (e.g. UV/WB Varnish)
 			if not is_print:
@@ -565,15 +574,14 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item="", overrides=None):
 						consumption = flt(frappe.db.get_value("Offset Ink", ink_name, "consumption_per_sqm") or 0)
 						if consumption:
 							ink_qty = flt(sheet.get("reel_area", 0)) * consumption * (ink_pct / 100)
-					_iq, _iu, _iok = _to_stock_uom(ink_erp_item, ink_qty, "KG")
 					op_materials.append({
-						"item_code": ink_erp_item,
-						"item_name": ink_name,
-						"qty":       round(_iq, 8),
-						"uom":       _iu,
+						"item_code": "",
+						"item_name": "",
+						"qty":       round(ink_qty, 8),
+						"uom":       "KG",
 						"cost_fact": f"Ink - {ink_name}",
 						"include":   True,
-						"label":     f"🎨 {ink_name} ({ink_pct}%)" + ("" if _iok else f"  ⚠ UOM not converted (KG→{_iu})"),
+						"label":     f"🎨 {ink_name} ({ink_pct}%)",
 					})
 
 		sfg_code = _sfg_code(fg_item, spec_name)
@@ -845,16 +853,8 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 			ic = mat.get("item_code", "")
 			if not ic or ic == input_code:
 				continue
-			mat_uom = mat.get("uom") or frappe.db.get_value("Item", ic, "stock_uom") or "Nos"
 			per_mat = (flt(mat.get("qty", 0)) / out_qty) if out_qty else flt(mat.get("qty", 0))
-			bom.append("items", {
-				"item_code": ic,
-				"item_name": mat.get("item_name", ic),
-				"qty":       per_mat,
-				"uom":       mat_uom,
-				"stock_uom": mat_uom,
-				"rate":      flt(mat.get("rate", 0)),
-			})
+			bom.append("items", _bom_material_row(mat, per_mat))
 
 		# Operation — ERPNext requires a workstation; auto-create one from the machine
 		# (or the operation name) when the machine has none. Operation COST comes from the
@@ -1140,10 +1140,7 @@ def create_bom(fg_item, mfg_qty, operations, raw_materials, is_default=0, submit
 	for mat in raw_materials:
 		ic = mat.get("item_code", "")
 		if not ic or flt(mat.get("qty", 0)) <= 0: continue
-		iu = mat.get("uom") or frappe.db.get_value("Item", ic, "stock_uom") or "Nos"
-		bom.append("items", {"item_code": ic, "item_name": mat.get("item_name", ic),
-		                      "qty": flt(mat["qty"]), "uom": iu, "stock_uom": iu,
-		                      "rate": flt(mat.get("rate", 0))})
+		bom.append("items", _bom_material_row(mat, mat["qty"]))
 	for i, op in enumerate(operations):
 		if not op.get("workstation"): continue
 		bom.append("operations", {"operation": _get_or_create_operation(op.get("spec_name", f"Op {i+1}")),
@@ -1197,10 +1194,7 @@ def _mk_qty1_bom(item_code, input_code, input_name, per_input_qty, materials, op
 		ic = mat.get("item_code", "")
 		if not ic or ic == input_code:
 			continue
-		mu = mat.get("uom") or frappe.db.get_value("Item", ic, "stock_uom") or "Nos"
-		bom.append("items", {"item_code": ic, "item_name": mat.get("item_name", ic),
-		                     "qty": flt(mat.get("qty", 0)), "uom": mu, "stock_uom": mu,
-		                     "rate": flt(mat.get("rate", 0))})
+		bom.append("items", _bom_material_row(mat, mat.get("qty", 0)))
 	_op_key = (op.get("erp_operation") or "").strip() or (op.get("spec_name") or "").strip()
 	if _op_key:
 		opn = _get_or_create_operation(_op_key)
