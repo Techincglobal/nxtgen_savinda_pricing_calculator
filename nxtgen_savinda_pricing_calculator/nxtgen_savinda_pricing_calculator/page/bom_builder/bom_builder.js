@@ -46,6 +46,7 @@ function bb_mount_app(el) {
 	var app = Vue.createApp({
 		data() {
 			return {
+				uoms: [],
 				loading: false, saving: false, error: '',
 				sourceType: '', sourceName: '', customer: '',
 				fgItems: [], selectedFG: '', selectedFGs: [], calcBreakdown: '', mfgQty: 0,
@@ -95,8 +96,15 @@ function bb_mount_app(el) {
 				}
 			},
 		},
-		mounted() { this.loadFromUrl(); },
+		mounted() { this.loadUoms(); this.loadFromUrl(); },
 		methods: {
+			loadUoms() {
+				frappe.call({
+					method: 'nxtgen_savinda_pricing_calculator.api.bom_builder.get_uoms',
+					callback: (r) => { this.uoms = r.message || []; },
+					error: () => { frappe.msgprint(__('Unable to load UOM master records. Check UOM read permissions.')); }
+				});
+			},
 			fmt, fmtq, fmtN,
 			selectSfgItemGroup() {
 				var self = this;
@@ -861,10 +869,7 @@ function bb_mount_app(el) {
 
   <!-- UOM datalist (shared) -->
   <datalist id="bb-uom-list">
-    <option value="Nos"></option><option value="Sheets"></option><option value="KG"></option>
-    <option value="M2"></option><option value="Meter"></option><option value="Ltr"></option>
-    <option value="Pcs"></option><option value="Set"></option><option value="Roll"></option>
-    <option value="Box"></option><option value="Unit"></option><option value="Gram"></option>
+    <option v-for="uom in uoms" :key="uom" :value="uom"></option>
   </datalist>
 
 
@@ -1195,7 +1200,10 @@ function bb_mount_app(el) {
               {{ mat.item_code ? (mat.item_name || mat.item_code) : '— Select item —' }}
             </div>
             <input type="number" v-model.number="mat.qty" min="0" step="0.000001" class="bb-inp bb-inp-xs" title="Quantity" />
-            <input type="text" v-model="mat.uom" class="bb-inp bb-inp-uom" title="UOM" />
+            <select v-model="mat.uom" class="bb-inp bb-inp-uom" title="UOM">
+              <option value="" disabled>Select UOM</option>
+              <option v-for="uom in uoms" :key="uom" :value="uom">{{ uom }}</option>
+            </select>
             <button class="bb-rm-btn" style="font-size:13px" @click="removeOpMat(op, mi)">×</button>
           </div>
         </div>
@@ -1300,6 +1308,7 @@ function bb_inject_styles() {
 .bb-inp-sm{padding:4px 6px;font-size:12px}
 .bb-inp-xs{width:70px!important;padding:3px 5px;font-size:11px}
 .bb-inp-uom{width:50px!important;padding:3px 5px;font-size:11px}
+select.bb-inp-uom{width:100px!important}
 .bb-sel{cursor:pointer}
 .bb-warn-tag{background:#fef9c3;color:#854d0e;border-radius:3px;padding:1px 5px;font-size:10px;margin-left:4px;font-weight:400;text-transform:none;letter-spacing:0}
 .bb-btn{padding:6px 12px;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600}
