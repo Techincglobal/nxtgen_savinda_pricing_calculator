@@ -305,7 +305,7 @@ def _upsert_product_library(fg_item_code, cost_item=None, customer_ref=None, ove
 
 @frappe.whitelist()
 def create_fg_item(item_name, description, item_group, department, stock_uom="Nos",
-                   cost_item=None, customer_ref=None, pl_overrides=None):
+                   cost_item=None, customer_ref=None, pl_overrides=None, costing_bundle=None):
 	"""
 	Create a Finished Good ERPNext Item with all mandatory custom fields resolved.
 	- custom_department_abbr  fetched from Department.custom_abbr
@@ -320,6 +320,17 @@ def create_fg_item(item_name, description, item_group, department, stock_uom="No
 	if not department:
 		frappe.throw("Department is required")
 	pl_overrides = _reviewed_pl_overrides(pl_overrides)
+	if costing_bundle:
+		from nxtgen_savinda_pricing_calculator.api.costing_bundle import validate_bundle
+		bundle = frappe.get_doc("Cost Sheet", costing_bundle)
+		bundle.check_permission("write")
+		frappe.has_permission("Item", "create", throw=True)
+		validate_bundle(bundle)
+		if not bundle.get("custom_quote_as_bundle") or bundle.docstatus != 1 or cost_item:
+			frappe.throw("Bundle FGs require a submitted bundle Cost Sheet and no single Cost Item.")
+		if bundle.custom_bundle_fg:
+			frappe.throw("The Cost Sheet already has an assembled bundle FG.")
+		pl_overrides["custom_costing_bundle"] = costing_bundle
 
 	# Resolve abbreviations from the linked masters
 	item_group_abbr = frappe.db.get_value("Item Group", item_group, "custom_abbr") or ""
@@ -340,6 +351,8 @@ def create_fg_item(item_name, description, item_group, department, stock_uom="No
 	})
 	if cost_item and frappe.db.has_column("Item", "custom_cost_item"):
 		doc.custom_cost_item = cost_item
+	if costing_bundle:
+		doc.custom_costing_bundle = costing_bundle
 	if customer_ref and frappe.db.has_column("Item", "customer_ref"):
 		doc.customer_ref = customer_ref
 	from nxtgen_savinda_pricing_calculator.api.fg_approval import insert_pending_fg
@@ -544,6 +557,15 @@ def get_quotation_fg_items(quotation):
 	"""Return every FG item tied to this quotation's cost items — including
 	variant FGs (Item.custom_cost_item) that aren't on a quotation row."""
 	doc = frappe.get_doc("Savinda Quotation", quotation)
+	doc.check_permission("read")
+	bundle_rows = [r for r in doc.items if r.get("custom_costing_bundle")]
+	if bundle_rows:
+		fg = frappe.db.get_value("Cost Sheet", bundle_rows[0].custom_costing_bundle, "custom_bundle_fg")
+		if not fg:
+			return []
+		return [{"item_code": fg, "item_name": bundle_rows[0].item_name,
+			"qty": bundle_rows[0].qty, "rate": bundle_rows[0].base_selling_price,
+			"cost_item": "", "calculation_breakdown": ""}]
 
 	ci_info = {}
 	packing_cache = {}

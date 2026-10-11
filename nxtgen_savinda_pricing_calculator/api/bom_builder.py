@@ -82,6 +82,11 @@ def get_bom_context(source_type, source_name):
 			if not row.item_code or row.item_code in seen:
 				continue
 			seen.add(row.item_code)
+			bundle = frappe.db.get_value("Item", row.item_code, "custom_costing_bundle")
+			if bundle:
+				from nxtgen_savinda_pricing_calculator.api.costing_bundle import builder_components
+				fg_items.extend(builder_components(frappe.get_doc("Cost Sheet", bundle), row.qty))
+				continue
 			iname = frappe.db.get_value("Item", row.item_code, "item_name") or row.item_code
 			cb    = _find_cb_for_fg(row.item_code)
 			fg_items.append({
@@ -96,6 +101,9 @@ def get_bom_context(source_type, source_name):
 		# FGs behind a Cost Sheet's cost items (used for the NPD → BOM Builder path).
 		cs = frappe.get_doc("Cost Sheet", source_name)
 		customer = cs.get("customer_name") or ""
+		if cs.get("custom_quote_as_bundle"):
+			from nxtgen_savinda_pricing_calculator.api.costing_bundle import builder_components
+			return {"fg_items": builder_components(cs), "customer": customer, "source_type": source_type, "source_name": source_name}
 		seen = set()
 		for row in (cs.get("pricing_list") or []):
 			ci = row.get("item")
@@ -119,6 +127,10 @@ def get_bom_context(source_type, source_name):
 	elif source_type == "Savinda Quotation":
 		sq = frappe.get_doc("Savinda Quotation", source_name)
 		customer = sq.customer_name or ""
+		if any(r.get("custom_costing_bundle") for r in sq.items):
+			from nxtgen_savinda_pricing_calculator.api.costing_bundle import builder_components
+			cs = frappe.get_doc("Cost Sheet", sq.cost_sheet)
+			return {"fg_items": builder_components(cs), "customer": customer, "source_type": source_type, "source_name": source_name}
 		seen = set()
 		for row in sq.items:
 			# FG(s) for this line: the direct finish_good link when set, otherwise the FG

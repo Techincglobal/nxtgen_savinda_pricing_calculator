@@ -1247,7 +1247,7 @@ function oc_mount_app(el) {
 					fields: [
 						{
 							fieldtype: 'Select', fieldname: 'kind', label: 'Create', reqd: 1,
-							options: 'New Qty Break\nNew Finishing Variant', default: 'New Qty Break'
+							options: 'New Qty Break\nNew Finishing Variant\nNew Component Item', default: 'New Qty Break'
 						},
 						{
 							fieldtype: 'Float', fieldname: 'new_qty', label: 'Order Qty', reqd: 1,
@@ -1255,9 +1255,9 @@ function oc_mount_app(el) {
 							description: 'The new calculation is recomputed for this quantity.'
 						},
 						{
-							fieldtype: 'Data', fieldname: 'new_name', label: 'Quotation Item Name',
-							depends_on: "eval:doc.kind=='New Finishing Variant'",
-							description: 'Required for a finishing variant. It becomes a separate quotation item.'
+							fieldtype: 'Data', fieldname: 'new_name', label: 'New Item / Component Name',
+							depends_on: "eval:doc.kind!='New Qty Break'",
+							description: 'For example: Inner Carton, Lid or Bottom Tray. Creates a separate Cost Item with its own calculation and FG.'
 						},
 						{
 							fieldtype: 'Currency', fieldname: 'new_selling_unit_price', label: 'Unit Selling Price (LKR)',
@@ -1269,14 +1269,14 @@ function oc_mount_app(el) {
 					primary_action: function (v) {
 						var isQty = v.kind === 'New Qty Break';
 						if (!(parseFloat(v.new_qty) > 0)) { frappe.msgprint('Enter a quantity.'); return; }
-						if (!isQty && !(v.new_name || '').trim()) { frappe.msgprint('Enter a quotation item name for the finishing variant.'); return; }
-						d.hide();
+						if (!isQty && !(v.new_name || '').trim()) { frappe.msgprint('Enter a name for the new item or component.'); return; }
+						d.disable_primary_action();
 						frappe.call({
 							method: API.createVariant,
 							args: {
 								source_cost_item: self.switcher.cost_item,
 								cost_sheet: self.costSheetRef || '',
-								kind: isQty ? 'qty' : 'finishing',
+								kind: isQty ? 'qty' : (v.kind === 'New Component Item' ? 'component' : 'finishing'),
 								new_qty: v.new_qty,
 								new_name: isQty ? null : (v.new_name || null),
 								new_selling_unit_price: v.new_selling_unit_price,
@@ -1288,8 +1288,10 @@ function oc_mount_app(el) {
 									frappe.msgprint({ message: m.error || 'Could not create — no breakdown returned.', indicator: 'red' });
 									return;
 								}
+								d.hide();
 								self.switcherGo(m.new_cb);
 							},
+							always: function () {d.enable_primary_action();},
 						});
 					},
 				});

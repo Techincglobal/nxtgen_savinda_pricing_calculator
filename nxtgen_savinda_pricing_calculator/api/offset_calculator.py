@@ -2359,17 +2359,28 @@ def get_calc_switcher(cost_sheet=None, calculation_breakdown=None):
 @frappe.whitelist()
 def create_variant_for_switcher(source_cost_item, cost_sheet=None, kind="qty", new_qty=None,
                                 new_name=None, new_selling_unit_price=None):
-    """Create a qty break (kind='qty') or finishing variant (kind='finishing') of a cost item,
+    """Create a qty break, finishing variant or named component (kind='component') of a cost item,
     add it to the cost sheet (draft only), and return the new CB so the calculator reloads to it."""
     if not source_cost_item or not frappe.db.exists("cost Item", source_cost_item):
         return {"error": "Source cost item not found"}
     if not new_qty or flt(new_qty) <= 0:
         return {"error": "Order quantity must be greater than 0"}
+    if kind not in ("qty", "finishing", "component"):
+        return {"error": "Choose a quantity break, finishing variant or new component item"}
+    if cost_sheet:
+        cs = frappe.get_doc("Cost Sheet", cost_sheet)
+        cs.check_permission("write")
+        if cs.docstatus != 0:
+            return {"error": "Add components or variants only to a draft Cost Sheet. Amend the submitted sheet first."}
+        if not any(r.item == source_cost_item for r in cs.get("pricing_list") or []):
+            return {"error": "The source Cost Item does not belong to this Cost Sheet"}
+        if cs.get("custom_quote_as_bundle") and kind == "qty":
+            return {"error": "For bundles, enter bundle quantity tiers in the Cost Sheet's Quotation Qty Breaks table. Use New Component Item for a separate physical component."}
     if kind == "qty":
         res = add_qty_variant(source_cost_item, new_qty)
     else:
         if not (new_name or "").strip():
-            return {"error": "Enter a quotation item name for the finishing variant"}
+            return {"error": "Enter a name for the new item or component"}
         res = duplicate_cost_item(source_cost_item, new_name=new_name.strip(), new_qty=new_qty)
     if not res or res.get("error"):
         return res or {"error": "Failed to create variant"}
@@ -2413,6 +2424,9 @@ def create_variant_for_switcher(source_cost_item, cost_sheet=None, kind="qty", n
                     "selling_ammount": round(flt(ci.get("item_qty")) * sell_unit, 2),
                 })
             cs.append("pricing_list", new_row)
+            if cs.get("custom_quote_as_bundle"):
+                cs.append("custom_bundle_components", {"cost_item": new_ci, "calculation_breakdown": new_cb,
+                          "qty_per_bundle": 1, "fg_item": ""})
             # Skip link validation so a pre-existing stale link elsewhere on the sheet (e.g. an
             # old sales_person) can't block adding the variant row.
             cs.flags.ignore_links = True

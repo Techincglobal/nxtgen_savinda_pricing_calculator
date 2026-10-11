@@ -1,0 +1,18 @@
+{
+ "doctype": "DocType",
+ "name": "Costing Bundle Component",
+ "module": "Nxtgen Savinda Pricing Calculator",
+ "istable": 1,
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": ["cost_item", "qty_per_bundle", "calculation_breakdown", "fg_item"],
+ "fields": [
+  {"fieldname": "cost_item", "label": "Cost Item", "fieldtype": "Link", "options": "cost Item", "reqd": 1, "in_list_view": 1, "columns": 3},
+  {"fieldname": "qty_per_bundle", "label": "Qty per Bundle", "fieldtype": "Float", "default": "1", "reqd": 1, "in_list_view": 1, "columns": 2},
+  {"fieldname": "calculation_breakdown", "label": "Calculation", "fieldtype": "Link", "options": "Calculation Breakdown", "reqd": 1},
+  {"fieldname": "fg_item", "label": "Component FG", "fieldtype": "Link", "options": "Item", "allow_on_submit": 1, "in_list_view": 1, "columns": 5}
+ ],
+ "permissions": [],
+ "links": [],
+ "actions": []
+}

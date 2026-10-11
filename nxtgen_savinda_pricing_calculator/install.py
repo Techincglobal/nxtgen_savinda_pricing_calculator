@@ -69,6 +69,8 @@ def after_install():
 	_sync_code_print_formats()
 	from nxtgen_savinda_pricing_calculator.api.fg_approval import setup_fg_approval
 	setup_fg_approval()
+	from nxtgen_savinda_pricing_calculator.api.costing_bundle import setup_bundle_fields
+	setup_bundle_fields()
 
 
 def after_migrate():
@@ -92,6 +94,8 @@ def after_migrate():
 	# approved local print-format changes that must never be overwritten by migrate.
 	from nxtgen_savinda_pricing_calculator.api.fg_approval import setup_fg_approval
 	setup_fg_approval()
+	from nxtgen_savinda_pricing_calculator.api.costing_bundle import setup_bundle_fields
+	setup_bundle_fields()
 
 
 def _migrate_flexo_planning_rows():
