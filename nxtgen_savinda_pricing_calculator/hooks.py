@@ -93,8 +93,15 @@ doc_events = {
 		"validate": "nxtgen_savinda_pricing_calculator.api.manufacturing.validate_base_material_transfer_cap",
 	},
 	"Delivery Note": {
+		"on_update": "nxtgen_savinda_pricing_calculator.api.dispatch.queue_delivery_note_sync",
+		"on_update_after_submit": "nxtgen_savinda_pricing_calculator.api.dispatch.queue_delivery_note_sync",
+		"before_validate": "nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.doctype.packing.packing.enforce_packing_extra_rates",
+		"validate": "nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.doctype.packing.packing.enforce_packing_extra_rates",
 		"on_submit": "nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.doctype.packing.packing.mark_packings_delivered",
-		"on_cancel": "nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.doctype.packing.packing.mark_packings_delivered",
+		"on_cancel": [
+			"nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.doctype.packing.packing.mark_packings_delivered",
+			"nxtgen_savinda_pricing_calculator.api.dispatch.queue_delivery_note_cancellation",
+		],
 	},
 }
 

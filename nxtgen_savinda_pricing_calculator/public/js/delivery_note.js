@@ -1,6 +1,6 @@
 // Copyright (c) 2026, Techincglobal.com and contributors
 // Delivery Note — packing is the ONLY item source: fetch items from the packing list (undelivered
-// Packing records for a Sales Order that has stock to dispatch), then save. The standard
+// Packing records for the selected Production Plan), then save. The standard
 // "Get Items From" options and manual row entry are removed.
 
 var PK = "nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.doctype.packing.packing.";
@@ -21,33 +21,29 @@ frappe.ui.form.on("Delivery Note", {
 	},
 });
 
-function _default_so(frm) {
-	var so = "";
-	(frm.doc.items || []).some(function (r) {
-		if (r.against_sales_order) { so = r.against_sales_order; return true; }
-		return false;
-	});
-	return so;
-}
-
-// Load the dispatchable Sales Orders first, then open the dialog with the picker restricted
-// to just those orders (only orders with undelivered packings — i.e. something to dispatch).
+// The picker uses Production Plans; their Sales Order references are resolved server-side.
 function _packing_popup(frm) {
 	frappe.call({
-		method: PK + "dispatchable_sales_orders",
+		method: PK + "dispatchable_production_plans",
+		args: { company: frm.doc.company || null },
 		callback: function (r) { _open_packing_dialog(frm, r.message || []); },
 	});
 }
 
-function _open_packing_dialog(frm, so_list) {
+function _open_packing_dialog(frm, pp_list) {
 	var d = new frappe.ui.Dialog({
 		title: __("Get Items from Packing"),
 		size: "large",
 		fields: [
-			{ fieldtype: "Link", options: "Sales Order", fieldname: "sales_order",
-				label: __("Sales Order (with stock to dispatch)"), reqd: 1, default: _default_so(frm),
+			{ fieldtype: "Link", options: "Production Plan", fieldname: "production_plan",
+				label: __("Production Plan (with approved packing)"), reqd: 1,
 				get_query: function () {
-					return { filters: { name: ["in", (so_list && so_list.length) ? so_list : ["__none__"]] } };
+					return { filters: { name: ["in", (pp_list && pp_list.length) ? pp_list : ["__none__"]] } };
+				}, onchange: function () {
+					if (!d) return;
+					d.__loaded_plan = null;
+					render([]);
+					if (d.get_value("production_plan")) load();
 				} },
 			{ fieldtype: "Button", fieldname: "load", label: __("Load Available Packings") },
 			{ fieldtype: "HTML", fieldname: "list" },
@@ -59,23 +55,30 @@ function _open_packing_dialog(frm, so_list) {
 				names.push($(this).attr("data-pk"));
 			});
 			if (!names.length) { frappe.msgprint(__("Select at least one packing.")); return; }
-			var so = d.get_value("sales_order");
+			var pp = d.get_value("production_plan");
+			if (d.__loaded_plan !== pp) { frappe.msgprint(__("Load packings for the selected Production Plan first.")); return; }
 			frappe.call({
 				method: PK + "get_delivery_items_from_packings",
-				args: { sales_order: so, packings: JSON.stringify(names) },
-				freeze: true, freeze_message: __("Fetching item data from the Sales Order…"),
+				args: { production_plan: pp, packings: JSON.stringify(names) },
+				freeze: true, freeze_message: __("Fetching items from the selected Production Plan's packing…"),
 				callback: function (r) {
 					var m = r.message || {};
 					var rows = m.items || [];
 					if (!rows.length) { frappe.msgprint(__("No matching items on the Sales Order.")); return; }
-					if (m.customer && !frm.doc.customer) frm.set_value("customer", m.customer);
+					if (frm.doc.customer && m.customer && frm.doc.customer !== m.customer) {
+						frappe.msgprint(__("The selected Production Plan belongs to a different customer. Use a new Delivery Note."));
+						return;
+					}
 					// Replace the items table: only the selected packings' items remain,
 					// with qty from the packing and all other data from the Sales Order.
-					frm.clear_table("items");
-					rows.forEach(function (row) { frm.add_child("items", row); });
-					frm.refresh_field("items");
-					d.hide();
-					frappe.show_alert({ message: __("Delivery Note set from {0} packing(s).", [rows.length]), indicator: "green" });
+					frm.set_value(m.header || { customer: m.customer }).then(function () {
+						frm.clear_table("items");
+						rows.forEach(function (row) { frm.add_child("items", row); });
+						frm.refresh_field("items");
+						frm.trigger("calculate_taxes_and_totals");
+						d.hide();
+						frappe.show_alert({ message: __("Delivery Note set from {0} packing(s), including separate zero-rate extra lines.", [m.packing_count]), indicator: "green" });
+					});
 				},
 			});
 		},
@@ -85,7 +88,7 @@ function _open_packing_dialog(frm, so_list) {
 		d.__packings = rows || [];
 		if (!rows || !rows.length) {
 			d.fields_dict.list.$wrapper.html(
-				"<div style='color:#888;padding:8px'>" + __("No available (undelivered) packings for this Sales Order.") + "</div>");
+				"<div style='color:#888;padding:8px'>" + __("No approved, undelivered packings for this Production Plan.") + "</div>");
 			return;
 		}
 		var html = "<table class='table table-bordered' style='font-size:12px;margin-bottom:0'><thead><tr>"
@@ -112,21 +115,20 @@ function _open_packing_dialog(frm, so_list) {
 	}
 
 	function load() {
-		var so = d.get_value("sales_order");
-		if (!so) { frappe.msgprint(__("Select a Sales Order.")); return; }
-		if (!frm.doc.customer) {
-			frappe.db.get_value("Sales Order", so, "customer", function (v) {
-				if (v && v.customer) frm.set_value("customer", v.customer);
-			});
-		}
+		var pp = d.get_value("production_plan");
+		if (!pp) { frappe.msgprint(__("Select a Production Plan.")); return; }
+		d.__loaded_plan = null;
 		frappe.call({
 			method: PK + "get_available_packings",
-			args: { sales_order: so },
-			callback: function (r) { render(r.message || []); },
+			args: { production_plan: pp },
+			callback: function (r) {
+				if (d.get_value("production_plan") !== pp) return;
+				d.__loaded_plan = pp;
+				render(r.message || []);
+			},
 		});
 	}
 
 	d.fields_dict.load.$input.on("click", load);
 	d.show();
-	if (d.get_value("sales_order")) load();
 }

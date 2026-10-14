@@ -797,7 +797,8 @@ def get_aod_data(delivery_note):
 			if v:
 				address_lines.append(v)
 
-	total_qty = sum(p["packed_qty"] for p in packings)
+	# The DN now has separate paid and zero-rate Extra lines for each Packing.
+	total_qty = sum(float(it.get("qty") or 0) for it in dn.get("items") or [])
 
 	return {
 		"doc": dn,
