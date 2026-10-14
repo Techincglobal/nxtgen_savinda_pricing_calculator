@@ -2,7 +2,8 @@
 
 Save/update hooks use queue_delivery_note_sync with the existing production
 tracker settings. The earlier environment-token preview functions are retained
-but are not registered in hooks. No automatic retries or cancellation sync.
+but are not registered in hooks. Cancellation uses a separate PATCH endpoint.
+No automatic retries are enabled.
 """
 
 import os
@@ -135,12 +136,9 @@ def _sync_delivery_note(delivery_note):
 	"""New standalone DN sync, independent of _push_job_card.
 
 	Use in a background worker after submission commits, or explicitly against
-	an already submitted DN. No automatic retry or cancellation sync is enabled.
+	an already submitted DN. No automatic retries are enabled.
 	"""
-	import json
 	from urllib.parse import urlsplit
-
-	from frappe.utils.response import json_handler
 
 	doc = frappe.get_doc("Delivery Note", delivery_note)
 	doc.check_permission("read")
@@ -159,6 +157,51 @@ def _sync_delivery_note(delivery_note):
 	if not body:
 		return {"ok": False, "skipped": True, "reason": "No dispatch items found."}
 	endpoint = f"{base_url}/dispatch"
+	return _send_logged_dispatch(doc, settings, endpoint, body, "post")
+
+
+def queue_delivery_note_cancellation(doc, method=None):
+	"""Queue external cancellation only after the local cancellation commits."""
+	if doc.docstatus != 2 or doc.is_return:
+		return
+	if not frappe.db.exists("DocType", "Savinda Production Tracker Settings"):
+		return
+	if not frappe.get_single("Savinda Production Tracker Settings").enabled:
+		return
+	frappe.enqueue(
+		"nxtgen_savinda_pricing_calculator.api.dispatch.sync_delivery_note_cancellation",
+		queue="short",
+		enqueue_after_commit=True,
+		delivery_note=doc.name,
+	)
+
+
+def sync_delivery_note_cancellation(delivery_note):
+	"""Use the same per-DN lock as submission to order POST/PATCH workers."""
+	from urllib.parse import quote, urlsplit
+
+	key = frappe.cache.make_key(f"delivery-note-dispatch:{delivery_note}")
+	with frappe.cache.lock(key, timeout=120, blocking_timeout=25):
+		doc = frappe.get_doc("Delivery Note", delivery_note)
+		doc.check_permission("read")
+		if doc.docstatus != 2 or doc.is_return:
+			return {"ok": False, "skipped": True, "reason": "Only cancelled, non-return Delivery Notes can sync cancellation."}
+		settings = frappe.get_single("Savinda Production Tracker Settings")
+		if not settings.enabled:
+			return {"ok": False, "skipped": True, "reason": "Savinda Production Tracker Settings is disabled."}
+		base_url = (settings.base_url or "").strip().rstrip("/")
+		url = urlsplit(base_url)
+		if url.scheme != "https" or not url.netloc or url.username or url.password or url.query or url.fragment:
+			frappe.throw("Set a valid HTTPS Base URL in Savinda Production Tracker Settings.")
+		endpoint = f"{base_url}/dispatch/status/dispatch-number/{quote(doc.name, safe='')}"
+		return _send_logged_dispatch(doc, settings, endpoint, {"status": "cancelled"}, "patch")
+
+
+def _send_logged_dispatch(doc, settings, endpoint, body, http_method):
+	"""Shared outbound log, duplicate-success check and auth for POST/PATCH."""
+	import json
+	from frappe.utils.response import json_handler
+
 	request_data = json.dumps(body, indent=2, ensure_ascii=False, default=json_handler)
 	previous_log = frappe.db.get_value("Savinda Production Tracker Log", {
 		"direction": "Outbound", "reference_doctype": "Delivery Note", "reference_name": doc.name,
@@ -181,7 +224,7 @@ def _sync_delivery_note(delivery_note):
 		token = settings.get_password("auth_token")
 		if not token:
 			raise RuntimeError("Auth Token is not set in Savinda Production Tracker Settings")
-		response = requests.post(
+		response = getattr(requests, http_method)(
 			endpoint,
 			json=body,
 			headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},

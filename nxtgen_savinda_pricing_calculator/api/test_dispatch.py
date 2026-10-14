@@ -27,6 +27,7 @@ class TestDeliveryNoteSync(unittest.TestCase):
 			make_key=lambda key: key, lock=Mock(side_effect=lambda *args, **kwargs: nullcontext()))))
 		self.builder = self.stack.enter_context(patch.object(dispatch, "build_dispatch_payload", return_value=self.body))
 		self.post = self.stack.enter_context(patch.object(dispatch.requests, "post", return_value=self.response))
+		self.http_patch = self.stack.enter_context(patch.object(dispatch.requests, "patch", return_value=self.response))
 
 	def test_uses_existing_settings_and_array_body_with_new_endpoint(self):
 		result = dispatch.sync_delivery_note("TEST-DN")
@@ -123,4 +124,55 @@ class TestDeliveryNoteSync(unittest.TestCase):
 		for event in ("on_update", "on_update_after_submit"):
 			self.assertEqual(events[event], "nxtgen_savinda_pricing_calculator.api.dispatch.queue_delivery_note_sync")
 		self.assertTrue(events["on_submit"].endswith("mark_packings_delivered"))
-		self.assertTrue(events["on_cancel"].endswith("mark_packings_delivered"))
+		self.assertTrue(events["on_cancel"][0].endswith("mark_packings_delivered"))
+		self.assertEqual(events["on_cancel"][1], "nxtgen_savinda_pricing_calculator.api.dispatch.queue_delivery_note_cancellation")
+
+	def test_cancellation_patch_uses_same_settings_and_logs_object_payload(self):
+		self.doc.docstatus = 2
+		result = dispatch.sync_delivery_note_cancellation("TEST-DN")
+		self.assertTrue(result["ok"])
+		self.http_patch.assert_called_once_with(
+			"https://example.invalid/dispatch/status/dispatch-number/TEST-DN", json={"status": "cancelled"},
+			headers={"Authorization": "Bearer test-token", "Content-Type": "application/json"}, timeout=20, allow_redirects=False)
+		self.post.assert_not_called()
+		self.builder.assert_not_called()
+		self.assertEqual(self.log.status, "Success")
+		self.assertIn('"status": "cancelled"', self.get_doc.call_args.args[0]["request_data"])
+
+	def test_cancellation_queue_waits_for_commit(self):
+		self.doc.docstatus = 2
+		with patch.object(dispatch.frappe, "enqueue") as enqueue:
+			dispatch.queue_delivery_note_cancellation(self.doc, "on_cancel")
+		self.assertEqual(enqueue.call_args.args[0], "nxtgen_savinda_pricing_calculator.api.dispatch.sync_delivery_note_cancellation")
+		self.assertTrue(enqueue.call_args.kwargs["enqueue_after_commit"])
+
+	def test_cancellation_skips_submitted_drafts_and_returns(self):
+		self.get_doc.side_effect = None
+		self.get_doc.return_value = self.doc
+		with patch.object(dispatch.frappe, "enqueue") as enqueue:
+			for status, is_return in [(0, 0), (1, 0), (2, 1)]:
+				self.doc.docstatus, self.doc.is_return = status, is_return
+				dispatch.queue_delivery_note_cancellation(self.doc)
+				self.assertTrue(dispatch.sync_delivery_note_cancellation("TEST-DN")["skipped"])
+			enqueue.assert_not_called()
+		self.http_patch.assert_not_called()
+
+	def test_cancellation_failure_is_logged(self):
+		self.doc.docstatus = 2
+		self.response.status_code = 404
+		self.assertFalse(dispatch.sync_delivery_note_cancellation("TEST-DN")["ok"])
+		self.assertEqual(self.log.status, "Failed")
+		self.assertEqual(self.log.http_status, 404)
+
+	def test_successful_cancellation_is_not_sent_twice(self):
+		import json
+		self.doc.docstatus = 2
+		self.db.get_value.return_value = SimpleNamespace(name="CANCEL-SUCCESS", request_data=json.dumps({"status":"cancelled"}, indent=2))
+		self.assertTrue(dispatch.sync_delivery_note_cancellation("TEST-DN")["skipped"])
+		self.http_patch.assert_not_called()
+
+	def test_cancellation_encodes_dispatch_number_in_url(self):
+		self.doc.docstatus = 2
+		self.doc.name = "AOD/2026 01"
+		dispatch.sync_delivery_note_cancellation(self.doc.name)
+		self.assertTrue(self.http_patch.call_args.args[0].endswith("AOD%2F2026%2001"))
