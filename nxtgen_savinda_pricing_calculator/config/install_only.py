@@ -8,6 +8,7 @@ It never runs during ``bench migrate`` or an app update.
 
 import json
 import os
+import re
 
 import frappe
 
@@ -67,6 +68,7 @@ def export_from_site():
 	ui.extend(_export_named("Print Format", PRINT_FORMATS, missing))
 	ui.extend(_export_inquiry_scripts("Client Script", missing))
 	ui.extend(_export_inquiry_scripts("Server Script", missing))
+	ui.extend(_export_workspace_server_scripts(workspace_dependencies, missing))
 
 	directory = frappe.get_app_path("nxtgen_savinda_pricing_calculator", "fixtures", "install_only")
 	os.makedirs(directory, exist_ok=True)
@@ -302,6 +304,28 @@ def _collect_links_for_targets(document, links):
 		elif field.fieldtype in ("Table", "Table MultiSelect") and isinstance(value, list):
 			for child in value:
 				_collect_links_for_targets(child, links)
+
+
+def _export_workspace_server_scripts(records, missing):
+	"""Export API Server Scripts called by the selected dashboard cards/blocks."""
+	if not frappe.db.table_exists("Server Script"):
+		missing.append("Server Script")
+		return []
+	methods = set()
+	for record in records:
+		if record.get("doctype") == "Number Card" and record.get("method"):
+			methods.add(record["method"])
+		if record.get("doctype") == "Custom HTML Block":
+			methods.update(re.findall(r'''frappe\.xcall\(\s*['"]([^'"]+)''', record.get("script") or ""))
+	if not methods:
+		return []
+	meta = frappe.get_meta("Server Script")
+	if not meta.has_field("api_method"):
+		return []
+	names = frappe.get_all(
+		"Server Script", filters={"api_method": ["in", sorted(methods)]}, pluck="name", limit_page_length=0
+	)
+	return [_document("Server Script", name) for name in names]
 
 
 def _export_inquiry_scripts(doctype, missing):
