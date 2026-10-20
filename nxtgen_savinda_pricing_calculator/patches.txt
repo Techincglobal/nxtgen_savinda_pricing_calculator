@@ -13,4 +13,6 @@
 #nxtgen_savinda_pricing_calculator.patches.v1_0.offset_job_ticket_bind
 #nxtgen_savinda_pricing_calculator.patches.v1_0.quotation_finishing_from_specs
 #nxtgen_savinda_pricing_calculator.patches.v1_0.quotation_price_txn_currency
-nxtgen_savinda_pricing_calculator.patches.v1_0.inquiry_dimensions_backfill
+# Deliberately disabled: this app deploys approved configuration only. It must
+# not alter existing Inquiry/transaction data during bench migrate.
+#nxtgen_savinda_pricing_calculator.patches.v1_0.inquiry_dimensions_backfill

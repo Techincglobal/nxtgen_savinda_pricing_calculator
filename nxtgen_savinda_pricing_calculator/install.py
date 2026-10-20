@@ -22,7 +22,8 @@ INSTALL_ONLY_FIXTURES = [
 	"flexo_foil.json",
 	"offset_spec.json",         # references cost facts + machines above
 	"costing_configuration.json",  # single — tax/wastage config
-	"print_format.json",        # print templates
+	"install_only/master_data.json",  # exported production masters
+	"install_only/user_interface.json",  # workspaces, selected scripts and formats
 ]
 
 
@@ -66,7 +67,9 @@ def after_install():
 	_ensure_packing_workflow()
 	_retire_sales_order_npd_workflow()
 	_seed_install_only_fixtures()
-	_sync_code_print_formats()
+	# Print formats are sourced from install_only/user_interface.json.  They are
+	# intentionally not overwritten from code after the reviewed source-site
+	# snapshot has been inserted.
 	from nxtgen_savinda_pricing_calculator.api.fg_approval import setup_fg_approval
 	setup_fg_approval()
 	from nxtgen_savinda_pricing_calculator.api.costing_bundle import setup_bundle_fields

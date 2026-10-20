@@ -161,9 +161,9 @@ doc_events = {
 
 before_install = "nxtgen_savinda_pricing_calculator.install.before_install"
 after_install = "nxtgen_savinda_pricing_calculator.install.after_install"
-
-before_migrate = "nxtgen_savinda_pricing_calculator.install.before_migrate"
-after_migrate = "nxtgen_savinda_pricing_calculator.install.after_migrate"
+# Configuration is deliberately installed once only.  Do not add migrate hooks
+# here: production users may edit the seeded masters, print formats and
+# workspaces after installation and an app update must never replace them.
 
 # Uninstallation
 # ------------
