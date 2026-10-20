@@ -57,10 +57,13 @@ def export_from_site():
 	masters = dependencies + item_groups + items + masters
 	missing.extend(missing_items)
 	missing.extend(missing_dependencies)
+	workspaces = _export_workspaces(missing)
+	workspace_dependencies = _export_workspace_dependencies(workspaces, missing)
 	ui = []
 	ui.extend(_export_named("Role", ROLES, missing))
 	ui.extend(_export_named("Workflow", WORKFLOWS, missing))
-	ui.extend(_export_workspaces(missing))
+	ui.extend(workspace_dependencies)
+	ui.extend(workspaces)
 	ui.extend(_export_named("Print Format", PRINT_FORMATS, missing))
 	ui.extend(_export_inquiry_scripts("Client Script", missing))
 	ui.extend(_export_inquiry_scripts("Server Script", missing))
@@ -96,11 +99,35 @@ def _export_doctypes(doctypes):
 			continue
 		# Parent Item Groups must be inserted before their children on the target.
 		order_by = "lft asc" if doctype == "Item Group" else "name asc"
-		for name in frappe.get_all(doctype, pluck="name", order_by=order_by, limit_page_length=0):
-			document = frappe.get_doc(doctype, name).as_dict()
-			source_documents.append(document)
-			records.append(_clean(document))
+		documents = [
+			frappe.get_doc(doctype, name).as_dict()
+			for name in frappe.get_all(doctype, pluck="name", order_by=order_by, limit_page_length=0)
+		]
+		source_documents.extend(documents)
+		if doctype == "Offset Spec":
+			documents = _parent_first(documents)
+		records.extend(_clean(document) for document in documents)
 	return records, missing, source_documents
+
+
+def _parent_first(documents):
+	"""Order Offset Specs so a linked parent_spec exists before its child."""
+	by_name = {document.get("name"): document for document in documents}
+	ordered, visiting = [], set()
+
+	def visit(document):
+		name = document.get("name")
+		if not name or name in visiting or document in ordered:
+			return
+		visiting.add(name)
+		parent = by_name.get(document.get("parent_spec"))
+		if parent:
+			visit(parent)
+		ordered.append(document)
+
+	for document in documents:
+		visit(document)
+	return ordered
 
 
 def _export_calculation_items(source_documents):
@@ -246,6 +273,35 @@ def _export_workspaces(missing):
 		or_filters["title"] = ["in", WORKSPACES]
 	names = frappe.get_all("Workspace", or_filters=or_filters, pluck="name", limit_page_length=0)
 	return [_document("Workspace", name) for name in names]
+
+
+def _export_workspace_dependencies(workspaces, missing):
+	"""Export the dashboard records and role links embedded in workspaces."""
+	targets = {"Dashboard Chart", "Number Card", "Custom HTML Block", "Role"}
+	links = {target: set() for target in targets}
+	for workspace in workspaces:
+		_collect_links_for_targets(workspace, links)
+	records = []
+	for doctype in ("Role", "Custom HTML Block", "Number Card", "Dashboard Chart"):
+		for name in sorted(links[doctype]):
+			if frappe.db.exists(doctype, name):
+				records.append(_document(doctype, name))
+			else:
+				missing.append(doctype + ": " + name)
+	return records
+
+
+def _collect_links_for_targets(document, links):
+	if not isinstance(document, dict) or not document.get("doctype"):
+		return
+	meta = frappe.get_meta(document["doctype"])
+	for field in meta.fields:
+		value = document.get(field.fieldname)
+		if field.fieldtype == "Link" and field.options in links and value:
+			links[field.options].add(value)
+		elif field.fieldtype in ("Table", "Table MultiSelect") and isinstance(value, list):
+			for child in value:
+				_collect_links_for_targets(child, links)
 
 
 def _export_inquiry_scripts(doctype, missing):

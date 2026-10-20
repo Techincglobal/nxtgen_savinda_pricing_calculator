@@ -6045,8 +6045,8 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": []
   },
   {
@@ -6073,8 +6073,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fj6hasj95q",
@@ -6126,8 +6126,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fj7gc45ru0",
@@ -6188,8 +6188,8 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fj7vs8rbjb",
@@ -6274,8 +6274,8 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fj6an099rn",
@@ -6315,8 +6315,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fj8tpijult",
@@ -6397,8 +6397,8 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fj7h58bsmu",
@@ -6450,8 +6450,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "b165infvl5",
@@ -6536,8 +6536,8 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fj7aom3r6o",
@@ -6577,8 +6577,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fjaekej3ve",
@@ -6618,8 +6618,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fjb4mm3p15",
@@ -6659,8 +6659,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fjatqq55l9",
@@ -6712,8 +6712,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fjas6pbqhn",
@@ -6753,8 +6753,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": []
   },
   {
@@ -6781,7 +6781,6 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [
       {
         "name": "bf09o2jns0",
@@ -6808,6 +6807,7 @@
         "doctype": "Offset Spec Allowed Foil"
       }
     ],
+    "allowed_inks": [],
     "cost_facts": []
   },
   {
@@ -6834,7 +6834,6 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [
       {
         "name": "0eqm89tnrv",
@@ -6885,6 +6884,7 @@
         "doctype": "Offset Spec Allowed Foil"
       }
     ],
+    "allowed_inks": [],
     "cost_facts": []
   },
   {
@@ -6911,8 +6911,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fjaunt4e5o",
@@ -6964,8 +6964,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fjag348vqe",
@@ -7022,8 +7022,8 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": []
   },
   {
@@ -7050,8 +7050,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fjbn1i26sa",
@@ -7091,8 +7091,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fja2hrhfjr",
@@ -7141,8 +7141,8 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fj8og4pdue",
@@ -7182,8 +7182,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fj94tdmj46",
@@ -7256,8 +7256,8 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fj88rm05b4",
@@ -7306,8 +7306,8 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fj7iuvaef6",
@@ -7368,8 +7368,8 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": []
   },
   {
@@ -7396,8 +7396,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "4snbsqh048",
@@ -7437,8 +7437,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fj7g9bb9r1",
@@ -7490,8 +7490,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fjagjgt16a",
@@ -7564,8 +7564,8 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fj9bl3vb5e",
@@ -7605,8 +7605,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "aj1m56odt6",
@@ -7655,8 +7655,8 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "98g72ionfl",
@@ -7666,47 +7666,6 @@
         "rate_source": "Standard Rate",
         "machine_source": "Current Spec",
         "parent": "Pasting",
-        "parentfield": "cost_facts",
-        "parenttype": "Offset Spec",
-        "doctype": "Offset Spec Cost Fact"
-      }
-    ]
-  },
-  {
-    "name": "Plates",
-    "spec_name": "Plates",
-    "group": "Specification",
-    "operation": null,
-    "parent_spec": "Print",
-    "is_active": 1,
-    "auto_select": 0,
-    "pricing_type": "Offset",
-    "adds_colors": 0,
-    "allow_foil_assignment": 0,
-    "flexo_wastage_overwrite": 0,
-    "flexo_wastage_pct": 0.0,
-    "has_machine": 0,
-    "skip_machine_if_spec": null,
-    "skip_machine_if_machine": null,
-    "skip_machine_if_printing": 0,
-    "units": "Full sheet",
-    "bom_include": 1,
-    "bom_sequence": 0,
-    "bom_operation": null,
-    "bom_qi_template": null,
-    "doctype": "Offset Spec",
-    "machines": [],
-    "allowed_inks": [],
-    "allowed_foils": [],
-    "cost_facts": [
-      {
-        "name": "d8cm1avcim",
-        "cost_fact": "Plates",
-        "is_primary": 1,
-        "manual_select": 0,
-        "rate_source": "Selected Machine Rate",
-        "machine_source": "Parent Spec",
-        "parent": "Plates",
         "parentfield": "cost_facts",
         "parenttype": "Offset Spec",
         "doctype": "Offset Spec Cost Fact"
@@ -7770,6 +7729,7 @@
         "doctype": "Offset Spec Machine"
       }
     ],
+    "allowed_foils": [],
     "allowed_inks": [
       {
         "name": "f7epa0cdmp",
@@ -7812,8 +7772,48 @@
         "doctype": "Offset Spec Allowed Ink"
       }
     ],
-    "allowed_foils": [],
     "cost_facts": []
+  },
+  {
+    "name": "Plates",
+    "spec_name": "Plates",
+    "group": "Specification",
+    "operation": null,
+    "parent_spec": "Print",
+    "is_active": 1,
+    "auto_select": 0,
+    "pricing_type": "Offset",
+    "adds_colors": 0,
+    "allow_foil_assignment": 0,
+    "flexo_wastage_overwrite": 0,
+    "flexo_wastage_pct": 0.0,
+    "has_machine": 0,
+    "skip_machine_if_spec": null,
+    "skip_machine_if_machine": null,
+    "skip_machine_if_printing": 0,
+    "units": "Full sheet",
+    "bom_include": 1,
+    "bom_sequence": 0,
+    "bom_operation": null,
+    "bom_qi_template": null,
+    "doctype": "Offset Spec",
+    "machines": [],
+    "allowed_foils": [],
+    "allowed_inks": [],
+    "cost_facts": [
+      {
+        "name": "d8cm1avcim",
+        "cost_fact": "Plates",
+        "is_primary": 1,
+        "manual_select": 0,
+        "rate_source": "Selected Machine Rate",
+        "machine_source": "Parent Spec",
+        "parent": "Plates",
+        "parentfield": "cost_facts",
+        "parenttype": "Offset Spec",
+        "doctype": "Offset Spec Cost Fact"
+      }
+    ]
   },
   {
     "name": "Proof Board",
@@ -7839,8 +7839,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fj8behbldg",
@@ -7897,6 +7897,7 @@
         "doctype": "Offset Spec Machine"
       }
     ],
+    "allowed_foils": [],
     "allowed_inks": [
       {
         "name": "aj3795kknm",
@@ -7907,7 +7908,6 @@
         "doctype": "Offset Spec Allowed Ink"
       }
     ],
-    "allowed_foils": [],
     "cost_facts": []
   },
   {
@@ -7943,6 +7943,7 @@
         "doctype": "Offset Spec Machine"
       }
     ],
+    "allowed_foils": [],
     "allowed_inks": [
       {
         "name": "6c23qtermu",
@@ -7953,7 +7954,6 @@
         "doctype": "Offset Spec Allowed Ink"
       }
     ],
-    "allowed_foils": [],
     "cost_facts": []
   },
   {
@@ -7980,8 +7980,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fj6pva92l7",
@@ -8042,8 +8042,8 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": []
   },
   {
@@ -8079,8 +8079,8 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": []
   },
   {
@@ -8124,6 +8124,7 @@
         "doctype": "Offset Spec Machine"
       }
     ],
+    "allowed_foils": [],
     "allowed_inks": [
       {
         "name": "2mq3gg4v89",
@@ -8134,7 +8135,6 @@
         "doctype": "Offset Spec Allowed Ink"
       }
     ],
-    "allowed_foils": [],
     "cost_facts": []
   },
   {
@@ -8161,8 +8161,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fj9nd8r8mu",
@@ -8214,8 +8214,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fj98jole9a",
@@ -8267,8 +8267,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fj9jt50jti",
@@ -8320,8 +8320,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "9rpo48lukl",
@@ -8394,6 +8394,7 @@
         "doctype": "Offset Spec Machine"
       }
     ],
+    "allowed_foils": [],
     "allowed_inks": [
       {
         "name": "e711mnta3f",
@@ -8460,7 +8461,6 @@
         "doctype": "Offset Spec Allowed Ink"
       }
     ],
-    "allowed_foils": [],
     "cost_facts": []
   },
   {
@@ -8496,6 +8496,7 @@
         "doctype": "Offset Spec Machine"
       }
     ],
+    "allowed_foils": [],
     "allowed_inks": [
       {
         "name": "dvc437f6h9",
@@ -8554,7 +8555,6 @@
         "doctype": "Offset Spec Allowed Ink"
       }
     ],
-    "allowed_foils": [],
     "cost_facts": []
   },
   {
@@ -8581,8 +8581,8 @@
     "bom_qi_template": null,
     "doctype": "Offset Spec",
     "machines": [],
-    "allowed_inks": [],
     "allowed_foils": [],
+    "allowed_inks": [],
     "cost_facts": [
       {
         "name": "fj9v2pnq7g",
