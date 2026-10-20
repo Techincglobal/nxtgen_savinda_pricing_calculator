@@ -76,6 +76,15 @@ def after_install():
 	setup_bundle_fields()
 
 
+def apply_install_only_configuration():
+	"""Safely apply the exported configuration to an already-installed site.
+
+	Use only as a one-time repair when the app was installed before the exported
+	JSON files were present. Existing records remain untouched.
+	"""
+	_seed_install_only_fixtures()
+
+
 def after_migrate():
 	"""Runs on every migrate/update.
 

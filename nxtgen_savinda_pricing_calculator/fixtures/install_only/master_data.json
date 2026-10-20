@@ -141,11 +141,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "07v18qfq4t",
@@ -157,7 +152,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "ALL-PC-000002",
@@ -250,11 +250,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "rpt63hkv9c",
@@ -266,7 +261,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "ALL-PC-000003",
@@ -359,11 +359,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "v76o1c2net",
@@ -375,7 +370,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "ALL-PC-000004",
@@ -468,11 +468,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "vgr4a8s57o",
@@ -484,7 +479,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-4CORNER-PASTE",
@@ -577,11 +577,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fiohbimu50",
@@ -593,7 +588,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-COLD-FRAME",
@@ -686,11 +686,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fin9ak2inv",
@@ -702,7 +697,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-COLD-MESH",
@@ -795,11 +795,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "finfr2qro7",
@@ -811,7 +806,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-COLD-SCREEN",
@@ -904,11 +904,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "finn3i1qh7",
@@ -920,7 +915,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-CREASE-100G",
@@ -1013,11 +1013,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fijn9kt9gm",
@@ -1029,7 +1024,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-CREASE-100TB",
@@ -1122,11 +1122,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fijftgut35",
@@ -1138,7 +1133,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-CREASE-10TB",
@@ -1231,11 +1231,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fihbrg5qr3",
@@ -1247,7 +1242,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-CREASE-1KG",
@@ -1340,11 +1340,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "filsobpmrr",
@@ -1356,7 +1351,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-CREASE-200G",
@@ -1449,11 +1449,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fikho8tf48",
@@ -1465,7 +1460,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-CREASE-250G",
@@ -1558,11 +1558,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fikn40th94",
@@ -1574,7 +1569,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-CREASE-25TB",
@@ -1667,11 +1667,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fiil5o51cg",
@@ -1683,7 +1678,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-CREASE-450G",
@@ -1776,11 +1776,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fikakoi3e2",
@@ -1792,7 +1787,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-CREASE-500G",
@@ -1885,11 +1885,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "filg6b9omi",
@@ -1901,7 +1896,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-CREASE-50G",
@@ -1994,11 +1994,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fijhb3oods",
@@ -2010,7 +2005,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-CREASE-50TB",
@@ -2103,11 +2103,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fiijg2e9bu",
@@ -2119,7 +2114,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-DELIVERY",
@@ -2212,11 +2212,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fimdrfljvp",
@@ -2228,7 +2223,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-DIECUT-100G",
@@ -2321,11 +2321,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fig10l8ksp",
@@ -2337,7 +2332,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-DIECUT-100TB",
@@ -2430,11 +2430,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fifb025nns",
@@ -2446,7 +2441,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-DIECUT-10TB",
@@ -2539,11 +2539,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fie58fpsmh",
@@ -2555,7 +2550,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-DIECUT-1KG",
@@ -2648,11 +2648,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fihie8eg7o",
@@ -2664,7 +2659,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-DIECUT-200G",
@@ -2757,11 +2757,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "figec05qsd",
@@ -2773,7 +2768,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-DIECUT-250G",
@@ -2866,11 +2866,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "figjsvbe0a",
@@ -2882,7 +2877,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-DIECUT-25TB",
@@ -2975,11 +2975,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fie54hfoov",
@@ -2991,7 +2986,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-DIECUT-500G",
@@ -3084,11 +3084,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fif2h3egdc",
@@ -3100,7 +3095,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-DIECUT-50TB",
@@ -3193,11 +3193,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fie3s45ig3",
@@ -3209,7 +3204,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-DIECUT-MACHINE",
@@ -3302,11 +3302,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fihdtt7tua",
@@ -3318,7 +3313,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-EMB-BLOCK",
@@ -3411,11 +3411,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fidv31iflr",
@@ -3427,7 +3422,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-FLEXO-BOXES",
@@ -3520,11 +3520,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fivqae9m81",
@@ -3536,7 +3531,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-FLEXO-DELIVERY",
@@ -3629,11 +3629,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fiv50b4kii",
@@ -3645,7 +3640,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-FLEXO-DIE-BLK",
@@ -3738,11 +3738,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fiv2ms12t4",
@@ -3754,7 +3749,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-FLEXO-DIE-MCH",
@@ -3847,11 +3847,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fivj2beilm",
@@ -3863,7 +3858,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-FLEXO-EMBOSS",
@@ -3956,11 +3956,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fj0jvm3lqc",
@@ -3972,7 +3967,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-FLEXO-FOIL-BLK",
@@ -4065,11 +4065,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fiuht40hck",
@@ -4081,7 +4076,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-FLEXO-FOIL-MCH",
@@ -4174,11 +4174,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fiu55u6m0p",
@@ -4190,7 +4185,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-FLEXO-LAM",
@@ -4283,11 +4283,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fiuuvbo825",
@@ -4299,7 +4294,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-FLEXO-PLATES",
@@ -4392,11 +4392,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fj0csqpniv",
@@ -4408,7 +4403,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-FLEXO-PROOF",
@@ -4501,11 +4501,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fivahbsqe6",
@@ -4517,7 +4512,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-FLEXO-SLITTING",
@@ -4610,11 +4610,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fj046tv7e5",
@@ -4626,7 +4621,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-FOIL-BLOCK",
@@ -4719,11 +4719,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fid7dmsh4n",
@@ -4735,7 +4730,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-FOIL-MACH-1CY",
@@ -4828,11 +4828,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "finr8muucu",
@@ -4844,7 +4839,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-FOIL-MACH-2CY",
@@ -4937,11 +4937,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fio4fhfrb9",
@@ -4953,7 +4948,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-FOIL-REEL-JUMBO",
@@ -5046,11 +5046,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fimtv28mae",
@@ -5062,7 +5057,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-FOIL-REEL-SMALL",
@@ -5155,11 +5155,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fimj846a0h",
@@ -5171,7 +5166,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-GALLUS",
@@ -5264,11 +5264,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fj0o8adro2",
@@ -5280,7 +5275,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-GLOSS-LAM-IH",
@@ -5373,11 +5373,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fiqq4f06bf",
@@ -5389,7 +5384,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-GLOSS-LAM-OUT",
@@ -5482,11 +5482,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fiq6qos44g",
@@ -5498,7 +5493,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-GUILLOTINE",
@@ -5591,11 +5591,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fimlc0ia0r",
@@ -5607,7 +5602,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-MARK-ANDY",
@@ -5700,11 +5700,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fj1bjeu0ot",
@@ -5716,7 +5711,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-PASTING",
@@ -5809,11 +5809,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fioctjbkv4",
@@ -5825,7 +5820,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-PLATE-CD102",
@@ -5918,11 +5918,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fibakb4bb4",
@@ -5934,7 +5929,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-PLATE-HEIDEL",
@@ -6027,11 +6027,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fic318li8i",
@@ -6043,7 +6038,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-PLATE-SORD",
@@ -6136,11 +6136,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fiadbrb1ei",
@@ -6152,7 +6147,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-PRINT-CD102",
@@ -6245,11 +6245,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "ficrjgeegb",
@@ -6261,7 +6256,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-PRINT-HEIDEL",
@@ -6354,11 +6354,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fickole4nc",
@@ -6370,7 +6365,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-PRINT-SORD",
@@ -6463,11 +6463,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fibkoqthsc",
@@ -6479,7 +6474,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-PROOF-BOARD",
@@ -6572,11 +6572,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fil5v8f9jv",
@@ -6588,7 +6583,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-SAND-UV",
@@ -6681,11 +6681,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fitjc01kea",
@@ -6697,7 +6692,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-SAND-UV-BLANKET",
@@ -6790,11 +6790,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fits4h2m5r",
@@ -6806,7 +6801,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-SAND-UV-PLATE",
@@ -6899,11 +6899,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fitr6e0ce4",
@@ -6915,7 +6910,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-SOFT-TOUCH",
@@ -7008,11 +7008,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fiufqddtvq",
@@ -7024,7 +7019,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-SORTING-100TB",
@@ -7117,11 +7117,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fipmln9kqu",
@@ -7133,7 +7128,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-SORTING-NORM",
@@ -7226,11 +7226,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fiohfg7qhp",
@@ -7242,7 +7237,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-SPOT-UV-FRAME",
@@ -7335,11 +7335,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fishgjhoar",
@@ -7351,7 +7346,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-SPOT-UV-IH1",
@@ -7444,11 +7444,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "firkunj3b9",
@@ -7460,7 +7455,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-SPOT-UV-IH2",
@@ -7553,11 +7553,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fis0gfauo4",
@@ -7569,7 +7564,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-SPOT-UV-MESH",
@@ -7662,11 +7662,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fir3s2ke83",
@@ -7678,7 +7673,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-SPOT-UV-OUT",
@@ -7771,11 +7771,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fisuth9r0a",
@@ -7787,7 +7782,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-SPOT-UV-OUT-SCR",
@@ -7880,11 +7880,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fiturr288n",
@@ -7896,7 +7891,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-SPOT-UV-POLY",
@@ -7989,11 +7989,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fis4pd2jlt",
@@ -8005,7 +8000,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-SPOT-UV-SCR",
@@ -8098,11 +8098,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "firk6r3ift",
@@ -8114,7 +8109,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-THGLOS-LAM",
@@ -8207,11 +8207,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "e91kpo9mk1",
@@ -8223,7 +8218,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-THMATT-LAM",
@@ -8316,11 +8316,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "d8pitv63u3",
@@ -8332,7 +8327,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-UV-VARN-IH",
@@ -8425,11 +8425,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fips5heqc7",
@@ -8441,7 +8436,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-UV-VARN-IH2",
@@ -8534,11 +8534,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fipocnd470",
@@ -8550,7 +8545,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-UV-VARN-OUT",
@@ -8643,11 +8643,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fipb3b0h6a",
@@ -8659,7 +8654,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CALC-WINDOW-LAM",
@@ -8752,11 +8752,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "fir8osbftc",
@@ -8768,7 +8763,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CRI-ALL-12346",
@@ -8861,11 +8861,6 @@
     "custom_inquery_item": null,
     "doctype": "Item",
     "taxes": [],
-    "reorder_levels": [],
-    "customer_items": [],
-    "attributes": [],
-    "barcodes": [],
-    "supplier_items": [],
     "uoms": [
       {
         "name": "6cif5aqbpm",
@@ -8877,7 +8872,12 @@
         "doctype": "UOM Conversion Detail"
       }
     ],
-    "item_defaults": []
+    "supplier_items": [],
+    "customer_items": [],
+    "barcodes": [],
+    "reorder_levels": [],
+    "item_defaults": [],
+    "attributes": []
   },
   {
     "name": "CD102 Plate",
@@ -12471,6 +12471,8 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
+    "allowed_foils": [],
+    "cost_facts": [],
     "machines": [
       {
         "name": "fj6a9tebsf",
@@ -12481,8 +12483,6 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_foils": [],
-    "cost_facts": [],
     "allowed_inks": []
   },
   {
@@ -12508,7 +12508,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -12536,6 +12535,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -12561,7 +12561,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -12589,6 +12588,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -12614,16 +12614,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [
-      {
-        "name": "9284bokd5o",
-        "machine": "Jiguo Foiling",
-        "parent": "Cold Foiling",
-        "parentfield": "machines",
-        "parenttype": "Offset Spec",
-        "doctype": "Offset Spec Machine"
-      }
-    ],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -12675,6 +12665,16 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [
+      {
+        "name": "9284bokd5o",
+        "machine": "Jiguo Foiling",
+        "parent": "Cold Foiling",
+        "parentfield": "machines",
+        "parenttype": "Offset Spec",
+        "doctype": "Offset Spec Machine"
+      }
+    ],
     "allowed_inks": []
   },
   {
@@ -12700,16 +12700,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [
-      {
-        "name": "fj64ukrj2c",
-        "machine": "Clash Bottom Pasting Machine",
-        "parent": "Crash Bottom Pasting",
-        "parentfield": "machines",
-        "parenttype": "Offset Spec",
-        "doctype": "Offset Spec Machine"
-      }
-    ],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -12723,6 +12713,16 @@
         "parentfield": "cost_facts",
         "parenttype": "Offset Spec",
         "doctype": "Offset Spec Cost Fact"
+      }
+    ],
+    "machines": [
+      {
+        "name": "fj64ukrj2c",
+        "machine": "Clash Bottom Pasting Machine",
+        "parent": "Crash Bottom Pasting",
+        "parentfield": "machines",
+        "parenttype": "Offset Spec",
+        "doctype": "Offset Spec Machine"
       }
     ],
     "allowed_inks": []
@@ -12750,7 +12750,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -12766,6 +12765,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -12791,6 +12791,33 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
+    "allowed_foils": [],
+    "cost_facts": [
+      {
+        "name": "fj7h58bsmu",
+        "cost_fact": "Die Cutter Block N*",
+        "is_primary": 1,
+        "manual_select": 1,
+        "rate_source": "Standard Rate",
+        "machine_source": "Current Spec",
+        "parent": "Die Cutter",
+        "parentfield": "cost_facts",
+        "parenttype": "Offset Spec",
+        "doctype": "Offset Spec Cost Fact"
+      },
+      {
+        "name": "fj76q7ki83",
+        "cost_fact": "Die Cutter Block N*-Manual",
+        "is_primary": 1,
+        "manual_select": 1,
+        "rate_source": "Standard Rate",
+        "machine_source": "Current Spec",
+        "parent": "Die Cutter",
+        "parentfield": "cost_facts",
+        "parenttype": "Offset Spec",
+        "doctype": "Offset Spec Cost Fact"
+      }
+    ],
     "machines": [
       {
         "name": "au39k48duq",
@@ -12833,33 +12860,6 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_foils": [],
-    "cost_facts": [
-      {
-        "name": "fj7h58bsmu",
-        "cost_fact": "Die Cutter Block N*",
-        "is_primary": 1,
-        "manual_select": 1,
-        "rate_source": "Standard Rate",
-        "machine_source": "Current Spec",
-        "parent": "Die Cutter",
-        "parentfield": "cost_facts",
-        "parenttype": "Offset Spec",
-        "doctype": "Offset Spec Cost Fact"
-      },
-      {
-        "name": "fj76q7ki83",
-        "cost_fact": "Die Cutter Block N*-Manual",
-        "is_primary": 1,
-        "manual_select": 1,
-        "rate_source": "Standard Rate",
-        "machine_source": "Current Spec",
-        "parent": "Die Cutter",
-        "parentfield": "cost_facts",
-        "parenttype": "Offset Spec",
-        "doctype": "Offset Spec Cost Fact"
-      }
-    ],
     "allowed_inks": []
   },
   {
@@ -12885,7 +12885,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -12937,6 +12936,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -12962,16 +12962,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [
-      {
-        "name": "0unvf5p2v7",
-        "machine": "Die Cutter",
-        "parent": "Embossing",
-        "parentfield": "machines",
-        "parenttype": "Offset Spec",
-        "doctype": "Offset Spec Machine"
-      }
-    ],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -12985,6 +12975,16 @@
         "parentfield": "cost_facts",
         "parenttype": "Offset Spec",
         "doctype": "Offset Spec Cost Fact"
+      }
+    ],
+    "machines": [
+      {
+        "name": "0unvf5p2v7",
+        "machine": "Die Cutter",
+        "parent": "Embossing",
+        "parentfield": "machines",
+        "parenttype": "Offset Spec",
+        "doctype": "Offset Spec Machine"
       }
     ],
     "allowed_inks": []
@@ -13012,7 +13012,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -13028,6 +13027,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -13053,7 +13053,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -13069,6 +13068,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -13094,7 +13094,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -13122,6 +13121,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -13147,7 +13147,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -13163,6 +13162,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -13188,9 +13188,9 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -13216,7 +13216,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [
       {
         "name": "bf09o2jns0",
@@ -13244,6 +13243,7 @@
       }
     ],
     "cost_facts": [],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -13269,7 +13269,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [
       {
         "name": "0eqm89tnrv",
@@ -13321,6 +13320,7 @@
       }
     ],
     "cost_facts": [],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -13346,7 +13346,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -13374,6 +13373,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -13399,7 +13399,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -13415,6 +13414,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -13440,6 +13440,8 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
+    "allowed_foils": [],
+    "cost_facts": [],
     "machines": [
       {
         "name": "d492lif3ee",
@@ -13458,8 +13460,6 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_foils": [],
-    "cost_facts": [],
     "allowed_inks": []
   },
   {
@@ -13485,7 +13485,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -13501,6 +13500,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -13526,7 +13526,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -13542,6 +13541,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -13567,16 +13567,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [
-      {
-        "name": "ebaab8rmm7",
-        "machine": "Four Corner Pasting Machine",
-        "parent": "Four Corner Pasting",
-        "parentfield": "machines",
-        "parenttype": "Offset Spec",
-        "doctype": "Offset Spec Machine"
-      }
-    ],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -13590,6 +13580,16 @@
         "parentfield": "cost_facts",
         "parenttype": "Offset Spec",
         "doctype": "Offset Spec Cost Fact"
+      }
+    ],
+    "machines": [
+      {
+        "name": "ebaab8rmm7",
+        "machine": "Four Corner Pasting Machine",
+        "parent": "Four Corner Pasting",
+        "parentfield": "machines",
+        "parenttype": "Offset Spec",
+        "doctype": "Offset Spec Machine"
       }
     ],
     "allowed_inks": []
@@ -13617,7 +13617,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -13657,6 +13656,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -13682,16 +13682,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [
-      {
-        "name": "9ma9tce1sq",
-        "machine": "Lamination Machine",
-        "parent": "Gloss Lamination",
-        "parentfield": "machines",
-        "parenttype": "Offset Spec",
-        "doctype": "Offset Spec Machine"
-      }
-    ],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -13705,6 +13695,16 @@
         "parentfield": "cost_facts",
         "parenttype": "Offset Spec",
         "doctype": "Offset Spec Cost Fact"
+      }
+    ],
+    "machines": [
+      {
+        "name": "9ma9tce1sq",
+        "machine": "Lamination Machine",
+        "parent": "Gloss Lamination",
+        "parentfield": "machines",
+        "parenttype": "Offset Spec",
+        "doctype": "Offset Spec Machine"
       }
     ],
     "allowed_inks": []
@@ -13732,16 +13732,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [
-      {
-        "name": "1anpdr4c9o",
-        "machine": "Jiguo Foiling",
-        "parent": "Gold Silver Foiling",
-        "parentfield": "machines",
-        "parenttype": "Offset Spec",
-        "doctype": "Offset Spec Machine"
-      }
-    ],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -13769,6 +13759,16 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [
+      {
+        "name": "1anpdr4c9o",
+        "machine": "Jiguo Foiling",
+        "parent": "Gold Silver Foiling",
+        "parentfield": "machines",
+        "parenttype": "Offset Spec",
+        "doctype": "Offset Spec Machine"
+      }
+    ],
     "allowed_inks": []
   },
   {
@@ -13794,6 +13794,8 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
+    "allowed_foils": [],
+    "cost_facts": [],
     "machines": [
       {
         "name": "6k08o38ha5",
@@ -13804,8 +13806,6 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_foils": [],
-    "cost_facts": [],
     "allowed_inks": []
   },
   {
@@ -13831,7 +13831,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -13847,6 +13846,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -13872,7 +13872,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -13900,6 +13899,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -13925,7 +13925,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -13965,6 +13964,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -13990,16 +13990,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [
-      {
-        "name": "320nsaki19",
-        "machine": "Lamination Machine",
-        "parent": "Matt Lamination",
-        "parentfield": "machines",
-        "parenttype": "Offset Spec",
-        "doctype": "Offset Spec Machine"
-      }
-    ],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -14013,6 +14003,16 @@
         "parentfield": "cost_facts",
         "parenttype": "Offset Spec",
         "doctype": "Offset Spec Cost Fact"
+      }
+    ],
+    "machines": [
+      {
+        "name": "320nsaki19",
+        "machine": "Lamination Machine",
+        "parent": "Matt Lamination",
+        "parentfield": "machines",
+        "parenttype": "Offset Spec",
+        "doctype": "Offset Spec Machine"
       }
     ],
     "allowed_inks": []
@@ -14040,7 +14040,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -14056,6 +14055,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -14081,16 +14081,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [
-      {
-        "name": "6ol2j2ojg2",
-        "machine": "Side Pasting Machine",
-        "parent": "Pasting",
-        "parentfield": "machines",
-        "parenttype": "Offset Spec",
-        "doctype": "Offset Spec Machine"
-      }
-    ],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -14104,6 +14094,16 @@
         "parentfield": "cost_facts",
         "parenttype": "Offset Spec",
         "doctype": "Offset Spec Cost Fact"
+      }
+    ],
+    "machines": [
+      {
+        "name": "6ol2j2ojg2",
+        "machine": "Side Pasting Machine",
+        "parent": "Pasting",
+        "parentfield": "machines",
+        "parenttype": "Offset Spec",
+        "doctype": "Offset Spec Machine"
       }
     ],
     "allowed_inks": []
@@ -14131,7 +14131,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -14147,6 +14146,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -14172,6 +14172,8 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
+    "allowed_foils": [],
+    "cost_facts": [],
     "machines": [
       {
         "name": "fj6bdtactm",
@@ -14206,8 +14208,6 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_foils": [],
-    "cost_facts": [],
     "allowed_inks": [
       {
         "name": "f7epa0cdmp",
@@ -14274,7 +14274,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -14290,6 +14289,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -14315,6 +14315,8 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
+    "allowed_foils": [],
+    "cost_facts": [],
     "machines": [
       {
         "name": "5hljnv5bur",
@@ -14333,8 +14335,6 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_foils": [],
-    "cost_facts": [],
     "allowed_inks": [
       {
         "name": "aj3795kknm",
@@ -14369,6 +14369,8 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
+    "allowed_foils": [],
+    "cost_facts": [],
     "machines": [
       {
         "name": "8cmelqar7b",
@@ -14379,8 +14381,6 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_foils": [],
-    "cost_facts": [],
     "allowed_inks": [
       {
         "name": "6c23qtermu",
@@ -14415,7 +14415,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -14443,6 +14442,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -14468,6 +14468,8 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
+    "allowed_foils": [],
+    "cost_facts": [],
     "machines": [
       {
         "name": "0rk4pabtf2",
@@ -14478,8 +14480,6 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_foils": [],
-    "cost_facts": [],
     "allowed_inks": []
   },
   {
@@ -14505,6 +14505,8 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
+    "allowed_foils": [],
+    "cost_facts": [],
     "machines": [
       {
         "name": "7kn4k9d3ha",
@@ -14515,8 +14517,6 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_foils": [],
-    "cost_facts": [],
     "allowed_inks": []
   },
   {
@@ -14542,6 +14542,8 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
+    "allowed_foils": [],
+    "cost_facts": [],
     "machines": [
       {
         "name": "cfr0tnkhdd",
@@ -14560,8 +14562,6 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_foils": [],
-    "cost_facts": [],
     "allowed_inks": [
       {
         "name": "2mq3gg4v89",
@@ -14596,7 +14596,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -14624,6 +14623,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -14649,7 +14649,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -14677,6 +14676,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -14702,7 +14702,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -14730,6 +14729,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -14755,7 +14755,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -14795,6 +14794,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {
@@ -14820,6 +14820,8 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
+    "allowed_foils": [],
+    "cost_facts": [],
     "machines": [
       {
         "name": "e5kirn5690",
@@ -14830,8 +14832,6 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_foils": [],
-    "cost_facts": [],
     "allowed_inks": [
       {
         "name": "e711mnta3f",
@@ -14922,6 +14922,8 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
+    "allowed_foils": [],
+    "cost_facts": [],
     "machines": [
       {
         "name": "dvc4ge57ha",
@@ -14932,8 +14934,6 @@
         "doctype": "Offset Spec Machine"
       }
     ],
-    "allowed_foils": [],
-    "cost_facts": [],
     "allowed_inks": [
       {
         "name": "dvc437f6h9",
@@ -15016,7 +15016,6 @@
     "bom_operation": null,
     "bom_qi_template": null,
     "doctype": "Offset Spec",
-    "machines": [],
     "allowed_foils": [],
     "cost_facts": [
       {
@@ -15032,6 +15031,7 @@
         "doctype": "Offset Spec Cost Fact"
       }
     ],
+    "machines": [],
     "allowed_inks": []
   },
   {

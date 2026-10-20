@@ -395,55 +395,7 @@
     "is_hidden": 0,
     "content": "[{\"id\": \"bom1\", \"type\": \"custom_block\", \"data\": {\"custom_block_name\": \"BOM Key Numbers\", \"col\": 12}}, {\"id\": \"bom2\", \"type\": \"custom_block\", \"data\": {\"custom_block_name\": \"BOM Work Queue\", \"col\": 12}}, {\"id\": \"bom3\", \"type\": \"custom_block\", \"data\": {\"custom_block_name\": \"BOM Cost Sheets Without Quote\", \"col\": 12}}, {\"id\": \"bom4\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Insights</b></span>\", \"col\": 12}}, {\"id\": \"bom5\", \"type\": \"chart\", \"data\": {\"chart_name\": \"BOM BOMs Created per Week\", \"col\": 6}}, {\"id\": \"bom6\", \"type\": \"chart\", \"data\": {\"chart_name\": \"BOM Products by Approval Status\", \"col\": 6}}, {\"id\": \"bom7\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Shortcuts</b></span>\", \"col\": 12}}, {\"id\": \"bom8\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"BOM\", \"col\": 4}}, {\"id\": \"bom9\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Product Library\", \"col\": 4}}, {\"id\": \"bom10\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Savinda Quotation\", \"col\": 4}}, {\"id\": \"bom11\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Cost Sheet\", \"col\": 4}}, {\"id\": \"bom12\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Job Ticket\", \"col\": 4}}, {\"id\": \"bom13\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"BOM Builder\", \"col\": 4}}]",
     "doctype": "Workspace",
-    "number_cards": [],
-    "custom_blocks": [
-      {
-        "name": "8506a3cj0u",
-        "custom_block_name": "BOM Key Numbers",
-        "label": "BOM Key Numbers",
-        "parent": "BOM Desk",
-        "parentfield": "custom_blocks",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Custom Block"
-      },
-      {
-        "name": "8506lbb5o3",
-        "custom_block_name": "BOM Work Queue",
-        "label": "BOM Work Queue",
-        "parent": "BOM Desk",
-        "parentfield": "custom_blocks",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Custom Block"
-      },
-      {
-        "name": "8506edoemh",
-        "custom_block_name": "BOM Cost Sheets Without Quote",
-        "label": "BOM Cost Sheets Without Quote",
-        "parent": "BOM Desk",
-        "parentfield": "custom_blocks",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Custom Block"
-      }
-    ],
     "quick_lists": [],
-    "roles": [
-      {
-        "name": "8506dokt8q",
-        "role": "BOM Team",
-        "parent": "BOM Desk",
-        "parentfield": "roles",
-        "parenttype": "Workspace",
-        "doctype": "Has Role"
-      },
-      {
-        "name": "85069b5j3h",
-        "role": "System Manager",
-        "parent": "BOM Desk",
-        "parentfield": "roles",
-        "parenttype": "Workspace",
-        "doctype": "Has Role"
-      }
-    ],
     "charts": [
       {
         "name": "85060t5vnh",
@@ -462,6 +414,24 @@
         "parentfield": "charts",
         "parenttype": "Workspace",
         "doctype": "Workspace Chart"
+      }
+    ],
+    "roles": [
+      {
+        "name": "8506dokt8q",
+        "role": "BOM Team",
+        "parent": "BOM Desk",
+        "parentfield": "roles",
+        "parenttype": "Workspace",
+        "doctype": "Has Role"
+      },
+      {
+        "name": "85069b5j3h",
+        "role": "System Manager",
+        "parent": "BOM Desk",
+        "parentfield": "roles",
+        "parenttype": "Workspace",
+        "doctype": "Has Role"
       }
     ],
     "links": [],
@@ -580,7 +550,37 @@
         "parenttype": "Workspace",
         "doctype": "Workspace Shortcut"
       }
-    ]
+    ],
+    "custom_blocks": [
+      {
+        "name": "8506a3cj0u",
+        "custom_block_name": "BOM Key Numbers",
+        "label": "BOM Key Numbers",
+        "parent": "BOM Desk",
+        "parentfield": "custom_blocks",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Custom Block"
+      },
+      {
+        "name": "8506lbb5o3",
+        "custom_block_name": "BOM Work Queue",
+        "label": "BOM Work Queue",
+        "parent": "BOM Desk",
+        "parentfield": "custom_blocks",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Custom Block"
+      },
+      {
+        "name": "8506edoemh",
+        "custom_block_name": "BOM Cost Sheets Without Quote",
+        "label": "BOM Cost Sheets Without Quote",
+        "parent": "BOM Desk",
+        "parentfield": "custom_blocks",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Custom Block"
+      }
+    ],
+    "number_cards": []
   },
   {
     "name": "Production",
@@ -598,110 +598,7 @@
     "is_hidden": 0,
     "content": "[{\"id\":\"prod1\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Job cards</b></span>\",\"col\":12}},{\"id\":\"prod2\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"PROD Job Cards Running\",\"col\":3}},{\"id\":\"prod3\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"PROD Job Cards Not Started\",\"col\":3}},{\"id\":\"prod4\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"PROD Job Cards Ready to Start\",\"col\":3}},{\"id\":\"prod5\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"PROD Job Cards On Hold\",\"col\":3}},{\"id\":\"prod6\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Work orders and delays</b></span>\",\"col\":12}},{\"id\":\"prod7\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"PROD Work Orders In Process\",\"col\":3}},{\"id\":\"prod8\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"PROD Work Orders Not Started\",\"col\":3}},{\"id\":\"prod9\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"PROD Overdue Work Orders\",\"col\":3}},{\"id\":\"prod10\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"PROD Late Job Cards\",\"col\":3}},{\"id\":\"prod11\",\"type\":\"custom_block\",\"data\":{\"custom_block_name\":\"PROD Job Journey\",\"col\":12}},{\"id\":\"prod12\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Insights</b></span>\",\"col\":12}},{\"id\":\"prod13\",\"type\":\"chart\",\"data\":{\"chart_name\":\"PROD Running Job Cards by Workstation\",\"col\":6}},{\"id\":\"prod14\",\"type\":\"chart\",\"data\":{\"chart_name\":\"PROD Work Orders Completed per Day\",\"col\":6}},{\"id\":\"prod15\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Shortcuts</b></span>\",\"col\":12}},{\"id\":\"prod16\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Job Card\",\"col\":3}},{\"id\":\"prod17\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Work Order\",\"col\":3}},{\"id\":\"prod18\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Job Ticket\",\"col\":3}},{\"id\":\"prod19\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Material Request\",\"col\":3}},{\"id\":\"prod20\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Workstation\",\"col\":3}},{\"id\":\"prod21\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Reports</b></span>\",\"col\":12}},{\"id\":\"prod22\",\"type\":\"card\",\"data\":{\"card_name\":\"Production Reports\",\"col\":4}}]",
     "doctype": "Workspace",
-    "number_cards": [
-      {
-        "name": "a0okejm13h",
-        "number_card_name": "PROD Job Cards Running",
-        "label": "PROD Job Cards Running",
-        "parent": "Production",
-        "parentfield": "number_cards",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Number Card"
-      },
-      {
-        "name": "a0okqhr90r",
-        "number_card_name": "PROD Job Cards Not Started",
-        "label": "PROD Job Cards Not Started",
-        "parent": "Production",
-        "parentfield": "number_cards",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Number Card"
-      },
-      {
-        "name": "a0oklvscrq",
-        "number_card_name": "PROD Job Cards Ready to Start",
-        "label": "PROD Job Cards Ready to Start",
-        "parent": "Production",
-        "parentfield": "number_cards",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Number Card"
-      },
-      {
-        "name": "a0ok2cn1f3",
-        "number_card_name": "PROD Job Cards On Hold",
-        "label": "PROD Job Cards On Hold",
-        "parent": "Production",
-        "parentfield": "number_cards",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Number Card"
-      },
-      {
-        "name": "a0ok717cn7",
-        "number_card_name": "PROD Work Orders In Process",
-        "label": "PROD Work Orders In Process",
-        "parent": "Production",
-        "parentfield": "number_cards",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Number Card"
-      },
-      {
-        "name": "a0okd0pvma",
-        "number_card_name": "PROD Work Orders Not Started",
-        "label": "PROD Work Orders Not Started",
-        "parent": "Production",
-        "parentfield": "number_cards",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Number Card"
-      },
-      {
-        "name": "a0okkut88p",
-        "number_card_name": "PROD Overdue Work Orders",
-        "label": "PROD Overdue Work Orders",
-        "parent": "Production",
-        "parentfield": "number_cards",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Number Card"
-      },
-      {
-        "name": "a0ok8s9po4",
-        "number_card_name": "PROD Late Job Cards",
-        "label": "PROD Late Job Cards",
-        "parent": "Production",
-        "parentfield": "number_cards",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Number Card"
-      }
-    ],
-    "custom_blocks": [
-      {
-        "name": "a0okre4bh9",
-        "custom_block_name": "PROD Job Journey",
-        "label": "PROD Job Journey",
-        "parent": "Production",
-        "parentfield": "custom_blocks",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Custom Block"
-      }
-    ],
     "quick_lists": [],
-    "roles": [
-      {
-        "name": "a0ok3uf7uo",
-        "role": "Production Team",
-        "parent": "Production",
-        "parentfield": "roles",
-        "parenttype": "Workspace",
-        "doctype": "Has Role"
-      },
-      {
-        "name": "a0ok0gfg3p",
-        "role": "System Manager",
-        "parent": "Production",
-        "parentfield": "roles",
-        "parenttype": "Workspace",
-        "doctype": "Has Role"
-      }
-    ],
     "charts": [
       {
         "name": "a0okenrn6f",
@@ -720,6 +617,24 @@
         "parentfield": "charts",
         "parenttype": "Workspace",
         "doctype": "Workspace Chart"
+      }
+    ],
+    "roles": [
+      {
+        "name": "a0ok3uf7uo",
+        "role": "Production Team",
+        "parent": "Production",
+        "parentfield": "roles",
+        "parenttype": "Workspace",
+        "doctype": "Has Role"
+      },
+      {
+        "name": "a0ok0gfg3p",
+        "role": "System Manager",
+        "parent": "Production",
+        "parentfield": "roles",
+        "parenttype": "Workspace",
+        "doctype": "Has Role"
       }
     ],
     "links": [
@@ -920,6 +835,91 @@
         "parenttype": "Workspace",
         "doctype": "Workspace Shortcut"
       }
+    ],
+    "custom_blocks": [
+      {
+        "name": "a0okre4bh9",
+        "custom_block_name": "PROD Job Journey",
+        "label": "PROD Job Journey",
+        "parent": "Production",
+        "parentfield": "custom_blocks",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Custom Block"
+      }
+    ],
+    "number_cards": [
+      {
+        "name": "a0okejm13h",
+        "number_card_name": "PROD Job Cards Running",
+        "label": "PROD Job Cards Running",
+        "parent": "Production",
+        "parentfield": "number_cards",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Number Card"
+      },
+      {
+        "name": "a0okqhr90r",
+        "number_card_name": "PROD Job Cards Not Started",
+        "label": "PROD Job Cards Not Started",
+        "parent": "Production",
+        "parentfield": "number_cards",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Number Card"
+      },
+      {
+        "name": "a0oklvscrq",
+        "number_card_name": "PROD Job Cards Ready to Start",
+        "label": "PROD Job Cards Ready to Start",
+        "parent": "Production",
+        "parentfield": "number_cards",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Number Card"
+      },
+      {
+        "name": "a0ok2cn1f3",
+        "number_card_name": "PROD Job Cards On Hold",
+        "label": "PROD Job Cards On Hold",
+        "parent": "Production",
+        "parentfield": "number_cards",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Number Card"
+      },
+      {
+        "name": "a0ok717cn7",
+        "number_card_name": "PROD Work Orders In Process",
+        "label": "PROD Work Orders In Process",
+        "parent": "Production",
+        "parentfield": "number_cards",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Number Card"
+      },
+      {
+        "name": "a0okd0pvma",
+        "number_card_name": "PROD Work Orders Not Started",
+        "label": "PROD Work Orders Not Started",
+        "parent": "Production",
+        "parentfield": "number_cards",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Number Card"
+      },
+      {
+        "name": "a0okkut88p",
+        "number_card_name": "PROD Overdue Work Orders",
+        "label": "PROD Overdue Work Orders",
+        "parent": "Production",
+        "parentfield": "number_cards",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Number Card"
+      },
+      {
+        "name": "a0ok8s9po4",
+        "number_card_name": "PROD Late Job Cards",
+        "label": "PROD Late Job Cards",
+        "parent": "Production",
+        "parentfield": "number_cards",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Number Card"
+      }
     ]
   },
   {
@@ -938,91 +938,6 @@
     "is_hidden": 0,
     "content": "[{\"id\": \"cs1\", \"type\": \"custom_block\", \"data\": {\"custom_block_name\": \"CS Welcome\", \"col\": 12}}, {\"id\": \"cs2\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Orders</b></span>\", \"col\": 12}}, {\"id\": \"cs3\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"CS Won Quotations\", \"col\": 3}}, {\"id\": \"cs4\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"CS Overdue Sales Orders\", \"col\": 3}}, {\"id\": \"cs5\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"CS SOs Due This Week\", \"col\": 3}}, {\"id\": \"cs6\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"CS SOs Without Job Ticket\", \"col\": 3}}, {\"id\": \"cs7\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Production handoff and products</b></span>\", \"col\": 12}}, {\"id\": \"cs8\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"CS Job Tickets Pending BOM\", \"col\": 3}}, {\"id\": \"cs9\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"CS Pending Material Requests\", \"col\": 3}}, {\"id\": \"cs10\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"CS Open NPD Requests\", \"col\": 3}}, {\"id\": \"cs11\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"CS Products Missing FG Item\", \"col\": 3}}, {\"id\": \"cs12\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Insights</b></span>\", \"col\": 12}}, {\"id\": \"cs13\", \"type\": \"chart\", \"data\": {\"chart_name\": \"CS Monthly Sales Order Value\", \"col\": 6}}, {\"id\": \"cs14\", \"type\": \"chart\", \"data\": {\"chart_name\": \"CS Open Sales Orders by Status\", \"col\": 6}}, {\"id\": \"cs15\", \"type\": \"chart\", \"data\": {\"chart_name\": \"CS Top Customers This Year\", \"col\": 6}}, {\"id\": \"cs16\", \"type\": \"chart\", \"data\": {\"chart_name\": \"CS Job Tickets by Stage\", \"col\": 6}}, {\"id\": \"cs17\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Shortcuts</b></span>\", \"col\": 12}}, {\"id\": \"cs18\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Sales Order\", \"col\": 3}}, {\"id\": \"cs19\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Savinda Quotation\", \"col\": 3}}, {\"id\": \"cs20\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Material Request\", \"col\": 3}}, {\"id\": \"cs21\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Job Ticket\", \"col\": 3}}, {\"id\": \"cs22\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"NPD Request\", \"col\": 3}}, {\"id\": \"cs23\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Product Library\", \"col\": 3}}, {\"id\": \"cs24\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Sales Order Analysis\", \"col\": 3}}, {\"id\": \"cs25\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Customer\", \"col\": 3}}, {\"id\": \"cs26\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Quick lists</b></span>\", \"col\": 12}}, {\"id\": \"cs27\", \"type\": \"quick_list\", \"data\": {\"quick_list_name\": \"Finished Goods\", \"col\": 4}}, {\"id\": \"cs28\", \"type\": \"quick_list\", \"data\": {\"quick_list_name\": \"Won Quotations\", \"col\": 4}}, {\"id\": \"cs29\", \"type\": \"quick_list\", \"data\": {\"quick_list_name\": \"Open Sales Orders\", \"col\": 4}}, {\"id\": \"cs30\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Links</b></span>\", \"col\": 12}}, {\"id\": \"cs31\", \"type\": \"card\", \"data\": {\"card_name\": \"Selling\", \"col\": 3}}, {\"id\": \"cs32\", \"type\": \"card\", \"data\": {\"card_name\": \"Products and Pricing\", \"col\": 3}}, {\"id\": \"cs33\", \"type\": \"card\", \"data\": {\"card_name\": \"Production Handoff\", \"col\": 3}}, {\"id\": \"cs34\", \"type\": \"card\", \"data\": {\"card_name\": \"Reports\", \"col\": 3}}]",
     "doctype": "Workspace",
-    "number_cards": [
-      {
-        "name": "dnl8kno6do",
-        "number_card_name": "CS Won Quotations",
-        "label": "CS Won Quotations",
-        "parent": "Customer Service",
-        "parentfield": "number_cards",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Number Card"
-      },
-      {
-        "name": "dnl89k6l7b",
-        "number_card_name": "CS Overdue Sales Orders",
-        "label": "CS Overdue Sales Orders",
-        "parent": "Customer Service",
-        "parentfield": "number_cards",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Number Card"
-      },
-      {
-        "name": "dnl8nspll7",
-        "number_card_name": "CS SOs Due This Week",
-        "label": "CS SOs Due This Week",
-        "parent": "Customer Service",
-        "parentfield": "number_cards",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Number Card"
-      },
-      {
-        "name": "dnl8l8por9",
-        "number_card_name": "CS SOs Without Job Ticket",
-        "label": "CS SOs Without Job Ticket",
-        "parent": "Customer Service",
-        "parentfield": "number_cards",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Number Card"
-      },
-      {
-        "name": "dnl8gjcgfr",
-        "number_card_name": "CS Job Tickets Pending BOM",
-        "label": "CS Job Tickets Pending BOM",
-        "parent": "Customer Service",
-        "parentfield": "number_cards",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Number Card"
-      },
-      {
-        "name": "dnl8k44s5k",
-        "number_card_name": "CS Pending Material Requests",
-        "label": "CS Pending Material Requests",
-        "parent": "Customer Service",
-        "parentfield": "number_cards",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Number Card"
-      },
-      {
-        "name": "dnl8ou4cqa",
-        "number_card_name": "CS Open NPD Requests",
-        "label": "CS Open NPD Requests",
-        "parent": "Customer Service",
-        "parentfield": "number_cards",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Number Card"
-      },
-      {
-        "name": "dnl8inqi1g",
-        "number_card_name": "CS Products Missing FG Item",
-        "label": "CS Products Missing FG Item",
-        "parent": "Customer Service",
-        "parentfield": "number_cards",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Number Card"
-      }
-    ],
-    "custom_blocks": [
-      {
-        "name": "dnl8jr2kql",
-        "custom_block_name": "CS Welcome",
-        "label": "CS Welcome",
-        "parent": "Customer Service",
-        "parentfield": "custom_blocks",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Custom Block"
-      }
-    ],
     "quick_lists": [
       {
         "name": "dnl8lfksgh",
@@ -1053,24 +968,6 @@
         "parentfield": "quick_lists",
         "parenttype": "Workspace",
         "doctype": "Workspace Quick List"
-      }
-    ],
-    "roles": [
-      {
-        "name": "dnl8umpfun",
-        "role": "CS Team",
-        "parent": "Customer Service",
-        "parentfield": "roles",
-        "parenttype": "Workspace",
-        "doctype": "Has Role"
-      },
-      {
-        "name": "dnl8k1ps3m",
-        "role": "System Manager",
-        "parent": "Customer Service",
-        "parentfield": "roles",
-        "parenttype": "Workspace",
-        "doctype": "Has Role"
       }
     ],
     "charts": [
@@ -1109,6 +1006,24 @@
         "parentfield": "charts",
         "parenttype": "Workspace",
         "doctype": "Workspace Chart"
+      }
+    ],
+    "roles": [
+      {
+        "name": "dnl8umpfun",
+        "role": "CS Team",
+        "parent": "Customer Service",
+        "parentfield": "roles",
+        "parenttype": "Workspace",
+        "doctype": "Has Role"
+      },
+      {
+        "name": "dnl8k1ps3m",
+        "role": "System Manager",
+        "parent": "Customer Service",
+        "parentfield": "roles",
+        "parenttype": "Workspace",
+        "doctype": "Has Role"
       }
     ],
     "links": [
@@ -1665,6 +1580,91 @@
         "parentfield": "shortcuts",
         "parenttype": "Workspace",
         "doctype": "Workspace Shortcut"
+      }
+    ],
+    "custom_blocks": [
+      {
+        "name": "dnl8jr2kql",
+        "custom_block_name": "CS Welcome",
+        "label": "CS Welcome",
+        "parent": "Customer Service",
+        "parentfield": "custom_blocks",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Custom Block"
+      }
+    ],
+    "number_cards": [
+      {
+        "name": "dnl8kno6do",
+        "number_card_name": "CS Won Quotations",
+        "label": "CS Won Quotations",
+        "parent": "Customer Service",
+        "parentfield": "number_cards",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Number Card"
+      },
+      {
+        "name": "dnl89k6l7b",
+        "number_card_name": "CS Overdue Sales Orders",
+        "label": "CS Overdue Sales Orders",
+        "parent": "Customer Service",
+        "parentfield": "number_cards",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Number Card"
+      },
+      {
+        "name": "dnl8nspll7",
+        "number_card_name": "CS SOs Due This Week",
+        "label": "CS SOs Due This Week",
+        "parent": "Customer Service",
+        "parentfield": "number_cards",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Number Card"
+      },
+      {
+        "name": "dnl8l8por9",
+        "number_card_name": "CS SOs Without Job Ticket",
+        "label": "CS SOs Without Job Ticket",
+        "parent": "Customer Service",
+        "parentfield": "number_cards",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Number Card"
+      },
+      {
+        "name": "dnl8gjcgfr",
+        "number_card_name": "CS Job Tickets Pending BOM",
+        "label": "CS Job Tickets Pending BOM",
+        "parent": "Customer Service",
+        "parentfield": "number_cards",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Number Card"
+      },
+      {
+        "name": "dnl8k44s5k",
+        "number_card_name": "CS Pending Material Requests",
+        "label": "CS Pending Material Requests",
+        "parent": "Customer Service",
+        "parentfield": "number_cards",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Number Card"
+      },
+      {
+        "name": "dnl8ou4cqa",
+        "number_card_name": "CS Open NPD Requests",
+        "label": "CS Open NPD Requests",
+        "parent": "Customer Service",
+        "parentfield": "number_cards",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Number Card"
+      },
+      {
+        "name": "dnl8inqi1g",
+        "number_card_name": "CS Products Missing FG Item",
+        "label": "CS Products Missing FG Item",
+        "parent": "Customer Service",
+        "parentfield": "number_cards",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Number Card"
       }
     ]
   },

@@ -58,7 +58,7 @@ def export_from_site():
 	ui = []
 	ui.extend(_export_named("Role", ROLES, missing))
 	ui.extend(_export_named("Workflow", WORKFLOWS, missing))
-	ui.extend(_export_named("Workspace", WORKSPACES, missing))
+	ui.extend(_export_workspaces(missing))
 	ui.extend(_export_named("Print Format", PRINT_FORMATS, missing))
 	ui.extend(_export_inquiry_scripts("Client Script", missing))
 	ui.extend(_export_inquiry_scripts("Server Script", missing))
@@ -157,6 +157,19 @@ def _export_named(doctype, names, missing):
 		missing.append(doctype)
 		return []
 	return [_document(doctype, name) for name in names if frappe.db.exists(doctype, name)]
+
+
+def _export_workspaces(missing):
+	"""Workspace routes/titles are not always the database document name."""
+	if not frappe.db.table_exists("Workspace"):
+		missing.append("Workspace")
+		return []
+	meta = frappe.get_meta("Workspace")
+	or_filters = {"name": ["in", WORKSPACES]}
+	if meta.has_field("title"):
+		or_filters["title"] = ["in", WORKSPACES]
+	names = frappe.get_all("Workspace", or_filters=or_filters, pluck="name", limit_page_length=0)
+	return [_document("Workspace", name) for name in names]
 
 
 def _export_inquiry_scripts(doctype, missing):
