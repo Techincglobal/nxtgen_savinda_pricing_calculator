@@ -57,8 +57,8 @@
     "old_parent": "",
     "rgt": 124,
     "doctype": "Item Group",
-    "item_group_defaults": [],
-    "taxes": []
+    "taxes": [],
+    "item_group_defaults": []
   },
   {
     "name": "calculation",
@@ -74,8 +74,8 @@
     "old_parent": "All Item Groups",
     "rgt": 3,
     "doctype": "Item Group",
-    "item_group_defaults": [],
-    "taxes": []
+    "taxes": [],
+    "item_group_defaults": []
   },
   {
     "name": "Costing Rate Items",
@@ -91,8 +91,8 @@
     "old_parent": "All Item Groups",
     "rgt": 21,
     "doctype": "Item Group",
-    "item_group_defaults": [],
-    "taxes": []
+    "taxes": [],
+    "item_group_defaults": []
   },
   {
     "name": "12245",

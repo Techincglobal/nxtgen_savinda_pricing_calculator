@@ -1282,57 +1282,6 @@
     "content": "[{\"id\": \"bom1\", \"type\": \"custom_block\", \"data\": {\"custom_block_name\": \"BOM Key Numbers\", \"col\": 12}}, {\"id\": \"bom2\", \"type\": \"custom_block\", \"data\": {\"custom_block_name\": \"BOM Work Queue\", \"col\": 12}}, {\"id\": \"bom3\", \"type\": \"custom_block\", \"data\": {\"custom_block_name\": \"BOM Cost Sheets Without Quote\", \"col\": 12}}, {\"id\": \"bom4\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Insights</b></span>\", \"col\": 12}}, {\"id\": \"bom5\", \"type\": \"chart\", \"data\": {\"chart_name\": \"BOM BOMs Created per Week\", \"col\": 6}}, {\"id\": \"bom6\", \"type\": \"chart\", \"data\": {\"chart_name\": \"BOM Products by Approval Status\", \"col\": 6}}, {\"id\": \"bom7\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Shortcuts</b></span>\", \"col\": 12}}, {\"id\": \"bom8\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"BOM\", \"col\": 4}}, {\"id\": \"bom9\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Product Library\", \"col\": 4}}, {\"id\": \"bom10\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Savinda Quotation\", \"col\": 4}}, {\"id\": \"bom11\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Cost Sheet\", \"col\": 4}}, {\"id\": \"bom12\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Job Ticket\", \"col\": 4}}, {\"id\": \"bom13\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"BOM Builder\", \"col\": 4}}]",
     "doctype": "Workspace",
     "number_cards": [],
-    "links": [],
-    "quick_lists": [],
-    "custom_blocks": [
-      {
-        "name": "8506a3cj0u",
-        "custom_block_name": "BOM Key Numbers",
-        "label": "BOM Key Numbers",
-        "parent": "BOM Desk",
-        "parentfield": "custom_blocks",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Custom Block"
-      },
-      {
-        "name": "8506lbb5o3",
-        "custom_block_name": "BOM Work Queue",
-        "label": "BOM Work Queue",
-        "parent": "BOM Desk",
-        "parentfield": "custom_blocks",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Custom Block"
-      },
-      {
-        "name": "8506edoemh",
-        "custom_block_name": "BOM Cost Sheets Without Quote",
-        "label": "BOM Cost Sheets Without Quote",
-        "parent": "BOM Desk",
-        "parentfield": "custom_blocks",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Custom Block"
-      }
-    ],
-    "charts": [
-      {
-        "name": "85060t5vnh",
-        "chart_name": "BOM BOMs Created per Week",
-        "label": "BOM BOMs Created per Week",
-        "parent": "BOM Desk",
-        "parentfield": "charts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Chart"
-      },
-      {
-        "name": "8506qvlas6",
-        "chart_name": "BOM Products by Approval Status",
-        "label": "BOM Products by Approval Status",
-        "parent": "BOM Desk",
-        "parentfield": "charts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Chart"
-      }
-    ],
     "shortcuts": [
       {
         "name": "8506fcmcgf",
@@ -1449,6 +1398,55 @@
         "doctype": "Workspace Shortcut"
       }
     ],
+    "custom_blocks": [
+      {
+        "name": "8506a3cj0u",
+        "custom_block_name": "BOM Key Numbers",
+        "label": "BOM Key Numbers",
+        "parent": "BOM Desk",
+        "parentfield": "custom_blocks",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Custom Block"
+      },
+      {
+        "name": "8506lbb5o3",
+        "custom_block_name": "BOM Work Queue",
+        "label": "BOM Work Queue",
+        "parent": "BOM Desk",
+        "parentfield": "custom_blocks",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Custom Block"
+      },
+      {
+        "name": "8506edoemh",
+        "custom_block_name": "BOM Cost Sheets Without Quote",
+        "label": "BOM Cost Sheets Without Quote",
+        "parent": "BOM Desk",
+        "parentfield": "custom_blocks",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Custom Block"
+      }
+    ],
+    "charts": [
+      {
+        "name": "85060t5vnh",
+        "chart_name": "BOM BOMs Created per Week",
+        "label": "BOM BOMs Created per Week",
+        "parent": "BOM Desk",
+        "parentfield": "charts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Chart"
+      },
+      {
+        "name": "8506qvlas6",
+        "chart_name": "BOM Products by Approval Status",
+        "label": "BOM Products by Approval Status",
+        "parent": "BOM Desk",
+        "parentfield": "charts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Chart"
+      }
+    ],
     "roles": [
       {
         "name": "8506dokt8q",
@@ -1466,7 +1464,9 @@
         "parenttype": "Workspace",
         "doctype": "Has Role"
       }
-    ]
+    ],
+    "quick_lists": [],
+    "links": []
   },
   {
     "name": "Production",
@@ -1558,6 +1558,153 @@
         "doctype": "Workspace Number Card"
       }
     ],
+    "shortcuts": [
+      {
+        "name": "a0okg3ig48",
+        "type": "DocType",
+        "link_to": "Job Card",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Job Card",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"status\": \"Work In Progress\", \"docstatus\": 0}",
+        "color": "Green",
+        "format": "{} Running",
+        "parent": "Production",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
+      },
+      {
+        "name": "a0ok2hg04c",
+        "type": "DocType",
+        "link_to": "Work Order",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Work Order",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"status\": \"In Process\", \"docstatus\": 1}",
+        "color": "Blue",
+        "format": "{} In Process",
+        "parent": "Production",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
+      },
+      {
+        "name": "a0okv4vn6b",
+        "type": "DocType",
+        "link_to": "Production Plan",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Job Ticket",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"docstatus\": 1, \"status\": [\"in\", [\"Submitted\", \"Not Started\", \"Material Requested\"]]}",
+        "color": "Blue",
+        "format": "{} To Start",
+        "parent": "Production",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
+      },
+      {
+        "name": "a0oka9m2c7",
+        "type": "DocType",
+        "link_to": "Material Request",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Material Request",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"docstatus\": 1, \"status\": [\"in\", [\"Pending\", \"Partially Ordered\"]]}",
+        "color": "Orange",
+        "format": "{} Pending",
+        "parent": "Production",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
+      },
+      {
+        "name": "a0ok1d9dkg",
+        "type": "DocType",
+        "link_to": "Workstation",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Workstation",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"status\": \"Problem\"}",
+        "color": "Red",
+        "format": "{} Problem",
+        "parent": "Production",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
+      }
+    ],
+    "custom_blocks": [
+      {
+        "name": "a0okre4bh9",
+        "custom_block_name": "PROD Job Journey",
+        "label": "PROD Job Journey",
+        "parent": "Production",
+        "parentfield": "custom_blocks",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Custom Block"
+      }
+    ],
+    "charts": [
+      {
+        "name": "a0okenrn6f",
+        "chart_name": "PROD Running Job Cards by Workstation",
+        "label": "PROD Running Job Cards by Workstation",
+        "parent": "Production",
+        "parentfield": "charts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Chart"
+      },
+      {
+        "name": "a0okunfpq8",
+        "chart_name": "PROD Work Orders Completed per Day",
+        "label": "PROD Work Orders Completed per Day",
+        "parent": "Production",
+        "parentfield": "charts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Chart"
+      }
+    ],
+    "roles": [
+      {
+        "name": "a0ok3uf7uo",
+        "role": "Production Team",
+        "parent": "Production",
+        "parentfield": "roles",
+        "parenttype": "Workspace",
+        "doctype": "Has Role"
+      },
+      {
+        "name": "a0ok0gfg3p",
+        "role": "System Manager",
+        "parent": "Production",
+        "parentfield": "roles",
+        "parenttype": "Workspace",
+        "doctype": "Has Role"
+      }
+    ],
+    "quick_lists": [],
     "links": [
       {
         "name": "a0oknblefj",
@@ -1659,153 +1806,6 @@
         "parenttype": "Workspace",
         "doctype": "Workspace Link"
       }
-    ],
-    "quick_lists": [],
-    "custom_blocks": [
-      {
-        "name": "a0okre4bh9",
-        "custom_block_name": "PROD Job Journey",
-        "label": "PROD Job Journey",
-        "parent": "Production",
-        "parentfield": "custom_blocks",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Custom Block"
-      }
-    ],
-    "charts": [
-      {
-        "name": "a0okenrn6f",
-        "chart_name": "PROD Running Job Cards by Workstation",
-        "label": "PROD Running Job Cards by Workstation",
-        "parent": "Production",
-        "parentfield": "charts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Chart"
-      },
-      {
-        "name": "a0okunfpq8",
-        "chart_name": "PROD Work Orders Completed per Day",
-        "label": "PROD Work Orders Completed per Day",
-        "parent": "Production",
-        "parentfield": "charts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Chart"
-      }
-    ],
-    "shortcuts": [
-      {
-        "name": "a0okg3ig48",
-        "type": "DocType",
-        "link_to": "Job Card",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Job Card",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"status\": \"Work In Progress\", \"docstatus\": 0}",
-        "color": "Green",
-        "format": "{} Running",
-        "parent": "Production",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      },
-      {
-        "name": "a0ok2hg04c",
-        "type": "DocType",
-        "link_to": "Work Order",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Work Order",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"status\": \"In Process\", \"docstatus\": 1}",
-        "color": "Blue",
-        "format": "{} In Process",
-        "parent": "Production",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      },
-      {
-        "name": "a0okv4vn6b",
-        "type": "DocType",
-        "link_to": "Production Plan",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Job Ticket",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"docstatus\": 1, \"status\": [\"in\", [\"Submitted\", \"Not Started\", \"Material Requested\"]]}",
-        "color": "Blue",
-        "format": "{} To Start",
-        "parent": "Production",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      },
-      {
-        "name": "a0oka9m2c7",
-        "type": "DocType",
-        "link_to": "Material Request",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Material Request",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"docstatus\": 1, \"status\": [\"in\", [\"Pending\", \"Partially Ordered\"]]}",
-        "color": "Orange",
-        "format": "{} Pending",
-        "parent": "Production",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      },
-      {
-        "name": "a0ok1d9dkg",
-        "type": "DocType",
-        "link_to": "Workstation",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Workstation",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"status\": \"Problem\"}",
-        "color": "Red",
-        "format": "{} Problem",
-        "parent": "Production",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      }
-    ],
-    "roles": [
-      {
-        "name": "a0ok3uf7uo",
-        "role": "Production Team",
-        "parent": "Production",
-        "parentfield": "roles",
-        "parenttype": "Workspace",
-        "doctype": "Has Role"
-      },
-      {
-        "name": "a0ok0gfg3p",
-        "role": "System Manager",
-        "parent": "Production",
-        "parentfield": "roles",
-        "parenttype": "Workspace",
-        "doctype": "Has Role"
-      }
     ]
   },
   {
@@ -1896,6 +1896,259 @@
         "parentfield": "number_cards",
         "parenttype": "Workspace",
         "doctype": "Workspace Number Card"
+      }
+    ],
+    "shortcuts": [
+      {
+        "name": "dnl8mfr96c",
+        "type": "DocType",
+        "link_to": "Sales Order",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Sales Order",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"status\": [\"in\", [\"To Deliver and Bill\", \"To Deliver\"]]}",
+        "color": "Blue",
+        "format": "{} To Deliver",
+        "parent": "Customer Service",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
+      },
+      {
+        "name": "dnl85vpqml",
+        "type": "DocType",
+        "link_to": "Savinda Quotation",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Savinda Quotation",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"status\": \"Won\"}",
+        "color": "Orange",
+        "format": "{} Won",
+        "parent": "Customer Service",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
+      },
+      {
+        "name": "dnl8cd8gl8",
+        "type": "DocType",
+        "link_to": "Material Request",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Material Request",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"docstatus\": 1, \"status\": [\"in\", [\"Pending\", \"Partially Ordered\"]]}",
+        "color": "Orange",
+        "format": "{} Pending",
+        "parent": "Customer Service",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
+      },
+      {
+        "name": "dnl8q00d41",
+        "type": "DocType",
+        "link_to": "Production Plan",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Job Ticket",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"docstatus\": 0}",
+        "color": "Grey",
+        "format": "{} Draft",
+        "parent": "Customer Service",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
+      },
+      {
+        "name": "dnl83fvok4",
+        "type": "DocType",
+        "link_to": "NPD Request",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "NPD Request",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"docstatus\": [\"<\", 2], \"production_plan\": [\"is\", \"not set\"]}",
+        "color": "Purple",
+        "format": "{} Open",
+        "parent": "Customer Service",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
+      },
+      {
+        "name": "dnl8rrel06",
+        "type": "DocType",
+        "link_to": "Product Library",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Product Library",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"approval_status\": \"Returned for Correction\"}",
+        "color": "Red",
+        "format": "{} Returned",
+        "parent": "Customer Service",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
+      },
+      {
+        "name": "dnl8m7mn95",
+        "type": "Report",
+        "link_to": "Sales Order Analysis",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Sales Order Analysis",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": "Sales Order",
+        "stats_filter": null,
+        "color": null,
+        "format": null,
+        "parent": "Customer Service",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
+      },
+      {
+        "name": "dnl89uhb33",
+        "type": "DocType",
+        "link_to": "Customer",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Customer",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": null,
+        "color": "Grey",
+        "format": null,
+        "parent": "Customer Service",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
+      }
+    ],
+    "custom_blocks": [
+      {
+        "name": "dnl8jr2kql",
+        "custom_block_name": "CS Welcome",
+        "label": "CS Welcome",
+        "parent": "Customer Service",
+        "parentfield": "custom_blocks",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Custom Block"
+      }
+    ],
+    "charts": [
+      {
+        "name": "dnl8be17dd",
+        "chart_name": "CS Monthly Sales Order Value",
+        "label": "CS Monthly Sales Order Value",
+        "parent": "Customer Service",
+        "parentfield": "charts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Chart"
+      },
+      {
+        "name": "dnl8vbe93v",
+        "chart_name": "CS Open Sales Orders by Status",
+        "label": "CS Open Sales Orders by Status",
+        "parent": "Customer Service",
+        "parentfield": "charts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Chart"
+      },
+      {
+        "name": "dnl8ef26sn",
+        "chart_name": "CS Top Customers This Year",
+        "label": "CS Top Customers This Year",
+        "parent": "Customer Service",
+        "parentfield": "charts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Chart"
+      },
+      {
+        "name": "dnl8fqar12",
+        "chart_name": "CS Job Tickets by Stage",
+        "label": "CS Job Tickets by Stage",
+        "parent": "Customer Service",
+        "parentfield": "charts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Chart"
+      }
+    ],
+    "roles": [
+      {
+        "name": "dnl8umpfun",
+        "role": "CS Team",
+        "parent": "Customer Service",
+        "parentfield": "roles",
+        "parenttype": "Workspace",
+        "doctype": "Has Role"
+      },
+      {
+        "name": "dnl8k1ps3m",
+        "role": "System Manager",
+        "parent": "Customer Service",
+        "parentfield": "roles",
+        "parenttype": "Workspace",
+        "doctype": "Has Role"
+      }
+    ],
+    "quick_lists": [
+      {
+        "name": "dnl8lfksgh",
+        "document_type": "Item",
+        "label": "Finished Goods",
+        "quick_list_filter": "[[\"Item\", \"item_group\", \"descendants of (inclusive)\", \"Finished Goods\", false], [\"Item\", \"disabled\", \"=\", 0, false]]",
+        "parent": "Customer Service",
+        "parentfield": "quick_lists",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Quick List"
+      },
+      {
+        "name": "dnl8m8ilps",
+        "document_type": "Savinda Quotation",
+        "label": "Won Quotations",
+        "quick_list_filter": "[[\"Savinda Quotation\", \"status\", \"=\", \"Won\", false]]",
+        "parent": "Customer Service",
+        "parentfield": "quick_lists",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Quick List"
+      },
+      {
+        "name": "dnl8k4lbk5",
+        "document_type": "Sales Order",
+        "label": "Open Sales Orders",
+        "quick_list_filter": "[[\"Sales Order\", \"docstatus\", \"=\", 1, false], [\"Sales Order\", \"status\", \"in\", [\"To Deliver and Bill\", \"To Deliver\"], false]]",
+        "parent": "Customer Service",
+        "parentfield": "quick_lists",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Quick List"
       }
     ],
     "links": [
@@ -2299,259 +2552,6 @@
         "parenttype": "Workspace",
         "doctype": "Workspace Link"
       }
-    ],
-    "quick_lists": [
-      {
-        "name": "dnl8lfksgh",
-        "document_type": "Item",
-        "label": "Finished Goods",
-        "quick_list_filter": "[[\"Item\", \"item_group\", \"descendants of (inclusive)\", \"Finished Goods\", false], [\"Item\", \"disabled\", \"=\", 0, false]]",
-        "parent": "Customer Service",
-        "parentfield": "quick_lists",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Quick List"
-      },
-      {
-        "name": "dnl8m8ilps",
-        "document_type": "Savinda Quotation",
-        "label": "Won Quotations",
-        "quick_list_filter": "[[\"Savinda Quotation\", \"status\", \"=\", \"Won\", false]]",
-        "parent": "Customer Service",
-        "parentfield": "quick_lists",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Quick List"
-      },
-      {
-        "name": "dnl8k4lbk5",
-        "document_type": "Sales Order",
-        "label": "Open Sales Orders",
-        "quick_list_filter": "[[\"Sales Order\", \"docstatus\", \"=\", 1, false], [\"Sales Order\", \"status\", \"in\", [\"To Deliver and Bill\", \"To Deliver\"], false]]",
-        "parent": "Customer Service",
-        "parentfield": "quick_lists",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Quick List"
-      }
-    ],
-    "custom_blocks": [
-      {
-        "name": "dnl8jr2kql",
-        "custom_block_name": "CS Welcome",
-        "label": "CS Welcome",
-        "parent": "Customer Service",
-        "parentfield": "custom_blocks",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Custom Block"
-      }
-    ],
-    "charts": [
-      {
-        "name": "dnl8be17dd",
-        "chart_name": "CS Monthly Sales Order Value",
-        "label": "CS Monthly Sales Order Value",
-        "parent": "Customer Service",
-        "parentfield": "charts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Chart"
-      },
-      {
-        "name": "dnl8vbe93v",
-        "chart_name": "CS Open Sales Orders by Status",
-        "label": "CS Open Sales Orders by Status",
-        "parent": "Customer Service",
-        "parentfield": "charts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Chart"
-      },
-      {
-        "name": "dnl8ef26sn",
-        "chart_name": "CS Top Customers This Year",
-        "label": "CS Top Customers This Year",
-        "parent": "Customer Service",
-        "parentfield": "charts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Chart"
-      },
-      {
-        "name": "dnl8fqar12",
-        "chart_name": "CS Job Tickets by Stage",
-        "label": "CS Job Tickets by Stage",
-        "parent": "Customer Service",
-        "parentfield": "charts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Chart"
-      }
-    ],
-    "shortcuts": [
-      {
-        "name": "dnl8mfr96c",
-        "type": "DocType",
-        "link_to": "Sales Order",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Sales Order",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"status\": [\"in\", [\"To Deliver and Bill\", \"To Deliver\"]]}",
-        "color": "Blue",
-        "format": "{} To Deliver",
-        "parent": "Customer Service",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      },
-      {
-        "name": "dnl85vpqml",
-        "type": "DocType",
-        "link_to": "Savinda Quotation",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Savinda Quotation",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"status\": \"Won\"}",
-        "color": "Orange",
-        "format": "{} Won",
-        "parent": "Customer Service",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      },
-      {
-        "name": "dnl8cd8gl8",
-        "type": "DocType",
-        "link_to": "Material Request",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Material Request",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"docstatus\": 1, \"status\": [\"in\", [\"Pending\", \"Partially Ordered\"]]}",
-        "color": "Orange",
-        "format": "{} Pending",
-        "parent": "Customer Service",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      },
-      {
-        "name": "dnl8q00d41",
-        "type": "DocType",
-        "link_to": "Production Plan",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Job Ticket",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"docstatus\": 0}",
-        "color": "Grey",
-        "format": "{} Draft",
-        "parent": "Customer Service",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      },
-      {
-        "name": "dnl83fvok4",
-        "type": "DocType",
-        "link_to": "NPD Request",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "NPD Request",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"docstatus\": [\"<\", 2], \"production_plan\": [\"is\", \"not set\"]}",
-        "color": "Purple",
-        "format": "{} Open",
-        "parent": "Customer Service",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      },
-      {
-        "name": "dnl8rrel06",
-        "type": "DocType",
-        "link_to": "Product Library",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Product Library",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"approval_status\": \"Returned for Correction\"}",
-        "color": "Red",
-        "format": "{} Returned",
-        "parent": "Customer Service",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      },
-      {
-        "name": "dnl8m7mn95",
-        "type": "Report",
-        "link_to": "Sales Order Analysis",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Sales Order Analysis",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": "Sales Order",
-        "stats_filter": null,
-        "color": null,
-        "format": null,
-        "parent": "Customer Service",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      },
-      {
-        "name": "dnl89uhb33",
-        "type": "DocType",
-        "link_to": "Customer",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Customer",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": null,
-        "color": "Grey",
-        "format": null,
-        "parent": "Customer Service",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      }
-    ],
-    "roles": [
-      {
-        "name": "dnl8umpfun",
-        "role": "CS Team",
-        "parent": "Customer Service",
-        "parentfield": "roles",
-        "parenttype": "Workspace",
-        "doctype": "Has Role"
-      },
-      {
-        "name": "dnl8k1ps3m",
-        "role": "System Manager",
-        "parent": "Customer Service",
-        "parentfield": "roles",
-        "parenttype": "Workspace",
-        "doctype": "Has Role"
-      }
     ]
   },
   {
@@ -2926,5 +2926,56 @@
     "enabled": 0,
     "script": "frappe.ui.form.on('Opportunity', {\r\n\r\n    setup: function(frm) {\r\n\r\n        const allowed_item_groups = [\r\n            \"Books - Digital\",\r\n            \"Cartons - Digital\",\r\n            \"Complementary Items - Digital\",\r\n            \"Gift Boxes - Digital\",\r\n            \"Other - Digital\",\r\n            \"Paper Bags - Digital\",\r\n            \"Paper Labels - Digital\",\r\n            \"Self Adhesive Labels - Digital\",\r\n            \"Other - Flexo\",\r\n            \"Paper Labels - Flexo\",\r\n            \"Self Adhesive Filmic Labels - Flexo\",\r\n            \"Self Adhesive Paper Labels - Flexo\",\r\n            \"Tags - Flexo\",\r\n            \"Books - Offset\",\r\n            \"Cartons - Offset\",\r\n            \"Complementary Items - Offset\",\r\n            \"Gift Boxes - Offset\",\r\n            \"Other - Offset\",\r\n            \"Paper Bags - Offset\",\r\n            \"Paper Labels - Offset\",\r\n            \"Self Adhesive Labels - Offset\"\r\n        ];\r\n\r\n        const allowed_departments = [\r\n            \"Digital - SGSPL\",\r\n            \"Flexo - SGSPL\",\r\n            \"Offset - SGSPL\"\r\n        ];\r\n\r\n        // Filter Department\r\n        frm.set_query(\"custom_department\", function() {\r\n            return {\r\n                filters: [\r\n                    [\"Department\", \"name\", \"in\", allowed_departments]\r\n                ]\r\n            };\r\n        });\r\n\r\n        // Dynamic Item Group Filter\r\n        frm.set_query(\"custom_item_group\", function() {\r\n\r\n            let parent_group = \"\";\r\n\r\n            if (frm.doc.custom_department === \"Digital - SGSPL\") {\r\n                parent_group = \"Digital\";\r\n            }\r\n            else if (frm.doc.custom_department === \"Flexo - SGSPL\") {\r\n                parent_group = \"Flexo\";\r\n            }\r\n            else if (frm.doc.custom_department === \"Offset - SGSPL\") {\r\n                parent_group = \"Offset\";\r\n            }\r\n\r\n            return {\r\n                filters: [\r\n                    [\"Item Group\", \"name\", \"in\", allowed_item_groups],\r\n                    [\"Item Group\", \"parent_item_group\", \"=\", parent_group]\r\n                ]\r\n            };\r\n        });\r\n\r\n    },\r\n\r\n    custom_department: function(frm) {\r\n        // Clear item group when department changes\r\n        frm.set_value(\"custom_item_group\", null);\r\n    }\r\n\r\n});\r\n\r\n/*frappe.ui.form.on('Opportunity', {\r\n    setup: function(frm) {\r\n        frm.set_query('custom_board', function() {\r\n            return {\r\n                filters: {\r\n                    item_group: \"Boards & Papers\",\r\n                    custom_tiep: frm.doc.custom_tiep\r\n                }\r\n            };\r\n        });\r\n    },\r\n\r\n    custom_tiep: function(frm) {\r\n        frm.set_value('custom_board', null);\r\n        frm.refresh_field('custom_board');\r\n    }\r\n});*/\r\n",
     "doctype": "Client Script"
+  },
+  {
+    "name": "BOM - Work Queue",
+    "script_type": "API",
+    "reference_doctype": null,
+    "event_frequency": "All",
+    "cron_format": null,
+    "doctype_event": "Before Insert",
+    "api_method": "bom_work_queue",
+    "allow_guest": 0,
+    "module": null,
+    "disabled": 0,
+    "script": "\nuser = frappe.session.user\nallowed = user == \"Administrator\" or frappe.db.exists(\"Has Role\", {\n    \"parent\": user,\n    \"parenttype\": \"User\",\n    \"role\": [\"in\", ['BOM Team', 'System Manager']],\n})\nif not allowed:\n    frappe.throw(\"You don't have access to this data.\")\n\ntoday = frappe.utils.nowdate()\npart = frappe.form_dict.get(\"part\") or \"queue\"\n\nif part == \"counts\":\n    prods = frappe.db.sql(\"\"\"select pl.name \n    from `tabProduct Library` pl\n    where ifnull(pl.fg_item, '') != ''\n      and not exists (\n          select 1 from `tabBOM` b\n          where b.item = pl.fg_item and b.is_active = 1 and b.docstatus = 1\n      )\n\"\"\")\n    sheets = frappe.db.sql(\"\"\"select cs.name \n    from `tabCost Sheet` cs\n    where cs.docstatus = 1\n      and not exists (\n          select 1 from `tabSavinda Quotation` sq\n          where sq.cost_sheet = cs.name and sq.docstatus < 2\n      )\n\"\"\")\n    frappe.response[\"message\"] = {\n        \"products\": [r[0] for r in prods],\n        \"cost_sheets\": [r[0] for r in sheets],\n    }\n\nelif part == \"cost_sheets\":\n    rows = frappe.db.sql(\"\"\"\n        select cs.name, cs.customer_name, cs.subject, cs.sales_person, cs.pricing_type, cs.creation\n        \n    from `tabCost Sheet` cs\n    where cs.docstatus = 1\n      and not exists (\n          select 1 from `tabSavinda Quotation` sq\n          where sq.cost_sheet = cs.name and sq.docstatus < 2\n      )\n\n        order by cs.creation asc\n        limit 200\n    \"\"\", as_dict=True)\n    emp_ids = list({r.sales_person: 1 for r in rows if r.sales_person}.keys())\n    emp_names = {}\n    for e in frappe.get_all(\"Employee\", filters={\"name\": [\"in\", emp_ids or [\"-\"]]},\n                            fields=[\"name\", \"employee_name\"]):\n        emp_names[e.name] = e.employee_name\n    out = []\n    for r in rows:\n        out.append({\n            \"name\": r.name,\n            \"customer\": r.customer_name or \"\",\n            \"subject\": r.subject or \"\",\n            \"sales_person\": emp_names.get(r.sales_person, r.sales_person or \"\"),\n            \"pricing_type\": r.pricing_type or \"\",\n            \"days\": frappe.utils.date_diff(today, r.creation),\n        })\n    frappe.response[\"message\"] = {\"rows\": out}\n\nelse:\n    items = []\n\n    # Job tickets with items pending BOM\n    tickets = frappe.get_all(\n        \"Production Plan\",\n        filters={\"custom_needs_bom\": 1, \"docstatus\": [\"<\", 2]},\n        fields=[\"name\", \"custom_customer_name\", \"custom_job_title\", \"custom_req_date\",\n                \"custom_sales_order\", \"custom_pricing_type\"],\n        limit_page_length=100,\n    )\n    t_names = [t.name for t in tickets]\n    pending = {}\n    first_so = {}\n    for row in frappe.get_all(\n        \"Production Plan Item\",\n        filters={\"parent\": [\"in\", t_names or [\"-\"]], \"parenttype\": \"Production Plan\"},\n        fields=[\"parent\", \"bom_no\", \"sales_order\"],\n    ):\n        if not row.bom_no:\n            pending[row.parent] = pending.get(row.parent, 0) + 1\n        if row.sales_order and row.parent not in first_so:\n            first_so[row.parent] = row.sales_order\n    for t in tickets:\n        days = None\n        if t.custom_req_date:\n            days = frappe.utils.date_diff(t.custom_req_date, today)\n        items.append({\n            \"kind\": \"ticket\",\n            \"name\": t.name,\n            \"customer\": t.custom_customer_name or \"\",\n            \"title\": t.custom_job_title or \"\",\n            \"pricing_type\": t.custom_pricing_type or \"\",\n            \"days_left\": days,\n            \"so\": t.custom_sales_order or first_so.get(t.name, \"\"),\n            \"pending\": pending.get(t.name, 0),\n            \"group\": 0,\n            \"sort\": days if days is not None else 9999,\n        })\n\n    # NPD requests waiting for BOM confirmation\n    for n in frappe.get_all(\n        \"NPD Request\",\n        filters={\"docstatus\": 1, \"bom_confirmed\": 0},\n        fields=[\"name\", \"customer_name\", \"job_title\", \"required_date\", \"artwork_status\"],\n        limit_page_length=100,\n    ):\n        days = None\n        if n.required_date:\n            days = frappe.utils.date_diff(n.required_date, today)\n        items.append({\n            \"kind\": \"npd\",\n            \"name\": n.name,\n            \"customer\": n.customer_name or \"\",\n            \"title\": n.job_title or \"\",\n            \"artwork_status\": n.artwork_status or \"\",\n            \"days_left\": days,\n            \"group\": 0,\n            \"sort\": days if days is not None else 9999,\n        })\n\n    # Product Library entries whose FG item has no active BOM\n    prods = frappe.db.sql(\"\"\"\n        select pl.name, pl.product_name, pl.customer, pl.fg_item, pl.approval_status, pl.modified\n        \n    from `tabProduct Library` pl\n    where ifnull(pl.fg_item, '') != ''\n      and not exists (\n          select 1 from `tabBOM` b\n          where b.item = pl.fg_item and b.is_active = 1 and b.docstatus = 1\n      )\n\n        order by pl.modified asc\n        limit 100\n    \"\"\", as_dict=True)\n    fg_items = [p.fg_item for p in prods]\n    configs = {}\n    for c in frappe.get_all(\"BOM Builder Config\", filters={\"name\": [\"in\", fg_items or [\"-\"]]},\n                            fields=[\"name\"]):\n        configs[c.name] = 1\n    for p in prods:\n        age = frappe.utils.date_diff(today, p.modified)\n        saved = 1 if p.fg_item in configs else 0\n        items.append({\n            \"kind\": \"product\",\n            \"name\": p.name,\n            \"product_name\": p.product_name or \"\",\n            \"customer\": p.customer or \"\",\n            \"fg_item\": p.fg_item,\n            \"approval_status\": p.approval_status or \"\",\n            \"config_saved\": saved,\n            \"age\": age,\n            \"group\": 1 if saved else 2,\n            \"sort\": -age,\n        })\n\n    items = sorted(items, key=lambda i: (i[\"group\"], i[\"sort\"]))\n    frappe.response[\"message\"] = {\n        \"items\": items,\n        \"counts\": {\n            \"ticket\": len([i for i in items if i[\"kind\"] == \"ticket\"]),\n            \"npd\": len([i for i in items if i[\"kind\"] == \"npd\"]),\n            \"product\": len([i for i in items if i[\"kind\"] == \"product\"]),\n        },\n    }\n",
+    "enable_rate_limit": 0,
+    "rate_limit_count": 5,
+    "rate_limit_seconds": 86400,
+    "doctype": "Server Script"
+  },
+  {
+    "name": "PROD - Job Journey",
+    "script_type": "API",
+    "reference_doctype": null,
+    "event_frequency": "All",
+    "cron_format": null,
+    "doctype_event": "Before Insert",
+    "api_method": "prod_job_journey",
+    "allow_guest": 0,
+    "module": null,
+    "disabled": 0,
+    "script": "\nuser = frappe.session.user\nallowed = user == \"Administrator\" or frappe.db.exists(\"Has Role\", {\n    \"parent\": user,\n    \"parenttype\": \"User\",\n    \"role\": [\"in\", ['Production Team', 'System Manager']],\n})\nif not allowed:\n    frappe.throw(\"You don't have access to this data.\")\n\ntoday = frappe.utils.nowdate()\nnow = frappe.utils.now_datetime()\n\nplans = frappe.get_all(\n    \"Production Plan\",\n    filters={\"docstatus\": 1, \"status\": [\"not in\", [\"Completed\", \"Closed\", \"Cancelled\"]]},\n    fields=[\"name\", \"custom_customer_name\", \"custom_job_title\", \"custom_pricing_type\",\n            \"custom_repeat_or_new\", \"custom_is_callout\", \"custom_req_date\"],\n    order_by=\"custom_req_date asc\",\n    limit_page_length=80,\n)\nplan_names = [p.name for p in plans]\n\nwo_plan = {}\nfor w in frappe.get_all(\n    \"Work Order\",\n    filters={\"production_plan\": [\"in\", plan_names or [\"-\"]], \"docstatus\": [\"<\", 2]},\n    fields=[\"name\", \"production_plan\"],\n):\n    wo_plan[w.name] = w.production_plan\n\ncards = frappe.get_all(\n    \"Job Card\",\n    filters={\"work_order\": [\"in\", list(wo_plan.keys()) or [\"-\"]], \"docstatus\": [\"<\", 2]},\n    fields=[\"name\", \"work_order\", \"operation\", \"workstation\", \"status\", \"docstatus\",\n            \"for_quantity\", \"total_completed_qty\", \"total_time_in_mins\",\n            \"expected_start_date\", \"creation\", \"modified\"],\n)\n\nrunning = [c.name for c in cards if c.status == \"Work In Progress\"]\nlive = {}\nif running:\n    logs = frappe.get_all(\n        \"Job Card Time Log\",\n        filters={\"parent\": [\"in\", running], \"parenttype\": \"Job Card\", \"to_time\": [\"is\", \"not set\"]},\n        fields=[\"parent\", \"employee\", \"from_time\"],\n    )\n    emp_ids = list({l.employee: 1 for l in logs if l.employee}.keys())\n    emp_names = {}\n    for e in frappe.get_all(\"Employee\", filters={\"name\": [\"in\", emp_ids or [\"-\"]]},\n                            fields=[\"name\", \"employee_name\"]):\n        emp_names[e.name] = e.employee_name\n    for l in logs:\n        mins = 0\n        if l.from_time:\n            mins = frappe.utils.time_diff_in_hours(now, l.from_time) * 60\n        live[l.parent] = {\"operator\": emp_names.get(l.employee, l.employee or \"\"), \"mins\": mins}\n\nsteps_by_plan = {}\nfor c in cards:\n    plan = wo_plan.get(c.work_order)\n    if plan not in steps_by_plan:\n        steps_by_plan[plan] = []\n    if c.docstatus == 1 or c.status == \"Completed\":\n        state = \"done\"\n    elif c.status == \"Work In Progress\":\n        state = \"run\"\n    elif c.status == \"On Hold\":\n        state = \"hold\"\n    elif c.status in (\"Material Transferred\", \"Partially Transferred\"):\n        state = \"ready\"\n    else:\n        state = \"todo\"\n    info = live.get(c.name, {})\n    hold_hours = 0\n    if state == \"hold\" and c.modified:\n        hold_hours = frappe.utils.time_diff_in_hours(now, c.modified)\n    steps_by_plan[plan].append({\n        \"job_card\": c.name,\n        \"operation\": c.operation,\n        \"workstation\": c.workstation,\n        \"state\": state,\n        \"hours\": round((c.total_time_in_mins or 0) / 60.0, 1),\n        \"operator\": info.get(\"operator\", \"\"),\n        \"running_mins\": round(info.get(\"mins\", 0)),\n        \"hold_hours\": round(hold_hours, 1),\n        \"sort\": str(c.expected_start_date or c.creation),\n    })\n\nrank = {\"late\": 0, \"risk\": 1, \"ok\": 2}\njobs = []\nfor p in plans:\n    steps = sorted(steps_by_plan.get(p.name, []), key=lambda s: s[\"sort\"])\n    if not steps:\n        continue\n    total = len(steps)\n    done = len([s for s in steps if s[\"state\"] == \"done\"])\n    remaining = total - done\n    days_left = None\n    if p.custom_req_date:\n        days_left = frappe.utils.date_diff(p.custom_req_date, today)\n    if days_left is not None and days_left < 0 and remaining:\n        health = \"late\"\n    elif days_left is not None and remaining and days_left <= 2:\n        health = \"risk\"\n    else:\n        health = \"ok\"\n    stuck = len([s for s in steps if s[\"state\"] == \"hold\"]) > 0\n    jobs.append({\n        \"name\": p.name,\n        \"customer\": p.custom_customer_name or \"\",\n        \"title\": p.custom_job_title or \"\",\n        \"pricing_type\": p.custom_pricing_type or \"\",\n        \"repeat\": p.custom_repeat_or_new or \"\",\n        \"callout\": p.custom_is_callout or 0,\n        \"req_date\": str(p.custom_req_date or \"\"),\n        \"days_left\": days_left,\n        \"health\": health,\n        \"stuck\": stuck,\n        \"done\": done,\n        \"total\": total,\n        \"steps\": steps,\n        \"rank\": rank[health],\n    })\n\njobs = sorted(jobs, key=lambda j: (j[\"rank\"], j[\"days_left\"] if j[\"days_left\"] is not None else 9999))\n\nfrappe.response[\"message\"] = {\n    \"jobs\": jobs,\n    \"summary\": {\n        \"active\": len(jobs),\n        \"ok\": len([j for j in jobs if j[\"health\"] == \"ok\"]),\n        \"risk\": len([j for j in jobs if j[\"health\"] == \"risk\"]),\n        \"late\": len([j for j in jobs if j[\"health\"] == \"late\"]),\n    },\n}\n",
+    "enable_rate_limit": 0,
+    "rate_limit_count": 5,
+    "rate_limit_seconds": 86400,
+    "doctype": "Server Script"
+  },
+  {
+    "name": "CS - SOs Without Job Ticket",
+    "script_type": "API",
+    "reference_doctype": null,
+    "event_frequency": "All",
+    "cron_format": null,
+    "doctype_event": "Before Insert",
+    "api_method": "cs_sos_without_job_ticket",
+    "allow_guest": 0,
+    "module": null,
+    "disabled": 0,
+    "script": "\nuser = frappe.session.user\nallowed = user == \"Administrator\" or frappe.db.exists(\"Has Role\", {\n    \"parent\": user,\n    \"parenttype\": \"User\",\n    \"role\": [\"in\", [\"CS Team\", \"System Manager\"]],\n})\nif not allowed:\n    frappe.throw(\"You don't have access to this data.\")\n\nrows = frappe.db.sql(\"\"\"\n    select so.name\n    from `tabSales Order` so\n    where so.docstatus = 1\n      and so.status in ('To Deliver and Bill', 'To Deliver')\n      and not exists (\n          select 1\n          from `tabProduction Plan Sales Order` ppso\n          inner join `tabProduction Plan` pp on pp.name = ppso.parent\n          where ppso.sales_order = so.name and pp.docstatus < 2\n      )\n      and not exists (\n          select 1\n          from `tabProduction Plan` pp2\n          where pp2.custom_sales_order = so.name and pp2.docstatus < 2\n      )\n\"\"\")\nnames = [r[0] for r in rows]\nresult = {\"value\": len(names), \"fieldtype\": \"Int\"}\nif frappe.form_dict.get(\"with_names\"):\n    result[\"names\"] = names\nfrappe.response[\"message\"] = result\n",
+    "enable_rate_limit": 0,
+    "rate_limit_count": 5,
+    "rate_limit_seconds": 86400,
+    "doctype": "Server Script"
   }
 ]
