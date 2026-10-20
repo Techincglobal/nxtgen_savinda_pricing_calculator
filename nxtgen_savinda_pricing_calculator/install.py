@@ -82,7 +82,7 @@ def apply_install_only_configuration():
 	Use only as a one-time repair when the app was installed before the exported
 	JSON files were present. Existing records remain untouched.
 	"""
-	_seed_install_only_fixtures()
+	return _seed_install_only_fixtures()
 
 
 def after_migrate():
@@ -1098,6 +1098,7 @@ def _seed_install_only_fixtures():
 	import json
 
 	fixtures_dir = frappe.get_app_path("nxtgen_savinda_pricing_calculator", "fixtures")
+	results = {"created": 0, "already_exists": 0, "missing_table": [], "failed": []}
 	for fname in INSTALL_ONLY_FIXTURES:
 		path = os.path.join(fixtures_dir, fname)
 		if not os.path.exists(path):
@@ -1114,21 +1115,30 @@ def _seed_install_only_fixtures():
 		if isinstance(records, dict):
 			records = [records]
 		for rec in records:
-			_create_if_missing(rec)
+			status, detail = _create_if_missing(rec)
+			if status in ("created", "already_exists"):
+				results[status] += 1
+			elif status == "missing_table":
+				results["missing_table"].append(detail)
+			elif status == "failed":
+				results["failed"].append(detail)
 	frappe.db.commit()
+	return results
 
 
 def _create_if_missing(rec):
 	"""Insert one fixture record only if it isn't already present."""
 	if not isinstance(rec, dict):
-		return
+		return "ignored", "Invalid fixture record"
 	doctype = rec.get("doctype")
-	if not doctype or not frappe.db.table_exists(doctype):
-		return
+	if not doctype:
+		return "ignored", "Fixture record without doctype"
 	try:
 		meta = frappe.get_meta(doctype)
 	except Exception:
-		return
+		return "missing_table", doctype
+	if not meta.issingle and not frappe.db.table_exists(doctype):
+		return "missing_table", doctype
 
 	# Strip transient keys that would interfere with a clean insert.
 	clean = {
@@ -1139,8 +1149,10 @@ def _create_if_missing(rec):
 	try:
 		if meta.issingle:
 			# Seed a Single ONLY if it has never been configured — never overwrite.
-			if frappe.db.get_singles_dict(doctype):
-				return
+			# get_singles_dict can contain framework defaults even when the site has
+			# never saved this Single. Check persisted tabSingles rows instead.
+			if frappe.db.exists("Singles", {"doctype": doctype}):
+				return "already_exists", doctype
 			single = frappe.get_doc(doctype)
 			for k, v in clean.items():
 				if k in ("doctype", "name", "idx", "docstatus"):
@@ -1149,18 +1161,20 @@ def _create_if_missing(rec):
 			single.flags.ignore_permissions = True
 			single.flags.ignore_mandatory = True
 			single.save(ignore_permissions=True)
-			return
+			return "created", doctype
 
 		name = clean.get("name")
 		if name and frappe.db.exists(doctype, name):
-			return  # already present — preserve any live edits
+			return "already_exists", doctype + ": " + name
 
 		doc = frappe.get_doc(clean)
 		doc.flags.ignore_permissions = True
 		doc.flags.ignore_mandatory = True
 		doc.insert(ignore_permissions=True)
+		return "created", doctype + ": " + (doc.name or "")
 	except Exception:
 		frappe.log_error(
 			title=f"pricing_calculator: seed insert failed ({doctype} {rec.get('name', '')})",
 			message=frappe.get_traceback(),
 		)
+		return "failed", doctype + ": " + str(rec.get("name", ""))
