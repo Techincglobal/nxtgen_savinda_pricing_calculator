@@ -16,13 +16,71 @@ def get_uoms():
 	return frappe.get_list("UOM", pluck="name", order_by="name asc", limit_page_length=0)
 
 
+def _library_sheet_size(value):
+	"""Read an Offset size pair in the calculator's existing inch units.
+
+	Do not extract arbitrary numbers from remarks, mm dimensions or set lists.
+	Unusable/partial dimensions fall back together to the saved calculation.
+	"""
+	number = r"(\d+(?:\.\d+)?)"
+	unit = r'(?:inches|inch|in|\")?'
+	match = re.fullmatch(rf"\s*{number}\s*{unit}\s*[xX×*]\s*{number}\s*{unit}\s*", str(value or ""), re.IGNORECASE)
+	if match:
+		length, width = flt(match.group(1)), flt(match.group(2))
+		if length > 0 and width > 0:
+			return length, width
+	return None
+
+
+def _library_bom_inputs(fg_item, pricing_type):
+	"""Technical inputs from the FG's own library; zero/unset numbers fall back.
+
+	Library dimensions/counts override saved costing, not the production type,
+	material selection or selected operation/machine assignments.
+	"""
+	if not fg_item:
+		return {}
+	pl_name = frappe.db.get_value("Item", fg_item, "custom_product_library")
+	if not pl_name:
+		pl_name = frappe.db.get_value("Product Library", {"fg_item": fg_item}, "name")
+	if not pl_name:
+		return {}
+	pl = frappe.get_doc("Product Library", pl_name)
+	pl.check_permission("read")
+	# Never borrow another FG's reviewed technical specification.
+	if pl.get("fg_item") != fg_item:
+		return {}
+	values = {}
+	for field in ("no_of_colors", "no_of_ups", "no_of_cuts"):
+		# no_of_cuts is optional for sites that have added it to their library.
+		if cint(pl.get(field)) > 0:
+			values[field] = cint(pl.get(field))
+	if (pl.get("product_size") or "").strip():
+		values["carton_size"] = pl.product_size.strip()
+	if pricing_type == "Flexo":
+		# Same meaning used by FG creation: width = reel width, length = label length.
+		for source, target in (("width_mm", "reel_width_mm"), ("length_mm", "product_length_mm")):
+			if flt(pl.get(source)) > 0:
+				values[target] = flt(pl.get(source))
+	else:
+		for source, targets in (("full_sheet_size", ("full_sheet_l", "full_sheet_w")),
+			("cut_sheet_size", ("cut_sheet_l", "cut_sheet_w"))):
+			pair = _library_sheet_size(pl.get(source))
+			if pair:
+				values.update(zip(targets, pair))
+	return values
+
+
 def _bom_calc_field_values(fg_item):
-	"""Costing/planning variables (from the FG's Calculation Breakdown) to stamp on the BOM's
+	"""Library-first costing/planning variables to stamp on the BOM's
 	Calculation Details section — used to compute sheet counts in the Production Plan."""
 	cb = _find_cb_for_fg(fg_item)
 	if not cb:
 		return {}
 	d = jt_api._cb_fields(cb)
+	inputs = _library_bom_inputs(fg_item, d.get("pricing_type") or "Offset")
+	for field, value in inputs.items():
+		d[{"cut_sheet_w": "cut_sheetw", "reel_width_mm": "_reel_width"}.get(field, field)] = value
 	no_ups = cint(d.get("no_of_ups"))
 	no_cuts = max(cint(d.get("no_of_cuts")) or 1, 1)
 	# BOM remark entered on the costing form (Cost Sheet -> cost Item). Only stamped when set,
@@ -328,6 +386,9 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item="", overrides=None):
 
 	form           = state.get("form", {}) or {}
 	selected_specs = state.get("selected_specs", []) or []
+	# Precedence: explicit builder edits > library > original saved calculation.
+	form.update(_library_bom_inputs(fg_item, (form.get("pricing_type") or cb.pricing_type or "Offset").strip()))
+	state["form"] = form
 
 	# Editable calculation drivers + variant inputs override the stored calculation. Applied
 	# to the base form (so base-material resolution below sees them) BEFORE the deepcopy, so
