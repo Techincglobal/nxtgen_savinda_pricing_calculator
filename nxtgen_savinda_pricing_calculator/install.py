@@ -1172,9 +1172,9 @@ def _create_if_missing(rec):
 		doc.flags.ignore_mandatory = True
 		doc.insert(ignore_permissions=True)
 		return "created", doctype + ": " + (doc.name or "")
-	except Exception:
+	except Exception as error:
 		frappe.log_error(
 			title=f"pricing_calculator: seed insert failed ({doctype} {rec.get('name', '')})",
 			message=frappe.get_traceback(),
 		)
-		return "failed", doctype + ": " + str(rec.get("name", ""))
+		return "failed", doctype + ": " + str(rec.get("name", "")) + " — " + str(error)

@@ -395,25 +395,33 @@
     "is_hidden": 0,
     "content": "[{\"id\": \"bom1\", \"type\": \"custom_block\", \"data\": {\"custom_block_name\": \"BOM Key Numbers\", \"col\": 12}}, {\"id\": \"bom2\", \"type\": \"custom_block\", \"data\": {\"custom_block_name\": \"BOM Work Queue\", \"col\": 12}}, {\"id\": \"bom3\", \"type\": \"custom_block\", \"data\": {\"custom_block_name\": \"BOM Cost Sheets Without Quote\", \"col\": 12}}, {\"id\": \"bom4\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Insights</b></span>\", \"col\": 12}}, {\"id\": \"bom5\", \"type\": \"chart\", \"data\": {\"chart_name\": \"BOM BOMs Created per Week\", \"col\": 6}}, {\"id\": \"bom6\", \"type\": \"chart\", \"data\": {\"chart_name\": \"BOM Products by Approval Status\", \"col\": 6}}, {\"id\": \"bom7\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Shortcuts</b></span>\", \"col\": 12}}, {\"id\": \"bom8\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"BOM\", \"col\": 4}}, {\"id\": \"bom9\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Product Library\", \"col\": 4}}, {\"id\": \"bom10\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Savinda Quotation\", \"col\": 4}}, {\"id\": \"bom11\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Cost Sheet\", \"col\": 4}}, {\"id\": \"bom12\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Job Ticket\", \"col\": 4}}, {\"id\": \"bom13\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"BOM Builder\", \"col\": 4}}]",
     "doctype": "Workspace",
-    "quick_lists": [],
-    "charts": [
+    "custom_blocks": [
       {
-        "name": "85060t5vnh",
-        "chart_name": "BOM BOMs Created per Week",
-        "label": "BOM BOMs Created per Week",
+        "name": "8506a3cj0u",
+        "custom_block_name": "BOM Key Numbers",
+        "label": "BOM Key Numbers",
         "parent": "BOM Desk",
-        "parentfield": "charts",
+        "parentfield": "custom_blocks",
         "parenttype": "Workspace",
-        "doctype": "Workspace Chart"
+        "doctype": "Workspace Custom Block"
       },
       {
-        "name": "8506qvlas6",
-        "chart_name": "BOM Products by Approval Status",
-        "label": "BOM Products by Approval Status",
+        "name": "8506lbb5o3",
+        "custom_block_name": "BOM Work Queue",
+        "label": "BOM Work Queue",
         "parent": "BOM Desk",
-        "parentfield": "charts",
+        "parentfield": "custom_blocks",
         "parenttype": "Workspace",
-        "doctype": "Workspace Chart"
+        "doctype": "Workspace Custom Block"
+      },
+      {
+        "name": "8506edoemh",
+        "custom_block_name": "BOM Cost Sheets Without Quote",
+        "label": "BOM Cost Sheets Without Quote",
+        "parent": "BOM Desk",
+        "parentfield": "custom_blocks",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Custom Block"
       }
     ],
     "roles": [
@@ -434,7 +442,26 @@
         "doctype": "Has Role"
       }
     ],
-    "links": [],
+    "charts": [
+      {
+        "name": "85060t5vnh",
+        "chart_name": "BOM BOMs Created per Week",
+        "label": "BOM BOMs Created per Week",
+        "parent": "BOM Desk",
+        "parentfield": "charts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Chart"
+      },
+      {
+        "name": "8506qvlas6",
+        "chart_name": "BOM Products by Approval Status",
+        "label": "BOM Products by Approval Status",
+        "parent": "BOM Desk",
+        "parentfield": "charts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Chart"
+      }
+    ],
     "shortcuts": [
       {
         "name": "8506fcmcgf",
@@ -551,35 +578,8 @@
         "doctype": "Workspace Shortcut"
       }
     ],
-    "custom_blocks": [
-      {
-        "name": "8506a3cj0u",
-        "custom_block_name": "BOM Key Numbers",
-        "label": "BOM Key Numbers",
-        "parent": "BOM Desk",
-        "parentfield": "custom_blocks",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Custom Block"
-      },
-      {
-        "name": "8506lbb5o3",
-        "custom_block_name": "BOM Work Queue",
-        "label": "BOM Work Queue",
-        "parent": "BOM Desk",
-        "parentfield": "custom_blocks",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Custom Block"
-      },
-      {
-        "name": "8506edoemh",
-        "custom_block_name": "BOM Cost Sheets Without Quote",
-        "label": "BOM Cost Sheets Without Quote",
-        "parent": "BOM Desk",
-        "parentfield": "custom_blocks",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Custom Block"
-      }
-    ],
+    "links": [],
+    "quick_lists": [],
     "number_cards": []
   },
   {
@@ -598,7 +598,35 @@
     "is_hidden": 0,
     "content": "[{\"id\":\"prod1\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Job cards</b></span>\",\"col\":12}},{\"id\":\"prod2\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"PROD Job Cards Running\",\"col\":3}},{\"id\":\"prod3\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"PROD Job Cards Not Started\",\"col\":3}},{\"id\":\"prod4\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"PROD Job Cards Ready to Start\",\"col\":3}},{\"id\":\"prod5\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"PROD Job Cards On Hold\",\"col\":3}},{\"id\":\"prod6\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Work orders and delays</b></span>\",\"col\":12}},{\"id\":\"prod7\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"PROD Work Orders In Process\",\"col\":3}},{\"id\":\"prod8\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"PROD Work Orders Not Started\",\"col\":3}},{\"id\":\"prod9\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"PROD Overdue Work Orders\",\"col\":3}},{\"id\":\"prod10\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"PROD Late Job Cards\",\"col\":3}},{\"id\":\"prod11\",\"type\":\"custom_block\",\"data\":{\"custom_block_name\":\"PROD Job Journey\",\"col\":12}},{\"id\":\"prod12\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Insights</b></span>\",\"col\":12}},{\"id\":\"prod13\",\"type\":\"chart\",\"data\":{\"chart_name\":\"PROD Running Job Cards by Workstation\",\"col\":6}},{\"id\":\"prod14\",\"type\":\"chart\",\"data\":{\"chart_name\":\"PROD Work Orders Completed per Day\",\"col\":6}},{\"id\":\"prod15\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Shortcuts</b></span>\",\"col\":12}},{\"id\":\"prod16\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Job Card\",\"col\":3}},{\"id\":\"prod17\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Work Order\",\"col\":3}},{\"id\":\"prod18\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Job Ticket\",\"col\":3}},{\"id\":\"prod19\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Material Request\",\"col\":3}},{\"id\":\"prod20\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Workstation\",\"col\":3}},{\"id\":\"prod21\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Reports</b></span>\",\"col\":12}},{\"id\":\"prod22\",\"type\":\"card\",\"data\":{\"card_name\":\"Production Reports\",\"col\":4}}]",
     "doctype": "Workspace",
-    "quick_lists": [],
+    "custom_blocks": [
+      {
+        "name": "a0okre4bh9",
+        "custom_block_name": "PROD Job Journey",
+        "label": "PROD Job Journey",
+        "parent": "Production",
+        "parentfield": "custom_blocks",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Custom Block"
+      }
+    ],
+    "roles": [
+      {
+        "name": "a0ok3uf7uo",
+        "role": "Production Team",
+        "parent": "Production",
+        "parentfield": "roles",
+        "parenttype": "Workspace",
+        "doctype": "Has Role"
+      },
+      {
+        "name": "a0ok0gfg3p",
+        "role": "System Manager",
+        "parent": "Production",
+        "parentfield": "roles",
+        "parenttype": "Workspace",
+        "doctype": "Has Role"
+      }
+    ],
     "charts": [
       {
         "name": "a0okenrn6f",
@@ -619,22 +647,101 @@
         "doctype": "Workspace Chart"
       }
     ],
-    "roles": [
+    "shortcuts": [
       {
-        "name": "a0ok3uf7uo",
-        "role": "Production Team",
+        "name": "a0okg3ig48",
+        "type": "DocType",
+        "link_to": "Job Card",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Job Card",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"status\": \"Work In Progress\", \"docstatus\": 0}",
+        "color": "Green",
+        "format": "{} Running",
         "parent": "Production",
-        "parentfield": "roles",
+        "parentfield": "shortcuts",
         "parenttype": "Workspace",
-        "doctype": "Has Role"
+        "doctype": "Workspace Shortcut"
       },
       {
-        "name": "a0ok0gfg3p",
-        "role": "System Manager",
+        "name": "a0ok2hg04c",
+        "type": "DocType",
+        "link_to": "Work Order",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Work Order",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"status\": \"In Process\", \"docstatus\": 1}",
+        "color": "Blue",
+        "format": "{} In Process",
         "parent": "Production",
-        "parentfield": "roles",
+        "parentfield": "shortcuts",
         "parenttype": "Workspace",
-        "doctype": "Has Role"
+        "doctype": "Workspace Shortcut"
+      },
+      {
+        "name": "a0okv4vn6b",
+        "type": "DocType",
+        "link_to": "Production Plan",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Job Ticket",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"docstatus\": 1, \"status\": [\"in\", [\"Submitted\", \"Not Started\", \"Material Requested\"]]}",
+        "color": "Blue",
+        "format": "{} To Start",
+        "parent": "Production",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
+      },
+      {
+        "name": "a0oka9m2c7",
+        "type": "DocType",
+        "link_to": "Material Request",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Material Request",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"docstatus\": 1, \"status\": [\"in\", [\"Pending\", \"Partially Ordered\"]]}",
+        "color": "Orange",
+        "format": "{} Pending",
+        "parent": "Production",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
+      },
+      {
+        "name": "a0ok1d9dkg",
+        "type": "DocType",
+        "link_to": "Workstation",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Workstation",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"status\": \"Problem\"}",
+        "color": "Red",
+        "format": "{} Problem",
+        "parent": "Production",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
       }
     ],
     "links": [
@@ -739,114 +846,7 @@
         "doctype": "Workspace Link"
       }
     ],
-    "shortcuts": [
-      {
-        "name": "a0okg3ig48",
-        "type": "DocType",
-        "link_to": "Job Card",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Job Card",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"status\": \"Work In Progress\", \"docstatus\": 0}",
-        "color": "Green",
-        "format": "{} Running",
-        "parent": "Production",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      },
-      {
-        "name": "a0ok2hg04c",
-        "type": "DocType",
-        "link_to": "Work Order",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Work Order",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"status\": \"In Process\", \"docstatus\": 1}",
-        "color": "Blue",
-        "format": "{} In Process",
-        "parent": "Production",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      },
-      {
-        "name": "a0okv4vn6b",
-        "type": "DocType",
-        "link_to": "Production Plan",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Job Ticket",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"docstatus\": 1, \"status\": [\"in\", [\"Submitted\", \"Not Started\", \"Material Requested\"]]}",
-        "color": "Blue",
-        "format": "{} To Start",
-        "parent": "Production",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      },
-      {
-        "name": "a0oka9m2c7",
-        "type": "DocType",
-        "link_to": "Material Request",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Material Request",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"docstatus\": 1, \"status\": [\"in\", [\"Pending\", \"Partially Ordered\"]]}",
-        "color": "Orange",
-        "format": "{} Pending",
-        "parent": "Production",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      },
-      {
-        "name": "a0ok1d9dkg",
-        "type": "DocType",
-        "link_to": "Workstation",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Workstation",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"status\": \"Problem\"}",
-        "color": "Red",
-        "format": "{} Problem",
-        "parent": "Production",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      }
-    ],
-    "custom_blocks": [
-      {
-        "name": "a0okre4bh9",
-        "custom_block_name": "PROD Job Journey",
-        "label": "PROD Job Journey",
-        "parent": "Production",
-        "parentfield": "custom_blocks",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Custom Block"
-      }
-    ],
+    "quick_lists": [],
     "number_cards": [
       {
         "name": "a0okejm13h",
@@ -938,36 +938,33 @@
     "is_hidden": 0,
     "content": "[{\"id\": \"cs1\", \"type\": \"custom_block\", \"data\": {\"custom_block_name\": \"CS Welcome\", \"col\": 12}}, {\"id\": \"cs2\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Orders</b></span>\", \"col\": 12}}, {\"id\": \"cs3\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"CS Won Quotations\", \"col\": 3}}, {\"id\": \"cs4\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"CS Overdue Sales Orders\", \"col\": 3}}, {\"id\": \"cs5\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"CS SOs Due This Week\", \"col\": 3}}, {\"id\": \"cs6\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"CS SOs Without Job Ticket\", \"col\": 3}}, {\"id\": \"cs7\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Production handoff and products</b></span>\", \"col\": 12}}, {\"id\": \"cs8\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"CS Job Tickets Pending BOM\", \"col\": 3}}, {\"id\": \"cs9\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"CS Pending Material Requests\", \"col\": 3}}, {\"id\": \"cs10\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"CS Open NPD Requests\", \"col\": 3}}, {\"id\": \"cs11\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"CS Products Missing FG Item\", \"col\": 3}}, {\"id\": \"cs12\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Insights</b></span>\", \"col\": 12}}, {\"id\": \"cs13\", \"type\": \"chart\", \"data\": {\"chart_name\": \"CS Monthly Sales Order Value\", \"col\": 6}}, {\"id\": \"cs14\", \"type\": \"chart\", \"data\": {\"chart_name\": \"CS Open Sales Orders by Status\", \"col\": 6}}, {\"id\": \"cs15\", \"type\": \"chart\", \"data\": {\"chart_name\": \"CS Top Customers This Year\", \"col\": 6}}, {\"id\": \"cs16\", \"type\": \"chart\", \"data\": {\"chart_name\": \"CS Job Tickets by Stage\", \"col\": 6}}, {\"id\": \"cs17\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Shortcuts</b></span>\", \"col\": 12}}, {\"id\": \"cs18\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Sales Order\", \"col\": 3}}, {\"id\": \"cs19\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Savinda Quotation\", \"col\": 3}}, {\"id\": \"cs20\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Material Request\", \"col\": 3}}, {\"id\": \"cs21\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Job Ticket\", \"col\": 3}}, {\"id\": \"cs22\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"NPD Request\", \"col\": 3}}, {\"id\": \"cs23\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Product Library\", \"col\": 3}}, {\"id\": \"cs24\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Sales Order Analysis\", \"col\": 3}}, {\"id\": \"cs25\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Customer\", \"col\": 3}}, {\"id\": \"cs26\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Quick lists</b></span>\", \"col\": 12}}, {\"id\": \"cs27\", \"type\": \"quick_list\", \"data\": {\"quick_list_name\": \"Finished Goods\", \"col\": 4}}, {\"id\": \"cs28\", \"type\": \"quick_list\", \"data\": {\"quick_list_name\": \"Won Quotations\", \"col\": 4}}, {\"id\": \"cs29\", \"type\": \"quick_list\", \"data\": {\"quick_list_name\": \"Open Sales Orders\", \"col\": 4}}, {\"id\": \"cs30\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Links</b></span>\", \"col\": 12}}, {\"id\": \"cs31\", \"type\": \"card\", \"data\": {\"card_name\": \"Selling\", \"col\": 3}}, {\"id\": \"cs32\", \"type\": \"card\", \"data\": {\"card_name\": \"Products and Pricing\", \"col\": 3}}, {\"id\": \"cs33\", \"type\": \"card\", \"data\": {\"card_name\": \"Production Handoff\", \"col\": 3}}, {\"id\": \"cs34\", \"type\": \"card\", \"data\": {\"card_name\": \"Reports\", \"col\": 3}}]",
     "doctype": "Workspace",
-    "quick_lists": [
+    "custom_blocks": [
       {
-        "name": "dnl8lfksgh",
-        "document_type": "Item",
-        "label": "Finished Goods",
-        "quick_list_filter": "[[\"Item\", \"item_group\", \"descendants of (inclusive)\", \"Finished Goods\", false], [\"Item\", \"disabled\", \"=\", 0, false]]",
+        "name": "dnl8jr2kql",
+        "custom_block_name": "CS Welcome",
+        "label": "CS Welcome",
         "parent": "Customer Service",
-        "parentfield": "quick_lists",
+        "parentfield": "custom_blocks",
         "parenttype": "Workspace",
-        "doctype": "Workspace Quick List"
+        "doctype": "Workspace Custom Block"
+      }
+    ],
+    "roles": [
+      {
+        "name": "dnl8umpfun",
+        "role": "CS Team",
+        "parent": "Customer Service",
+        "parentfield": "roles",
+        "parenttype": "Workspace",
+        "doctype": "Has Role"
       },
       {
-        "name": "dnl8m8ilps",
-        "document_type": "Savinda Quotation",
-        "label": "Won Quotations",
-        "quick_list_filter": "[[\"Savinda Quotation\", \"status\", \"=\", \"Won\", false]]",
+        "name": "dnl8k1ps3m",
+        "role": "System Manager",
         "parent": "Customer Service",
-        "parentfield": "quick_lists",
+        "parentfield": "roles",
         "parenttype": "Workspace",
-        "doctype": "Workspace Quick List"
-      },
-      {
-        "name": "dnl8k4lbk5",
-        "document_type": "Sales Order",
-        "label": "Open Sales Orders",
-        "quick_list_filter": "[[\"Sales Order\", \"docstatus\", \"=\", 1, false], [\"Sales Order\", \"status\", \"in\", [\"To Deliver and Bill\", \"To Deliver\"], false]]",
-        "parent": "Customer Service",
-        "parentfield": "quick_lists",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Quick List"
+        "doctype": "Has Role"
       }
     ],
     "charts": [
@@ -1008,22 +1005,158 @@
         "doctype": "Workspace Chart"
       }
     ],
-    "roles": [
+    "shortcuts": [
       {
-        "name": "dnl8umpfun",
-        "role": "CS Team",
+        "name": "dnl8mfr96c",
+        "type": "DocType",
+        "link_to": "Sales Order",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Sales Order",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"status\": [\"in\", [\"To Deliver and Bill\", \"To Deliver\"]]}",
+        "color": "Blue",
+        "format": "{} To Deliver",
         "parent": "Customer Service",
-        "parentfield": "roles",
+        "parentfield": "shortcuts",
         "parenttype": "Workspace",
-        "doctype": "Has Role"
+        "doctype": "Workspace Shortcut"
       },
       {
-        "name": "dnl8k1ps3m",
-        "role": "System Manager",
+        "name": "dnl85vpqml",
+        "type": "DocType",
+        "link_to": "Savinda Quotation",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Savinda Quotation",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"status\": \"Won\"}",
+        "color": "Orange",
+        "format": "{} Won",
         "parent": "Customer Service",
-        "parentfield": "roles",
+        "parentfield": "shortcuts",
         "parenttype": "Workspace",
-        "doctype": "Has Role"
+        "doctype": "Workspace Shortcut"
+      },
+      {
+        "name": "dnl8cd8gl8",
+        "type": "DocType",
+        "link_to": "Material Request",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Material Request",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"docstatus\": 1, \"status\": [\"in\", [\"Pending\", \"Partially Ordered\"]]}",
+        "color": "Orange",
+        "format": "{} Pending",
+        "parent": "Customer Service",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
+      },
+      {
+        "name": "dnl8q00d41",
+        "type": "DocType",
+        "link_to": "Production Plan",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Job Ticket",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"docstatus\": 0}",
+        "color": "Grey",
+        "format": "{} Draft",
+        "parent": "Customer Service",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
+      },
+      {
+        "name": "dnl83fvok4",
+        "type": "DocType",
+        "link_to": "NPD Request",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "NPD Request",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"docstatus\": [\"<\", 2], \"production_plan\": [\"is\", \"not set\"]}",
+        "color": "Purple",
+        "format": "{} Open",
+        "parent": "Customer Service",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
+      },
+      {
+        "name": "dnl8rrel06",
+        "type": "DocType",
+        "link_to": "Product Library",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Product Library",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": "{\"approval_status\": \"Returned for Correction\"}",
+        "color": "Red",
+        "format": "{} Returned",
+        "parent": "Customer Service",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
+      },
+      {
+        "name": "dnl8m7mn95",
+        "type": "Report",
+        "link_to": "Sales Order Analysis",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Sales Order Analysis",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": "Sales Order",
+        "stats_filter": null,
+        "color": null,
+        "format": null,
+        "parent": "Customer Service",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
+      },
+      {
+        "name": "dnl89uhb33",
+        "type": "DocType",
+        "link_to": "Customer",
+        "url": null,
+        "doc_view": "List",
+        "kanban_board": null,
+        "label": "Customer",
+        "icon": null,
+        "restrict_to_domain": null,
+        "report_ref_doctype": null,
+        "stats_filter": null,
+        "color": "Grey",
+        "format": null,
+        "parent": "Customer Service",
+        "parentfield": "shortcuts",
+        "parenttype": "Workspace",
+        "doctype": "Workspace Shortcut"
       }
     ],
     "links": [
@@ -1428,169 +1561,36 @@
         "doctype": "Workspace Link"
       }
     ],
-    "shortcuts": [
+    "quick_lists": [
       {
-        "name": "dnl8mfr96c",
-        "type": "DocType",
-        "link_to": "Sales Order",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Sales Order",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"status\": [\"in\", [\"To Deliver and Bill\", \"To Deliver\"]]}",
-        "color": "Blue",
-        "format": "{} To Deliver",
+        "name": "dnl8lfksgh",
+        "document_type": "Item",
+        "label": "Finished Goods",
+        "quick_list_filter": "[[\"Item\", \"item_group\", \"descendants of (inclusive)\", \"Finished Goods\", false], [\"Item\", \"disabled\", \"=\", 0, false]]",
         "parent": "Customer Service",
-        "parentfield": "shortcuts",
+        "parentfield": "quick_lists",
         "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
+        "doctype": "Workspace Quick List"
       },
       {
-        "name": "dnl85vpqml",
-        "type": "DocType",
-        "link_to": "Savinda Quotation",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Savinda Quotation",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"status\": \"Won\"}",
-        "color": "Orange",
-        "format": "{} Won",
+        "name": "dnl8m8ilps",
+        "document_type": "Savinda Quotation",
+        "label": "Won Quotations",
+        "quick_list_filter": "[[\"Savinda Quotation\", \"status\", \"=\", \"Won\", false]]",
         "parent": "Customer Service",
-        "parentfield": "shortcuts",
+        "parentfield": "quick_lists",
         "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
+        "doctype": "Workspace Quick List"
       },
       {
-        "name": "dnl8cd8gl8",
-        "type": "DocType",
-        "link_to": "Material Request",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Material Request",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"docstatus\": 1, \"status\": [\"in\", [\"Pending\", \"Partially Ordered\"]]}",
-        "color": "Orange",
-        "format": "{} Pending",
+        "name": "dnl8k4lbk5",
+        "document_type": "Sales Order",
+        "label": "Open Sales Orders",
+        "quick_list_filter": "[[\"Sales Order\", \"docstatus\", \"=\", 1, false], [\"Sales Order\", \"status\", \"in\", [\"To Deliver and Bill\", \"To Deliver\"], false]]",
         "parent": "Customer Service",
-        "parentfield": "shortcuts",
+        "parentfield": "quick_lists",
         "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      },
-      {
-        "name": "dnl8q00d41",
-        "type": "DocType",
-        "link_to": "Production Plan",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Job Ticket",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"docstatus\": 0}",
-        "color": "Grey",
-        "format": "{} Draft",
-        "parent": "Customer Service",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      },
-      {
-        "name": "dnl83fvok4",
-        "type": "DocType",
-        "link_to": "NPD Request",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "NPD Request",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"docstatus\": [\"<\", 2], \"production_plan\": [\"is\", \"not set\"]}",
-        "color": "Purple",
-        "format": "{} Open",
-        "parent": "Customer Service",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      },
-      {
-        "name": "dnl8rrel06",
-        "type": "DocType",
-        "link_to": "Product Library",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Product Library",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": "{\"approval_status\": \"Returned for Correction\"}",
-        "color": "Red",
-        "format": "{} Returned",
-        "parent": "Customer Service",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      },
-      {
-        "name": "dnl8m7mn95",
-        "type": "Report",
-        "link_to": "Sales Order Analysis",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Sales Order Analysis",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": "Sales Order",
-        "stats_filter": null,
-        "color": null,
-        "format": null,
-        "parent": "Customer Service",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      },
-      {
-        "name": "dnl89uhb33",
-        "type": "DocType",
-        "link_to": "Customer",
-        "url": null,
-        "doc_view": "List",
-        "kanban_board": null,
-        "label": "Customer",
-        "icon": null,
-        "restrict_to_domain": null,
-        "report_ref_doctype": null,
-        "stats_filter": null,
-        "color": "Grey",
-        "format": null,
-        "parent": "Customer Service",
-        "parentfield": "shortcuts",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Shortcut"
-      }
-    ],
-    "custom_blocks": [
-      {
-        "name": "dnl8jr2kql",
-        "custom_block_name": "CS Welcome",
-        "label": "CS Welcome",
-        "parent": "Customer Service",
-        "parentfield": "custom_blocks",
-        "parenttype": "Workspace",
-        "doctype": "Workspace Custom Block"
+        "doctype": "Workspace Quick List"
       }
     ],
     "number_cards": [

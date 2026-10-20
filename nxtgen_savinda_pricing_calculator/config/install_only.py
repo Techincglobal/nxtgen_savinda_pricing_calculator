@@ -53,8 +53,10 @@ def export_from_site():
 	"""
 	masters, missing, source_documents = _export_doctypes(MASTER_DOCTYPES)
 	item_groups, items, missing_items = _export_calculation_items(source_documents)
-	masters = item_groups + items + masters
+	dependencies, missing_dependencies = _export_standard_dependencies(source_documents, items)
+	masters = dependencies + item_groups + items + masters
 	missing.extend(missing_items)
+	missing.extend(missing_dependencies)
 	ui = []
 	ui.extend(_export_named("Role", ROLES, missing))
 	ui.extend(_export_named("Workflow", WORKFLOWS, missing))
@@ -120,7 +122,7 @@ def _export_calculation_items(source_documents):
 			missing.append("Item: " + name)
 			continue
 		document = frappe.get_doc("Item", name).as_dict()
-		items.append(_clean(document))
+		items.append(_portable_item(document))
 		if document.get("item_group"):
 			groups.update(_item_group_ancestors(document["item_group"]))
 
@@ -129,6 +131,67 @@ def _export_calculation_items(source_documents):
 		for name in frappe.get_all("Item Group", filters={"name": ["in", groups]}, pluck="name", order_by="lft asc", limit_page_length=0):
 			item_groups.append(_document("Item Group", name))
 	return item_groups, items, missing
+
+
+def _export_standard_dependencies(source_documents, items):
+	"""Export ERPNext masters referenced by calculator setup records.
+
+	Machines reference Workstations; Specs can reference Operations and Quality
+	Inspection Templates; calculator Items require their UOM. These are setup
+	masters, not operational transactions.
+	"""
+	links = {
+		"UOM": set(),
+		"Workstation": set(),
+		"Operation": set(),
+		"Quality Inspection Template": set(),
+	}
+	for document in source_documents:
+		_collect_supported_links(document, links)
+	for item in items:
+		if item.get("stock_uom"):
+			links["UOM"].add(item["stock_uom"])
+		for row in item.get("uoms", []):
+			if row.get("uom"):
+				links["UOM"].add(row["uom"])
+
+	records, missing = [], []
+	# Workstation Type has to precede the Workstation that may reference it.
+	workstation_types = set()
+	for name in links["Workstation"]:
+		if frappe.db.exists("Workstation", name):
+			workstation_types.add(frappe.db.get_value("Workstation", name, "workstation_type"))
+	for doctype, names in (
+		("UOM", links["UOM"]),
+		("Workstation Type", workstation_types),
+		("Workstation", links["Workstation"]),
+		("Operation", links["Operation"]),
+		("Quality Inspection Template", links["Quality Inspection Template"]),
+	):
+		for name in sorted(filter(None, names)):
+			if frappe.db.exists(doctype, name):
+				records.append(_document(doctype, name))
+			else:
+				missing.append(doctype + ": " + name)
+	return records, missing
+
+
+def _portable_item(document):
+	"""Keep only Item fields needed by the pricing engine.
+
+	The source Item records contain local approval workflow and department links.
+	Those are unrelated to calculator rates and can make a clean target install
+	fail, so they are intentionally not transferred.
+	"""
+	fields = (
+		"name", "item_code", "item_name", "item_group", "stock_uom", "description",
+		"disabled", "is_stock_item", "is_sales_item", "is_purchase_item",
+		"include_item_in_manufacturing", "valuation_rate", "standard_rate",
+		"last_purchase_rate", "allow_alternative_item", "uoms",
+	)
+	item = {field: document.get(field) for field in fields if field in document}
+	item["doctype"] = "Item"
+	return _clean(item)
 
 
 def _collect_item_links(document, item_names):
@@ -142,6 +205,19 @@ def _collect_item_links(document, item_names):
 		elif field.fieldtype in ("Table", "Table MultiSelect") and isinstance(value, list):
 			for child in value:
 				_collect_item_links(child, item_names)
+
+
+def _collect_supported_links(document, links):
+	if not isinstance(document, dict) or not document.get("doctype"):
+		return
+	meta = frappe.get_meta(document["doctype"])
+	for field in meta.fields:
+		value = document.get(field.fieldname)
+		if field.fieldtype == "Link" and field.options in links and value:
+			links[field.options].add(value)
+		elif field.fieldtype in ("Table", "Table MultiSelect") and isinstance(value, list):
+			for child in value:
+				_collect_supported_links(child, links)
 
 
 def _item_group_ancestors(name):
