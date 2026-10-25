@@ -4,6 +4,7 @@
 # the user in a popup, then written as native ERPNext Pricing Rules so a Sales Order prices each
 # line automatically by qty — instead of copying the rate from the Savinda Quotation.
 import json
+import math
 
 import frappe
 from frappe.utils import flt, getdate, nowdate
@@ -69,8 +70,8 @@ def get_qty_price_tiers(fg_item):
 			continue
 		rows.append({
 			"qty": flt(q),
-			"rate": round(flt(r.get("sell_unit")), 2),
-			"unit_cost": round(flt(r.get("unit_cost")), 2),
+			"rate": flt(r.get("sell_unit")),
+			"unit_cost": flt(r.get("unit_cost")),
 		})
 	rows.sort(key=lambda t: t["qty"])
 	n = len(rows)
@@ -107,6 +108,13 @@ def create_qty_pricing_rules(fg_item, tiers, customer=None, currency=None,
 		frappe.throw("FG item not found: %s" % fg_item)
 	from nxtgen_savinda_pricing_calculator.api.fg_approval import require_pricing_reviewer
 	require_pricing_reviewer(fg_item)
+	if currency and not frappe.db.exists("Currency", currency):
+		frappe.throw("Select a valid Pricing Rule Currency.")
+	if not isinstance(tiers, list) or not tiers:
+		frappe.throw("Enter at least one pricing tier.")
+	for tier in tiers:
+		if not isinstance(tier, dict) or not math.isfinite(flt(tier.get("rate"))) or flt(tier.get("rate")) <= 0:
+			frappe.throw("Every pricing tier must have a positive, finite per-item rate.")
 	cost_item = cost_item or frappe.db.get_value("Item", fg_item, "custom_cost_item") or ""
 
 	priority = max(1, min(20, int(flt(priority) or 10)))
@@ -200,7 +208,20 @@ def _active_auto_rule(item_code, qty, customer=None, currency=None, transaction_
 		if flt(qty) < flt(rule.min_qty) or (flt(rule.max_qty) and flt(qty) > flt(rule.max_qty)):
 			continue
 		matched.append(rule)
-	return max(matched, key=lambda r: (int(flt(r.priority)), str(r.valid_from or ""), r.name)) if matched else None
+	# Explicit transaction-currency rules win over legacy currency-unspecified rules.
+	return max(matched, key=lambda r: (
+		bool(currency and r.currency == currency), int(flt(r.priority)), str(r.valid_from or ""), r.name
+	)) if matched else None
+
+
+def _sales_order_base_currency(doc):
+	"""The SO exchange rate is company base per transaction-currency unit."""
+	if doc.get("company"):
+		currency = frappe.db.get_value("Company", doc.company, "default_currency")
+		if currency:
+			return currency
+	from nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.doctype.savinda_quotation.savinda_quotation import _company_currency
+	return _company_currency()
 
 
 def enforce_sales_order_pricing(doc, method=None):
@@ -209,15 +230,30 @@ def enforce_sales_order_pricing(doc, method=None):
 	This intentionally leaves ordinary ERPNext items alone. A costing FG without a valid rule,
 	or outside every configured quantity range, is explicitly priced at zero rather than falling
 	back to an Item Price, quotation value, or a previous rate.
+	Prefer a transaction-currency rule; otherwise convert a matching company-base rule
+	(LKR on Savinda sites). Never reuse a rate from an unrelated foreign currency.
 	"""
 	changed = False
-	conversion_rate = flt(doc.get("conversion_rate")) or 1
+	base_currency = None
 	for row in doc.get("items") or []:
 		if not row.item_code or not (frappe.db.get_value("Item", row.item_code, "custom_cost_item") or frappe.db.get_value("Item", row.item_code, "custom_costing_bundle")):
 			continue
+		if base_currency is None:
+			base_currency = _sales_order_base_currency(doc)
+		currency = doc.get("currency") or base_currency
+		conversion_rate = flt(doc.get("conversion_rate")) if currency != base_currency else 1
+		if not math.isfinite(conversion_rate) or conversion_rate <= 0:
+			frappe.throw("Set a positive Sales Order exchange rate ({0} per 1 {1}) before fetching FG pricing.".format(base_currency, currency))
 		rule = _active_auto_rule(
-			row.item_code, row.qty, doc.get("customer"), doc.get("currency"), doc.get("transaction_date"))
+			row.item_code, row.qty, doc.get("customer"), currency, doc.get("transaction_date"))
+		convert_base_rule = False
+		if not rule and currency != base_currency:
+			rule = _active_auto_rule(
+				row.item_code, row.qty, doc.get("customer"), base_currency, doc.get("transaction_date"))
+			convert_base_rule = bool(rule)
 		rate = flt(rule.rate) if rule else 0
+		if convert_base_rule:
+			rate /= conversion_rate
 		row.rate = row.price_list_rate = row.net_rate = rate
 		row.amount = row.net_amount = round(flt(row.qty) * rate, 2)
 		row.base_rate = row.base_price_list_rate = row.base_net_rate = rate * conversion_rate
