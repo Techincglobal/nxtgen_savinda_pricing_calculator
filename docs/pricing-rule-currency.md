@@ -28,21 +28,25 @@ preview is not overridden by this change; authoritative custom pricing is on sav
 ## Create currency-specific rules from FG / Product Library
 
 Open **Manage Pricing Rules** in the Product Library (or the available FG pricing
-action). The shared popup now includes **Pricing Rule Currency**, **Exchange Rate**
-and **Fetch Exchange Rate**.
+action). The pricing table itself now includes editable **Currency** and
+**Exchange Rate** columns. **Fetch Missing Exchange Rates** fills pending rows.
 
-1. Select USD, EUR or another Currency master record.
+1. Select USD, EUR or another Currency master record in each pricing row.
 2. Enter company-base currency per one selected currency, for example **300 LKR
-   per USD**, or fetch the rate for Valid From (today when that date is blank).
+   per USD**, in that row's Exchange Rate column, or fetch missing rates for Valid
+   From (today when that date is blank).
 3. The popup converts the displayed per-item rates and unit costs. You may edit
    the selling rates and add quantity tiers. Conversion preserves nine decimal
    places rather than rounding small FX rates to zero at two decimals.
 4. Review customer, quantities, validity and priority, then create the rules.
 
-Changing currency requires a new positive exchange rate before creation is enabled.
-Changing the exchange rate converts the currently entered prices; it does not
+Different rows may use different currencies, including LKR and USD for the same
+FG. They are saved as separate FG/currency rule groups, not under one popup-wide
+currency. Changing a row's currency requires a new positive exchange rate before
+creation is enabled. Changing that exchange rate converts only that row's entered
+prices; it does not
 silently reload or discard manual tier edits. Outdated exchange lookup responses
-cannot overwrite a newer currency selection or manual exchange-rate entry.
+cannot overwrite a newer currency selection or manual exchange-rate entry in the row.
 
 The saved Pricing Rule rate is **per single item in the selected currency**, not
 per 1,000. For example, enter USD 0.081846667, not the quotation's printed USD

@@ -1,202 +1,199 @@
-// Qty-pricing popup shown after FG creation. Pre-fills qty tiers + rates from the costing,
-// lets the user edit ranges/rates, then writes native ERPNext Pricing Rules so a Sales Order
-// prices each line automatically by qty (instead of copying the rate from the quotation).
+// Shared FG / Product Library quantity-pricing editor. Every tier has its own currency.
 window.nxtgen_pricing = window.nxtgen_pricing || {};
 
-// frm      — Savinda Quotation form (customer / currency / conversion_rate / valid_till)
-// fg_items — [{item_code, item_name, cost_item}] of the just-created FGs
-// on_done  — called after rules are created or skipped
 nxtgen_pricing.showForFGs = function (frm, fg_items, on_done) {
 	on_done = on_done || function () {};
 	if (!fg_items || !fg_items.length) { on_done(); return; }
-
-	// The dialog is also opened from an FG Item after a quotation is complete.
-	// It therefore accepts either a Frappe form or a small form-like context.
-	var source_doc = (frm && frm.doc) || {};
-	var base_currency = (frappe.boot && frappe.boot.sysdefaults && frappe.boot.sysdefaults.currency) || "LKR";
-	var currency = source_doc.currency || base_currency;
-	var crate = currency === base_currency ? 1 : (parseFloat(source_doc.conversion_rate) || 0);
-	var customer = source_doc.customer || "";
-	var valid_from = frappe.datetime.get_today();
-	var valid_upto = source_doc.valid_till || null;
+	var source = (frm && frm.doc) || {};
+	var base = (frappe.boot && frappe.boot.sysdefaults && frappe.boot.sysdefaults.currency) || "LKR";
+	var initial_currency = source.currency || base;
+	var initial_exchange = initial_currency === base ? 1 : (parseFloat(source.conversion_rate) || 0);
 	var API = "nxtgen_savinda_pricing_calculator.api.pricing_rule.";
-
-	function rounded(v) { return Math.round(v * 1000000000) / 1000000000; }
-	function conv(v) { return rounded((parseFloat(v) || 0) / (crate > 0 ? crate : 1)); }
-
-	var loaded = [];
-	(function fetch(i) {
-		if (i >= fg_items.length) { build(); return; }
-		frappe.call({
-			method: API + "get_qty_price_tiers",
-			args: { fg_item: fg_items[i].item_code },
-			callback: function (r) {
-				var m = r.message || {};
-				loaded.push({
-					fg_item: fg_items[i].item_code,
-					item_name: fg_items[i].item_name || m.item_name || fg_items[i].item_code,
-					cost_item: m.cost_item || fg_items[i].cost_item || "",
-					tiers: (m.tiers || []).map(function (t) {
-						return { min_qty: t.min_qty, max_qty: t.max_qty, rate: conv(t.rate), unit_cost: conv(t.unit_cost), currency: crate > 0 ? currency : base_currency };
-					}),
-				});
-				fetch(i + 1);
-			},
-			error: function () { loaded.push({ fg_item: fg_items[i].item_code, item_name: fg_items[i].item_name, cost_item: fg_items[i].cost_item || "", tiers: [] }); fetch(i + 1); },
+	var loaded = [], requests = new WeakMap(), d, closed = false;
+	function rounded(value) { return Math.round(value * 1000000000) / 1000000000; }
+	function exchange(row) { return row.currency === base ? 1 : parseFloat(row.exchange_rate); }
+	function valid_exchange(row) { return !!row.currency && Number.isFinite(exchange(row)) && exchange(row) > 0; }
+	function ready(row) {
+		return valid_exchange(row) && row.applied_currency === row.currency &&
+			parseFloat(row.applied_exchange_rate) === exchange(row);
+	}
+	function invalidate_request(row) { requests.set(row, (requests.get(row) || 0) + 1); }
+	function convert(row) {
+		if (!valid_exchange(row)) return;
+		var old_rate = parseFloat(row.applied_exchange_rate) || 1;
+		var new_rate = exchange(row);
+		row.rate = rounded((parseFloat(row.rate) || 0) * old_rate / new_rate);
+		row.unit_cost = rounded((parseFloat(row.unit_cost) || 0) * old_rate / new_rate);
+		row.exchange_rate = new_rate;
+		row.applied_currency = row.currency;
+		row.applied_exchange_rate = new_rate;
+	}
+	function rows(idx) { return d.get_value("tiers_" + idx) || []; }
+	function refresh() {
+		if (!d) return;
+		var can_create = true;
+		loaded.forEach(function (fg, idx) {
+			var data = rows(idx);
+			if (!data.length || data.some(function (row) {
+				return !ready(row) || !Number.isFinite(parseFloat(row.rate)) || parseFloat(row.rate) <= 0;
+			})) can_create = false;
+			var grid = d.fields_dict["tiers_" + idx].grid;
+			grid.refresh();
+			(grid.grid_rows || []).forEach(function (grid_row) {
+				if (grid_row.toggle_editable && grid_row.doc) grid_row.toggle_editable("rate", ready(grid_row.doc));
+			});
 		});
-	})(0);
-
+		d.get_primary_btn().prop("disabled", !can_create);
+	}
+	function row_currency_changed() {
+		var row = this.doc;
+		if (!d || !row) return;
+		invalidate_request(row);
+		row.exchange_rate = row.currency === base ? 1 : 0;
+		convert(row);
+		refresh();
+	}
+	function row_exchange_changed() {
+		var row = this.doc;
+		if (!d || !row) return;
+		invalidate_request(row);
+		convert(row);
+		refresh();
+	}
+	function fetch_missing_rates() {
+		loaded.forEach(function (fg, idx) {
+			rows(idx).forEach(function (row) {
+				// Keep rates users already entered. Fetch only rows awaiting conversion.
+				if (!row.currency || row.currency === base || ready(row)) return;
+				invalidate_request(row);
+				var token = requests.get(row), currency = row.currency;
+				frappe.call({method: "erpnext.setup.utils.get_exchange_rate", args: {
+					from_currency: currency, to_currency: base,
+					transaction_date: d.get_value("valid_from") || frappe.datetime.get_today(),
+				}, callback: function (r) {
+					if (closed || requests.get(row) !== token || row.currency !== currency || rows(idx).indexOf(row) < 0) return;
+					var value = parseFloat(r.message);
+					if (Number.isFinite(value) && value > 0) {
+						row.exchange_rate = value;
+						convert(row); refresh();
+					} else frappe.msgprint("No exchange rate found. Enter " + base + " per 1 " + currency + " in the pricing row.");
+				}});
+			});
+		});
+	}
 	function build() {
-		var usable = loaded.filter(function (x) { return x.tiers.length; });
-		if (!usable.length) {
-			frappe.show_alert({ message: "No qty tiers found to price (no cost breakdown / qty breaks).", indicator: "orange" });
-			on_done();
-			return;
+		loaded = loaded.filter(function (fg) { return fg.tiers.length; });
+		if (!loaded.length) {
+			frappe.show_alert({message: "No quantity tiers found to price.", indicator: "orange"});
+			on_done(); return;
 		}
-		var applied_currency = crate > 0 ? currency : base_currency;
-		var applied_rate = crate > 0 ? crate : 1;
-		var cur_lbl = applied_currency;
-		var fx_request = 0;
-		function apply_currency() {
-			if (!d) return;
-			var selected = d.get_value("rule_currency");
-			var exchange = selected === base_currency ? 1 : parseFloat(d.get_value("exchange_rate"));
-			var valid = !!selected && Number.isFinite(exchange) && exchange > 0;
-			d.get_primary_btn().prop("disabled", !valid);
-			d.set_df_property("exchange_rate", "read_only", selected === base_currency);
-			d.set_df_property("exchange_rate", "description", base_currency + " per 1 " + (selected || "selected currency") + ". Changing this converts the currently entered tier rates.");
-			usable.forEach(function (x, idx) {
-				var fieldname = "tiers_" + idx;
-				d.set_df_property(fieldname, "read_only", !valid);
-				if (!valid) return;
-				(d.get_value(fieldname) || []).forEach(function (row) {
-					row.rate = rounded((parseFloat(row.rate) || 0) * applied_rate / exchange);
-					row.unit_cost = rounded((parseFloat(row.unit_cost) || 0) * applied_rate / exchange);
-					row.currency = selected;
-				});
-				var grid = d.fields_dict[fieldname].grid;
-				grid.update_docfield_property("rate", "label", "Rate per Item (" + selected + ")");
-				grid.update_docfield_property("unit_cost", "label", "Unit Cost (" + selected + ")");
-				grid.refresh();
-			});
-			if (valid) { applied_currency = selected; applied_rate = exchange; }
-			d.fields_dict.currency_notice.$wrapper.html(valid
-				? "<p>Rates below are in <b>" + frappe.utils.escape_html(selected) + " per single item</b> — not per 1,000 items.</p>"
-				: "<p class='text-warning'>Select a currency and enter a positive exchange rate to convert the prices and continue.</p>");
-		}
-		function currency_changed() {
-			if (!d) return;
-			fx_request++;
-			var selected = d.get_value("rule_currency");
-			d.set_value("exchange_rate", selected === base_currency ? 1 : 0);
-			apply_currency();
-		}
-		function fetch_exchange_rate() {
-			var selected = d.get_value("rule_currency");
-			if (!selected) return;
-			if (selected === base_currency) { d.set_value("exchange_rate", 1); apply_currency(); return; }
-			var request = ++fx_request;
-			frappe.call({method: "erpnext.setup.utils.get_exchange_rate", args: {
-				from_currency: selected, to_currency: base_currency,
-				transaction_date: d.get_value("valid_from") || frappe.datetime.get_today(),
-			}, callback: function (r) {
-				if (request !== fx_request || selected !== d.get_value("rule_currency")) return;
-				if (Number.isFinite(parseFloat(r.message)) && parseFloat(r.message) > 0) {
-					d.set_value("exchange_rate", parseFloat(r.message));
-				} else frappe.msgprint("No exchange rate found. Enter " + base_currency + " per 1 " + selected + " manually.");
-			}});
-		}
-		var fields = [{
-			fieldtype: "HTML",
-			options: "<div style='padding:6px 10px;background:#f0f4ff;border-radius:4px;font-size:12px;color:#1a3a5c'>"
-				+ "Select the rule currency, then set quantity ranges and the selling rate <b>per single item</b> for each product. "
-				+ "These are saved as <b>Pricing Rules</b>, so a Sales Order prices each line automatically by quantity. "
-				+ "Use <b>Add Row</b> for a pricing-only new quantity tier; create a new calculation qty break first when its production cost must also be recalculated."
-				+ (customer ? " Scoped to customer <b>" + frappe.utils.escape_html(customer) + "</b>." : " (No customer — rules apply to any customer.)")
-				+ "<br><span style='color:#8a6d1f'>Max Qty = 0 means no upper limit. Ranges should not overlap. "
-				+ "A higher priority wins when dated rules overlap (use 20 for a short temporary override).</span></div>",
-		}];
-		fields.push(
-			{ fieldtype: "Section Break", label: "Pricing Currency" },
-			{ fieldtype: "Link", fieldname: "rule_currency", label: "Pricing Rule Currency", options: "Currency", reqd: 1,
-				default: currency, onchange: currency_changed },
-			{ fieldtype: "Column Break" },
-			{ fieldtype: "Float", fieldname: "exchange_rate", label: "Exchange Rate", precision: 9, reqd: 1,
-				default: crate || 0, onchange: function () { if (d) { fx_request++; apply_currency(); } } },
-			{ fieldtype: "Button", fieldname: "fetch_exchange_rate", label: "Fetch Exchange Rate", click: fetch_exchange_rate },
-			{ fieldtype: "Section Break" },
-			{ fieldtype: "HTML", fieldname: "currency_notice" },
-			{ fieldtype: "Section Break", label: "Rule Validity & Override" },
-			{ fieldtype: "Date", fieldname: "valid_from", label: "Valid From", default: valid_from },
-			{ fieldtype: "Column Break" },
-			{ fieldtype: "Date", fieldname: "valid_upto", label: "Valid Until", default: valid_upto,
-				description: "Leave blank for no expiry." },
-			{ fieldtype: "Column Break" },
-			{ fieldtype: "Int", fieldname: "priority", label: "Priority (1–20)", default: 10,
-				description: "Higher priority overrides another matching rule. Use 20 for a temporary price." }
-		);
-		usable.forEach(function (x, idx) {
-			fields.push({ fieldtype: "Section Break", label: x.item_name + "  (" + x.fg_item + ")" });
-			fields.push({
-				fieldtype: "Table", fieldname: "tiers_" + idx,
-				cannot_add_rows: false, in_place_edit: true, data: x.tiers,
+		var fields = [
+			{fieldtype: "HTML", options: "<p>Select <b>Currency</b> directly in each pricing row. " +
+				"Enter the exchange rate as <b>" + frappe.utils.escape_html(base) + " per 1 selected currency</b>, or fetch missing rates. " +
+				"Rates are <b>per single item</b>, not per 1,000. Changing a row's currency requires a new exchange rate before its rate can be edited. " +
+				(customer_text()) + "</p>"},
+			{fieldtype: "Button", fieldname: "fetch_exchange_rates", label: "Fetch Missing Exchange Rates", click: fetch_missing_rates},
+			{fieldtype: "Section Break", label: "Rule Validity & Override"},
+			{fieldtype: "Date", fieldname: "valid_from", label: "Valid From", default: frappe.datetime.get_today()},
+			{fieldtype: "Column Break"},
+			{fieldtype: "Date", fieldname: "valid_upto", label: "Valid Until", default: source.valid_till || null,
+				description: "Leave blank for no expiry."},
+			{fieldtype: "Column Break"},
+			{fieldtype: "Int", fieldname: "priority", label: "Priority (1–20)", default: 10,
+				description: "Higher priority overrides matching dated rules. Max Qty = 0 means no upper limit."},
+		];
+		loaded.forEach(function (fg, idx) {
+			fields.push({fieldtype: "Section Break", label: fg.item_name + " (" + fg.fg_item + ")"});
+			fields.push({fieldtype: "Table", fieldname: "tiers_" + idx, data: fg.tiers,
+				cannot_add_rows: false, in_place_edit: true,
+				on_add_row: function () {
+					rows(idx).forEach(function (row) {
+						if (!row.applied_currency) {
+							row.currency = row.currency || initial_currency;
+							row.exchange_rate = row.currency === base ? 1 : initial_exchange;
+							row.applied_currency = row.exchange_rate > 0 ? row.currency : base;
+							row.applied_exchange_rate = row.exchange_rate > 0 ? row.exchange_rate : 1;
+						}
+					});
+					refresh();
+				},
 				fields: [
-					{ fieldtype: "Float", fieldname: "min_qty", label: "Min Qty", in_list_view: 1, columns: 2, reqd: 1 },
-					{ fieldtype: "Float", fieldname: "max_qty", label: "Max Qty (0=∞)", in_list_view: 1, columns: 2 },
-					{ fieldtype: "Link", fieldname: "currency", options: "Currency", hidden: 1 },
-					{ fieldtype: "Currency", fieldname: "rate", label: "Rate per Item (" + cur_lbl + ")", options: "currency", precision: 9, in_list_view: 1, columns: 3, reqd: 1 },
-					{ fieldtype: "Currency", fieldname: "unit_cost", label: "Unit Cost", options: "currency", precision: 9, in_list_view: 1, columns: 2, read_only: 1 },
-				],
-			});
+					{fieldtype: "Float", fieldname: "min_qty", label: "Min Qty", in_list_view: 1, columns: 1, reqd: 1},
+					{fieldtype: "Float", fieldname: "max_qty", label: "Max Qty (0=∞)", in_list_view: 1, columns: 1},
+					{fieldtype: "Link", fieldname: "currency", label: "Currency", options: "Currency",
+						default: initial_currency, in_list_view: 1, columns: 2, reqd: 1, onchange: row_currency_changed},
+					{fieldtype: "Float", fieldname: "exchange_rate", label: "Exchange Rate", precision: 9,
+						default: initial_exchange, in_list_view: 1, columns: 2, reqd: 1, onchange: row_exchange_changed,
+						description: base + " per 1 row currency. Use 1 for " + base + "."},
+					{fieldtype: "Currency", fieldname: "rate", label: "Rate per Item", options: "currency",
+						precision: 9, in_list_view: 1, columns: 2, reqd: 1, onchange: refresh},
+					{fieldtype: "Currency", fieldname: "unit_cost", label: "Unit Cost", options: "currency",
+						precision: 9, in_list_view: 1, columns: 2, read_only: 1},
+					{fieldtype: "Data", fieldname: "applied_currency", hidden: 1},
+					{fieldtype: "Float", fieldname: "applied_exchange_rate", hidden: 1, precision: 9},
+				]});
 		});
-
-		var d = new frappe.ui.Dialog({
-			title: "Qty Pricing Rules — " + usable.length + " FG(s)",
-			size: "extra-large",
-			fields: fields,
-			primary_action_label: "Create Pricing Rules",
-			secondary_action_label: "Skip",
-			secondary_action: function () { d.hide(); on_done(); },
+		d = new frappe.ui.Dialog({
+			title: "Qty Pricing Rules — " + loaded.length + " FG(s)", size: "extra-large", fields: fields,
+			primary_action_label: "Create Pricing Rules", secondary_action_label: "Skip",
+			secondary_action: function () { closed = true; d.hide(); on_done(); },
 			primary_action: function (values) {
-				var selected_currency = values.rule_currency;
-				var exchange = selected_currency === base_currency ? 1 : parseFloat(values.exchange_rate);
-				if (!selected_currency || !Number.isFinite(exchange) || exchange <= 0 || applied_currency !== selected_currency || applied_rate !== exchange) {
-					frappe.msgprint("Select a currency and enter a positive exchange rate before creating rules."); return;
-				}
-				var rule_priority = Math.max(1, Math.min(20, parseInt(values.priority, 10) || 10));
-				var jobs = usable.map(function (x, idx) { return { fg: x, rows: d.get_value("tiers_" + idx) || [] }; });
-				if (jobs.some(function (job) { return !job.rows.length || job.rows.some(function (row) { return !Number.isFinite(parseFloat(row.rate)) || parseFloat(row.rate) <= 0; }); })) {
-					frappe.msgprint("Enter at least one positive-rate quantity tier for every FG."); return;
-				}
-				d.hide();
-				var total = 0;
-				(function run(i) {
-					if (i >= jobs.length) {
-						frappe.show_alert({ message: "Created " + total + " pricing rule(s).", indicator: "green" });
-						on_done();
+				var jobs = [];
+				for (var i = 0; i < loaded.length; i++) {
+					var data = rows(i), groups = {};
+					if (!data.length || data.some(function (row) {
+						return !ready(row) || !Number.isFinite(parseFloat(row.rate)) || parseFloat(row.rate) <= 0;
+					})) {
+						frappe.msgprint("Select Currency and enter a positive Exchange Rate and Rate per Item in every pricing row.");
 						return;
 					}
-					var j = jobs[i];
-					frappe.call({
-						method: API + "create_qty_pricing_rules",
-						args: {
-							fg_item: j.fg.fg_item,
-							tiers: JSON.stringify(j.rows),
-							customer: customer,
-							currency: selected_currency,
-							valid_from: values.valid_from || null,
-							valid_upto: values.valid_upto || null,
-							cost_item: j.fg.cost_item,
-							priority: rule_priority,
-						},
-						freeze: true, freeze_message: "Creating pricing rules for " + j.fg.fg_item + "…",
-						callback: function (r) { total += ((r.message || {}).count || 0); run(i + 1); },
-						error: function () { run(i + 1); },
+					data.forEach(function (row) {
+						if (!groups[row.currency]) groups[row.currency] = [];
+						groups[row.currency].push({min_qty: row.min_qty, max_qty: row.max_qty, rate: row.rate});
 					});
+					Object.keys(groups).forEach(function (currency) {
+						jobs.push({fg: loaded[i], currency: currency, rows: groups[currency]});
+					});
+				}
+				closed = true; d.hide();
+				var total = 0, priority = Math.max(1, Math.min(20, parseInt(values.priority, 10) || 10));
+				(function run(idx) {
+					if (idx >= jobs.length) {
+						frappe.show_alert({message: "Created " + total + " pricing rule(s).", indicator: "green"});
+						on_done(); return;
+					}
+					var job = jobs[idx];
+					frappe.call({method: API + "create_qty_pricing_rules", args: {
+						fg_item: job.fg.fg_item, cost_item: job.fg.cost_item, currency: job.currency,
+						tiers: JSON.stringify(job.rows), customer: source.customer || "",
+						valid_from: values.valid_from || null, valid_upto: values.valid_upto || null, priority: priority,
+					}, freeze: true, freeze_message: "Creating pricing rules for " + job.fg.fg_item + " (" + job.currency + ")…",
+					callback: function (r) { total += ((r.message || {}).count || 0); run(idx + 1); },
+					error: function () { run(idx + 1); }});
 				})(0);
 			},
 		});
-		d.show();
-		apply_currency();
+		d.show(); refresh();
 	}
+	function customer_text() {
+		return source.customer ? "Rules are scoped to <b>" + frappe.utils.escape_html(source.customer) + "</b>." :
+			"No customer selected — rules apply to any customer.";
+	}
+	(function fetch(idx) {
+		if (idx >= fg_items.length) { build(); return; }
+		frappe.call({method: API + "get_qty_price_tiers", args: {fg_item: fg_items[idx].item_code},
+			callback: function (r) {
+				var info = r.message || {}, applied_rate = initial_exchange > 0 ? initial_exchange : 1;
+				loaded.push({fg_item: fg_items[idx].item_code,
+					item_name: fg_items[idx].item_name || info.item_name || fg_items[idx].item_code,
+					cost_item: info.cost_item || fg_items[idx].cost_item || "",
+					tiers: (info.tiers || []).map(function (tier) {
+						return {min_qty: tier.min_qty, max_qty: tier.max_qty, currency: initial_currency,
+							exchange_rate: initial_exchange, rate: rounded((parseFloat(tier.rate) || 0) / applied_rate),
+							unit_cost: rounded((parseFloat(tier.unit_cost) || 0) / applied_rate),
+							applied_currency: initial_exchange > 0 ? initial_currency : base, applied_exchange_rate: applied_rate};
+					})});
+				fetch(idx + 1);
+			}, error: function () { fetch(idx + 1); }});
+	})(0);
 };

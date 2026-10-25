@@ -49,18 +49,27 @@ function open(sourceDoc = {}) {
 	context.nxtgen_pricing.showForFGs({doc: sourceDoc}, [{item_code: "FG-1", item_name: "Test FG"}]);
 	return {dialog, calls, messages, requests,
 		row: () => dialog.get_value("tiers_0")[0],
+		set_row: (name, value, idx = 0) => {
+			const row = dialog.get_value("tiers_0")[idx];
+			row[name] = value;
+			const field = dialog.options.fields.find(f => f.fieldname === "tiers_0").fields.find(f => f.fieldname === name);
+			if (field.onchange) field.onchange.call({doc: row});
+		},
 		submit: () => dialog.options.primary_action({...dialog.values}),
-		fetch: () => dialog.options.fields.find(f => f.fieldname === "fetch_exchange_rate").click()};
+		fetch: () => dialog.options.fields.find(f => f.fieldname === "fetch_exchange_rates").click()};
 }
 
 {
 	const t = open({customer: "CUSTOMER"});
 	assert.equal(t.row().rate, 24.554);
-	t.dialog.set_value("rule_currency", "USD");
+	const currency = t.dialog.options.fields.find(f => f.fieldname === "tiers_0").fields.find(f => f.fieldname === "currency");
+	assert.equal(currency.in_list_view, 1);
+	assert(!currency.hidden);
+	t.set_row("currency", "USD");
 	assert.equal(t.dialog.disabled, true);
 	t.submit();
 	assert.equal(t.calls.filter(c => c.method.endsWith("create_qty_pricing_rules")).length, 0);
-	t.dialog.set_value("exchange_rate", 300);
+	t.set_row("exchange_rate", 300);
 	assert.equal(t.dialog.disabled, false);
 	assert.equal(t.row().rate, 0.081846667);
 	t.submit();
@@ -73,27 +82,40 @@ function open(sourceDoc = {}) {
 	const t = open({currency: "USD", conversion_rate: 300});
 	assert.equal(t.row().rate, 0.081846667); // no second conversion on dialog open
 	t.row().rate = 0.1; // user edits a per-item rate
-	t.dialog.set_value("rule_currency", "EUR");
-	t.dialog.set_value("exchange_rate", 350);
+	t.set_row("currency", "EUR");
+	t.set_row("exchange_rate", 350);
 	assert.equal(t.row().rate, 0.085714286);
 	assert.equal(t.row().currency, "EUR");
 }
 {
 	const t = open();
-	t.dialog.set_value("rule_currency", "USD"); t.fetch();
-	t.dialog.set_value("rule_currency", "EUR");
+	t.set_row("currency", "USD"); t.fetch();
+	t.set_row("currency", "EUR");
 	t.requests[0].callback({message: 300});
-	assert.equal(t.dialog.get_value("exchange_rate"), 0); // stale USD response ignored
-	t.dialog.set_value("exchange_rate", 350);
-	t.dialog.set_value("rule_currency", "LKR");
-	assert.equal(t.dialog.get_value("exchange_rate"), 1);
+	assert.equal(t.row().exchange_rate, 0); // stale USD response ignored
+	t.set_row("exchange_rate", 350);
+	t.set_row("currency", "LKR");
+	assert.equal(t.row().exchange_rate, 1);
 	assert(Math.abs(t.row().rate - 24.554) < 0.000001);
 }
 {
 	const t = open();
-	t.dialog.set_value("rule_currency", "USD"); t.fetch();
-	t.dialog.set_value("exchange_rate", 310);
+	t.set_row("currency", "USD"); t.fetch();
+	t.set_row("exchange_rate", 310);
 	t.requests[0].callback({message: 300});
-	assert.equal(t.dialog.get_value("exchange_rate"), 310); // user's override preserved
+	assert.equal(t.row().exchange_rate, 310); // user's override preserved
+}
+{
+	const t = open();
+	t.dialog.get_value("tiers_0").push({...t.row()});
+	t.set_row("currency", "USD");
+	t.set_row("exchange_rate", 300);
+	t.submit();
+	const jobs = t.calls.filter(c => c.method.endsWith("create_qty_pricing_rules"));
+	assert.equal(jobs.length, 2);
+	assert.equal(jobs[0].args.currency, "USD");
+	assert.equal(jobs[1].args.currency, "LKR");
+	assert.equal(JSON.parse(jobs[0].args.tiers)[0].rate, 0.081846667);
+	assert.equal(JSON.parse(jobs[1].args.tiers)[0].rate, 24.554);
 }
 console.log("Pricing-rule popup checks passed: currency conversion, precision, scope, invalid-rate blocking and stale-request protection.");
