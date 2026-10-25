@@ -7,6 +7,7 @@ frappe.ui.form.on("Savinda Quotation", {
 
 	// ── On load ───────────────────────────────────────────────
 	refresh: function (frm) {
+		_update_quotation_price_display(frm);
 		var is_combined = (frm.doc.items || []).some(function (row) { return row.custom_costing_bundle; });
 		if (is_combined && !frm.is_new()) {
 			frm.add_custom_button(__("Print Combined Quotation"), function () {
@@ -274,6 +275,7 @@ frappe.ui.form.on("Savinda Quotation Item", {
 		frappe.model.set_value(cdt, cdn, "is_manually_set", 1);
 		// User typed a rate in the quotation currency → back-fill the company-base anchor.
 		frappe.model.set_value(cdt, cdn, "base_selling_price", flt_v(row.selling_price) * crate);
+		frappe.model.set_value(cdt, cdn, "price_per_1000", Math.round(flt_v(row.selling_price) * 1000 * 10000) / 10000);
 	},
 });
 
@@ -349,6 +351,7 @@ function _init_row_price(row, base_lkr, conversion_rate, currency) {
 	var crate = flt_v(conversion_rate) || 1;
 	row.base_selling_price = flt_v(base_lkr);
 	row.selling_price = flt_v(base_lkr) / crate;
+	row.price_per_1000 = Math.round(row.selling_price * 1000 * 10000) / 10000;
 	row.currency = currency;
 	row.is_manually_set = 0;
 }
@@ -362,8 +365,24 @@ function _reprice_items(frm) {
 		var base = flt_v(row.base_selling_price) || flt_v(row.selling_price);
 		row.base_selling_price = base;
 		row.selling_price = base / crate;
+		row.price_per_1000 = Math.round(row.selling_price * 1000 * 10000) / 10000;
 	});
+	_update_quotation_price_display(frm);
 	frm.refresh_field("items");
+}
+
+function _update_quotation_price_display(frm) {
+	var foreign = !!frm.doc.currency && frm.doc.currency !== _base_currency();
+	var grid = frm.fields_dict.items && frm.fields_dict.items.grid;
+	if (grid) {
+		grid.update_docfield_property("price_per_1000", "hidden", !foreign);
+		grid.update_docfield_property("selling_price", "label", "Selling Price per Unit");
+	}
+	(frm.doc.items || []).forEach(function (row) {
+		var base = flt_v(row.base_selling_price);
+		var rate = base ? base / (flt_v(frm.doc.conversion_rate) || 1) : flt_v(row.selling_price);
+		row.price_per_1000 = Math.round(rate * 1000 * 10000) / 10000;
+	});
 }
 
 // Carry the Cost Item's (final, saved) packing info onto a quotation row.

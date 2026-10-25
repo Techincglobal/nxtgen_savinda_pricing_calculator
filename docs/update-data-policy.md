@@ -29,5 +29,17 @@ keep a site-only layout. Formats with other names, such as `Quotation-Savinda`,
 are not synchronized by this helper. The site's default print-format selection
 is not changed.
 
+Exception for the quotation currency-display upgrade: existing Savinda Quotation
+formats with the exact legacy price heading and two-decimal price expression get
+only those two fragments replaced. This includes `Quotation-Savinda`. The rest of
+their layout remains unchanged; unrecognised custom pricing layouts are skipped.
+
+Foreign-currency quotations show price per **1,000 units**, with **four decimal
+places**, and identify that basis in the price-column header. Local-currency
+quotations still print per piece with two decimals. Stored selling prices and
+Sales Order rates remain per single unit; do not multiply those stored rates by
+1,000. The quotation's read-only `Price per 1,000 Units` field provides the foreign
+currency display value. Conversion/scaling happens before display rounding.
+
 Before production deployment, take a backup and review the updated layouts.
 No production deployment or migration is performed merely by editing these files.

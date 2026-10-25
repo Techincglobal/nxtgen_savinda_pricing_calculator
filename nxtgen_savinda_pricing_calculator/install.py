@@ -69,6 +69,7 @@ def after_install():
 	from nxtgen_savinda_pricing_calculator.api.costing_bundle import setup_bundle_fields
 	setup_bundle_fields()
 	_sync_code_print_formats()
+	_upgrade_quotation_price_layouts()
 
 
 def apply_install_only_configuration():
@@ -102,6 +103,7 @@ def after_migrate():
 	from nxtgen_savinda_pricing_calculator.api.costing_bundle import setup_bundle_fields
 	setup_bundle_fields()
 	_sync_code_print_formats()
+	_upgrade_quotation_price_layouts()
 
 
 def _migrate_flexo_planning_rows():
@@ -190,6 +192,22 @@ def _sync_code_print_formats():
 			)
 	from nxtgen_savinda_pricing_calculator.api.costing_bundle import _ensure_combined_print_format
 	_ensure_combined_print_format(overwrite=True)
+
+
+def _upgrade_quotation_price_layouts():
+	"""Upgrade only the known legacy price heading/expression; preserve other HTML."""
+	heading = "Price Per Piece ({{ doc.currency or 'LKR' }})"
+	rate = "{{ '{:.2f}'.format(((row.base_selling_price or 0) / (doc.conversion_rate or 1)) or (row.selling_price or 0)) }}"
+	for row in frappe.get_all("Print Format", filters={"doc_type": "Savinda Quotation"}, fields=["name", "html"]):
+		html = row.html or ""
+		# Never change a rate without its corresponding price-basis heading.
+		if heading not in html or rate not in html:
+			continue
+		html = html.replace(heading, "{{ get_quotation_price_basis(doc.currency).label | e }}").replace(
+			rate, "{{ get_quotation_print_rate(doc, row) }}")
+		pf = frappe.get_doc("Print Format", row.name)
+		pf.html = html
+		pf.save(ignore_permissions=True)
 
 
 def _ensure_roles():

@@ -29,6 +29,7 @@
 </style>
 <div class="combined-quote">
 {% if combined.rows %}
+  {% set price_basis = get_quotation_price_basis(doc.currency) %}
   {% if letter_head and not no_letterhead %}{{ letter_head }}
   {% else %}<div class="company-header">
     Savinda Graphic Systems (Pvt) Ltd.<br>
@@ -57,11 +58,11 @@
   </table>
   <table class="prices">
     <colgroup><col style="width:66%"><col style="width:12%"><col style="width:22%"></colgroup>
-    <thead><tr><th>ITEM DESCRIPTION</th><th class="right">UNITS</th><th class="right">UNIT PRICE ({{ (doc.currency or 'LKR') | e }})</th></tr></thead>
+    <thead><tr><th>ITEM DESCRIPTION</th><th class="right">UNITS</th><th class="right">{{ price_basis.label | upper | e }}</th></tr></thead>
     <tbody>{% for row in combined.rows %}<tr>
       <td>{{ title | e if loop.first else '' }}</td>
       <td class="right">{{ '{:,.0f}'.format(row.qty or 0) }}</td>
-      <td class="right">{{ '{:,.2f}'.format(row.selling_price or 0) }}</td>
+      <td class="right">{{ get_quotation_print_rate(doc, row) }}</td>
     </tr>{% endfor %}</tbody>
   </table>
   <p>{{ (doc.vat_note or 'Please confirm VAT treatment before issuing this quotation.') | e }}</p>

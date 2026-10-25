@@ -22,6 +22,7 @@
   "unit_cost",
   "column_break_3",
   "selling_price",
+  "price_per_1000",
   "base_selling_price",
   "currency",
   "is_manually_set",
@@ -151,7 +152,20 @@
    "fieldtype": "Currency",
    "in_list_view": 1,
    "label": "Selling Price",
-   "options": "currency"
+   "options": "currency",
+   "precision": "4"
+  },
+  {
+   "fieldname": "price_per_1000",
+   "fieldtype": "Currency",
+   "label": "Price per 1,000 Units",
+   "options": "currency",
+   "precision": "4",
+   "read_only": 1,
+   "allow_on_submit": 1,
+   "in_list_view": 1,
+   "columns": 2,
+   "description": "Display rate per 1,000 units. Stored selling price and downstream order rates remain per single unit."
   },
   {
    "description": "Company-base rate (LKR) from costing \u2014 the anchor. Transaction rate = this / conversion rate.",

@@ -8,6 +8,25 @@ import frappe
 from frappe.utils import cint, flt, format_date, getdate
 
 
+def get_quotation_price_basis(currency):
+	"""Foreign-currency prices are presented per 1,000; stored rates stay per piece."""
+	from nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.doctype.savinda_quotation.savinda_quotation import _company_currency
+	base = _company_currency()
+	currency = currency or base
+	foreign = currency != base
+	return {"currency": currency, "multiplier": 1000 if foreign else 1,
+		"precision": 4 if foreign else 2,
+		"label": f"Price per {'1,000 Units' if foreign else 'Piece'} ({currency})"}
+
+
+def get_quotation_print_rate(doc, row):
+	"""Convert first, scale next, round for display last (avoids tiny FX rates becoming zero)."""
+	basis = get_quotation_price_basis(doc.get("currency"))
+	base_rate = flt(row.get("base_selling_price"))
+	rate = base_rate / (flt(doc.get("conversion_rate")) or 1) if base_rate else flt(row.get("selling_price"))
+	return f"{rate * basis['multiplier']:,.{basis['precision']}f}"
+
+
 def get_cb_finishings(calculation_breakdown):
 	"""Finishing labels for a Calculation Breakdown, in selection order. Used on the quotation
 	print (with the colour statement) and copied to the Product Library on FG creation.

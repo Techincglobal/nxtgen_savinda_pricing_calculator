@@ -1057,14 +1057,19 @@ def resolve_common_material_name(raw_material=None, base_material=None, calculat
         cn = frappe.db.get_value("Boards and Papers", name, "item")
         if cn:
             return cn
+        if not frappe.db.has_column("Boards and Papers", "common_name"):
+            return ""
         return frappe.db.get_value("Boards and Papers", {"item": name}, "common_name") or ""
     def _get_bp_item(name,cost_breakdown=None):
-        cn =frappe.db.get_value("Item", name, "custom_board_and_paper_group")
         if not name:
             return ""
+        # This site-specific Item field is not installed on every pricing site.
+        # Do not issue a SELECT for a column that may not exist (notably Flexo).
+        cn = (frappe.db.get_value("Item", name, "custom_board_and_paper_group")
+              if frappe.db.has_column("Item", "custom_board_and_paper_group") else "")
         if cn:
             return cn
-        if cost_breakdown:
+        if cost_breakdown and frappe.db.has_column("Opportunity", "custom_board"):
             inquery=frappe.db.get_value("Calculation Breakdown", cost_breakdown, "ref")
             if  inquery:
                 common_name=frappe.db.get_value("Opportunity",inquery,"custom_board")

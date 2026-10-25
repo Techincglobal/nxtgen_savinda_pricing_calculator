@@ -60,6 +60,8 @@ doctype_js = {
 
 jinja = {
 	"methods": [
+		"nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.utils.jinja.get_quotation_price_basis",
+		"nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.utils.jinja.get_quotation_print_rate",
 		"nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.utils.jinja.get_cb_print_data",
 		"nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.utils.jinja.get_cb_finishings",
 		"nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.utils.jinja.get_ticket_print_data",

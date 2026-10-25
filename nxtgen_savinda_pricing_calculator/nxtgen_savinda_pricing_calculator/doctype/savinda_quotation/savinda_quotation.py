@@ -196,6 +196,8 @@ class SavindaQuotation(Document):
 			base = flt(it.base_selling_price) or flt(it.selling_price)
 			it.base_selling_price = base
 			it.selling_price = base / crate
+			# Presentation only. Sales Orders continue to use selling_price per piece.
+			it.price_per_1000 = flt(it.selling_price * 1000, 4)
 
 	def _apply_lowest_profit_margin(self):
 		"""Header profit margin = the LOWEST profit margin among the quoted items'
