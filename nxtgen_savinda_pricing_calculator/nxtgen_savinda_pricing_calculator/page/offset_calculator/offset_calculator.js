@@ -1326,6 +1326,11 @@ function oc_mount_app(el) {
 						var d = r.message;
 						self.savedDocName = d.doc_name || '';
 						self.loadSwitcher();
+						// Opt-in combined inquiry imports have component-specific operations,
+						// including an explicit empty list. Never substitute another part's list.
+						if (d.form && Array.isArray(d.form.inquiry_component_operations)) {
+							self.autoSelectOperations = d.form.inquiry_component_operations.slice();
+						}
 						if (d.form) {
 							Object.assign(self.form, d.form);
 							// Restore manual ad-hoc cost lines
@@ -2553,7 +2558,7 @@ function oc_inject_styles() {
 .oc-kv-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
 .oc-kv{display:flex;justify-content:space-between;font-size:12px;padding:4px 8px;border-radius:3px;background:#fff;border:1px solid #eee}
 .oc-kv .k{color:#6b7280}.oc-kv .v{font-weight:600;color:#1f272e}.oc-v-blue{color:#2c7be5!important}
-.oc-tbl-scroll{overflow:auto;max-height:38vh;border-radius:4px;border:1px solid #d1d5db}
+.oc-tbl-scroll{overflow:auto;max-height:70vh;border-radius:4px;border:1px solid #d1d5db}
 .oc-tbl{width:100%;border-collapse:collapse;font-size:12px}
 .oc-tbl thead tr{background:#1a3a5c}
 .oc-grp-header td{background:#1a3a5c!important;color:#fff;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px 8px;-webkit-print-color-adjust:exact;print-color-adjust:exact}

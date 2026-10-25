@@ -1,0 +1,85 @@
+{# Optional combined-product format. All specification text is stored on this quotation. #}
+{% set combined = namespace(rows=[]) %}
+{% for row in doc.items %}
+  {% if row.get('custom_costing_bundle') %}{% set combined.rows = combined.rows + [row] %}{% endif %}
+{% endfor %}
+<style>
+  .combined-quote { font-family: Arial, sans-serif; font-size: 10pt; color: #000; line-height: 1.25; }
+  .combined-quote table { width: 100%; border-collapse: collapse; }
+  .combined-quote td, .combined-quote th { padding: 2px 5px !important; vertical-align: top; border: 0; }
+  .combined-quote p { margin: 12px 0; }
+  .combined-quote .company-header { font-size: 9pt; line-height: 1.4; margin-bottom: 10px; }
+  .combined-quote .company-header .contact { font-style: italic; }
+  .combined-quote .meta { margin-bottom: 14px; }
+  .combined-quote .meta td { width: 50%; line-height: 1.65; }
+  .combined-quote .right { text-align: right; }
+  .combined-quote h3 { font-size: 10pt; text-align: center; font-weight: 600; margin: 16px 0; }
+  .combined-quote .specs { margin: 14px 0 18px; table-layout: fixed; }
+  .combined-quote .specs th { width: 78px; text-align: left; white-space: nowrap; font-weight: normal; }
+  .combined-quote .specs .colon { width: 10px; padding-left: 0 !important; padding-right: 0 !important; }
+  .combined-quote .text { white-space: pre-line; overflow-wrap: break-word; }
+  .combined-quote .prices { margin: 0 0 20px; table-layout: fixed; }
+  .combined-quote .prices th { text-align: left; font-size: 10pt; font-weight: 600; }
+  .combined-quote .prices .right { text-align: right; }
+  .combined-quote .validity { margin-top: -6px; }
+  .combined-quote .closing { margin-top: 24px; page-break-inside: avoid; }
+  .combined-quote .signature { margin-top: 52px; }
+  .combined-quote .prices tr, .combined-quote .specs tr { page-break-inside: avoid; }
+  @media print { .combined-quote { font-size: 10pt; } }
+</style>
+<div class="combined-quote">
+{% if combined.rows %}
+  {% if letter_head and not no_letterhead %}{{ letter_head }}
+  {% else %}<div class="company-header">
+    Savinda Graphic Systems (Pvt) Ltd.<br>
+    <span class="contact">NO: 145, UDA Industrial Estate, Katuwana Road, Homagama, Sri Lanka.<br>
+    Tel: +94 11 4368 571 &nbsp; Hot Line: +94 11 4651 755 &nbsp; Fax: +94 11 4303 253<br>
+    Email: info@savinda.lk &nbsp; Web: www.savinda.lk</span>
+  </div>{% endif %}
+  {% set title = doc.get('custom_combined_title') or combined.rows[0].item_name or '' %}
+  <table class="meta"><tr>
+    <td>{{ (doc.customer_name or doc.customer or '') | e }}</td>
+    <td class="right">Quote Number: {{ doc.name | e }}<br>
+      Inquiry Number: {{ (doc.inquiry or '') | e }}<br>
+      Date: {{ (doc.date or '') | string | e }}</td>
+  </tr></table>
+  <p>Dear Sir/Madam,</p>
+  <h3>QUOTATION FOR PRINTING OF {{ title | upper | e }}</h3>
+  <p>We refer to your inquiry for printing and supply of <em>{{ title | e }}</em> and take pleasure in quoting our best prices as per the details given below.</p>
+  <table class="specs">
+    {% for label, field in [('Printed in', 'custom_combined_material'), ('Color', 'custom_combined_colours'),
+      ('Finishings', 'custom_combined_finishing'), ('Size', 'custom_combined_size'), ('Remarks', 'custom_combined_remarks')] %}
+    {% if doc.get(field) %}<tr><th>{{ label }}</th><td class="colon">:</td><td class="text">{{ doc.get(field) | e }}</td></tr>{% endif %}
+    {% endfor %}
+    {% set tiep = frappe.db.get_value('Cost Sheet', doc.cost_sheet, 'tiep') if doc.cost_sheet else '' %}
+    {% if tiep in ['TIEP', 'NON TIEP'] %}<tr><th>TIEP</th><td class="colon">:</td><td>{{ 'YES' if tiep == 'TIEP' else 'NO' }}</td></tr>
+    {% elif doc.duty_basis %}<tr><th>Duty basis</th><td class="colon">:</td><td>{{ doc.duty_basis | e }}</td></tr>{% endif %}
+  </table>
+  <table class="prices">
+    <colgroup><col style="width:66%"><col style="width:12%"><col style="width:22%"></colgroup>
+    <thead><tr><th>ITEM DESCRIPTION</th><th class="right">UNITS</th><th class="right">UNIT PRICE ({{ (doc.currency or 'LKR') | e }})</th></tr></thead>
+    <tbody>{% for row in combined.rows %}<tr>
+      <td>{{ title | e if loop.first else '' }}</td>
+      <td class="right">{{ '{:,.0f}'.format(row.qty or 0) }}</td>
+      <td class="right">{{ '{:,.2f}'.format(row.selling_price or 0) }}</td>
+    </tr>{% endfor %}</tbody>
+  </table>
+  <p>{{ (doc.vat_note or 'Please confirm VAT treatment before issuing this quotation.') | e }}</p>
+  {% if doc.remarks %}<p class="text">{{ doc.remarks | e }}</p>{% endif %}
+  {% if doc.plate_charges %}<p>Plate charges: {{ '{:,.2f}'.format(doc.plate_charges / (doc.conversion_rate or 1)) }} {{ (doc.currency or 'LKR') | e }}{% if doc.plate_per_colour %} per colour{% endif %}</p>{% endif %}
+  {% if doc.die_cutter_charges %}<p>Die cutter / block charges: {{ '{:,.2f}'.format(doc.die_cutter_charges / (doc.conversion_rate or 1)) }} {{ (doc.currency or 'LKR') | e }}</p>{% endif %}
+  {% if doc.payment_terms %}<p class="text">Payment Terms: {{ doc.payment_terms | e }}</p>{% endif %}
+  <p>We hope our prices are competitive and look forward to receiving your valuable order.</p>
+  {% if doc.valid_till %}<p class="validity">VALID UNTIL: {{ doc.valid_till | string | e }}</p>
+  {% elif doc.validity_note %}<p class="validity">THE ABOVE QUOTED PRICES WILL BE VALID FOR {{ doc.validity_note | upper | e }}.</p>{% endif %}
+  {% if doc.terms %}<div>{{ doc.terms }}</div>{% endif %}
+  <div class="closing">Thank you,<br>Yours faithfully,
+    <div class="signature">
+    {% if doc.sales_person %}{{ (frappe.db.get_value('Employee', doc.sales_person, 'employee_name') or doc.sales_person) | e }}<br>
+    {% set designation = frappe.db.get_value('Employee', doc.sales_person, 'designation') %}{% if designation %}{{ designation | e }}<br>{% endif %}{% endif %}
+    </div>
+  </div>
+{% else %}
+  <p>This format is for a combined-item quotation. Use the normal Savinda Quotation format for separate products.</p>
+{% endif %}
+</div>

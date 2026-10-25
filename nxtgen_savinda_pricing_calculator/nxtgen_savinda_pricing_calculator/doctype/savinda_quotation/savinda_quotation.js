@@ -7,6 +7,24 @@ frappe.ui.form.on("Savinda Quotation", {
 
 	// ── On load ───────────────────────────────────────────────
 	refresh: function (frm) {
+		var is_combined = (frm.doc.items || []).some(function (row) { return row.custom_costing_bundle; });
+		if (is_combined && !frm.is_new()) {
+			frm.add_custom_button(__("Print Combined Quotation"), function () {
+				if (frm.is_dirty()) { frappe.msgprint(__("Save the quotation before printing.")); return; }
+				frappe.set_route("print", "Savinda Quotation", frm.doc.name, "Savinda Combined Item Quotation");
+			}, __("Actions"));
+		}
+		if (is_combined && frm.doc.docstatus === 0 && frm.doc.cost_sheet) {
+			frm.add_custom_button(__("Load Combined Specifications"), function () {
+				frappe.confirm(__("Replace the combined specification text from the linked component calculations? Quantities and prices will not change."), function () {
+					frappe.call({
+						method: "nxtgen_savinda_pricing_calculator.api.costing_bundle.get_combined_quote_defaults",
+						args: { cost_sheet: frm.doc.cost_sheet },
+						callback: function (r) { if (r.message) frm.set_value(r.message); },
+					});
+				});
+			}, __("Fill"));
+		}
 
 		// Auto-load items when quotation has a cost_sheet but no items yet
 		// This handles the case where quotation was just created from Cost Sheet

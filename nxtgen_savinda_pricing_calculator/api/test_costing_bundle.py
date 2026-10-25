@@ -8,6 +8,25 @@ from nxtgen_savinda_pricing_calculator.api import fg_approval, manufacturing, of
 
 
 class TestCostingBundle(unittest.TestCase):
+	def test_component_loader_includes_readable_item_names(self):
+		cs = self.sheet()
+		with patch.object(frappe, "get_doc", return_value=cs), patch.object(cs, "check_permission"), patch.object(
+			frappe.db, "get_value", side_effect=lambda dt, name, field, **kwargs:
+				"Outer box" if dt == "cost Item" and name == "LID" else "Tray" if dt == "cost Item" else "CB-1"
+		), patch.object(frappe, "get_all", return_value=[]):
+			rows = bundle.component_defaults(cs.name)
+		self.assertEqual([r["cost_item_name"] for r in rows], ["Outer box", "Tray"])
+		self.assertEqual([r["cost_item"] for r in rows], ["LID", "TRAY"])
+
+	def test_existing_bundle_names_are_displayed_without_database_writes(self):
+		from nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.doctype.cost_sheet.cost_sheet import CostSheet
+		cs = self.sheet()
+		cs.inquiry = None
+		with patch.object(frappe.db, "get_value", side_effect=["Outer box", "Tray"]), patch.object(frappe.db, "set_value") as write:
+			CostSheet.onload(cs)
+		self.assertEqual([r.cost_item_name for r in cs.custom_bundle_components], ["Outer box", "Tray"])
+		write.assert_not_called()
+
 	def sheet(self):
 		return frappe.get_doc({"doctype": "Cost Sheet", "name": "TEST-BUNDLE", "pricing_type": "Offset",
 			"custom_quote_as_bundle": 1, "custom_bundle_name": "Gift Box", "custom_bundle_qty": 100,

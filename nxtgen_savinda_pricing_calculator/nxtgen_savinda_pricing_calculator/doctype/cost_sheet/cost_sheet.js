@@ -64,6 +64,11 @@ frappe.ui.form.on("Cost Sheet", {
 		});
 		// ── Draft-only actions ─────────────────────────────────
 		if (frm.doc.docstatus === 0) {
+			if (!frm.is_new() && frm.doc.inquiry && !(frm.doc.pricing_list || []).length) {
+				frm.add_custom_button(__("Create Combined Costing"), function () {
+					_cs_inquiry_combined_costing(frm);
+				}, __("Actions"));
+			}
 			frm.add_custom_button(__("Create Breakdown"), function () {
 				run_create_breakdown(frm);
 			}, __("Actions"));
@@ -1196,7 +1201,14 @@ function create_calc_breakdown_and_open(frm, cdt, cdn, item_name, ci, vals, pric
 		cbForm.no_of_cuts = parseInt(vals.no_of_cuts) || 0;
 		cbForm.no_of_ups = parseInt(vals.no_of_ups) || 0;
 	}
-	cbDoc.ui_state = JSON.stringify({ form: cbForm, selected_specs: [], machine_spec: null, calc_result: null });
+	var cbState = { form: cbForm, selected_specs: [], machine_spec: null, calc_result: null };
+	if (ci.inquiry_component_key) {
+		var component_finishings = (ci.inquiry_finishings || []).map(function (row) {return row.finishing;}).filter(Boolean);
+		cbDoc.finishing = component_finishings.map(function (name) {return {finishing: name};});
+		cbState.finishing = component_finishings;
+		cbForm.inquiry_component_operations = component_finishings;
+	}
+	cbDoc.ui_state = JSON.stringify(cbState);
 
 	// 1. Create the Calculation Breakdown
 	frappe.call({
@@ -1379,6 +1391,48 @@ function finish_refresh(frm, cdt, cdn, unit_cost_sum) {
 //  CREATE BREAKDOWN (Book popup / single component)
 //  — same logic as before, kept intact
 // ─────────────────────────────────────────────────────────────
+
+function _cs_inquiry_combined_costing(frm) {
+	if (frm.is_dirty()) {
+		frappe.msgprint(__("Save the Cost Sheet before creating combined costing."));
+		return;
+	}
+	frappe.prompt([{
+		fieldname: "source", fieldtype: "Select", label: __("Component Source"),
+		options: "Gift Box\nBook", reqd: 1,
+	}], function (choice) {
+		var api = "nxtgen_savinda_pricing_calculator.api.inquiry_combined_costing.";
+		frappe.call({method: api + "preview", args: {cost_sheet: frm.doc.name, source: choice.source},
+			callback: function (r) {
+				if (!r.message) return;
+				var data = r.message;
+				var d = new frappe.ui.Dialog({title: __("Create Combined Costing"), size: "extra-large", fields: [
+					{fieldname: "components", fieldtype: "Table", label: __("Components — remove any rows you do not need"), cannot_add_rows: true,
+						data: data.components.map(function (p) {return {source_key: p.key, component: p.name, qty: p.qty, finishing: p.finishings.join(", ")};}),
+						fields: [
+							{fieldname: "source_key", fieldtype: "Data", hidden: 1},
+							{fieldname: "component", fieldtype: "Data", label: __("Component"), in_list_view: 1, read_only: 1, columns: 3},
+							{fieldname: "qty", fieldtype: "Float", label: __("Component Qty"), in_list_view: 1, read_only: 1, columns: 2},
+							{fieldname: "finishing", fieldtype: "Data", label: __("Selected Finishings"), in_list_view: 1, read_only: 1, columns: 5},
+						]},
+					{fieldtype: "HTML", options: "<p>" + __("Populates pricing-list items and their own finishings only. No Calculation Breakdowns are created. Use each item's normal Add Calculation dialog to set materials, sheet sizes, cuts and ups. Bundle quotation settings remain unchanged.") + "</p>"},
+				], primary_action_label: __("Create Components"), primary_action: function (values) {
+					d.get_primary_btn().prop("disabled", true);
+					frappe.call({method: api + "create", args: {
+						cost_sheet: frm.doc.name, source: choice.source,
+						component_keys: JSON.stringify((values.components || []).map(function (p) {return p.source_key;})),
+					}, freeze: true, freeze_message: __("Creating combined costing…"),
+					callback: function (result) {
+						if (!result.message) return;
+						d.hide();
+						frm.reload_doc();
+						frappe.msgprint(__("Pricing items and finishings loaded. Use Add Calculation on each item to enter its materials, cuts, ups and other specifications as normal."));
+					}, always: function () {d.get_primary_btn().prop("disabled", false);}});
+				}});
+				d.show();
+			}});
+	}, __("Combined Costing"), __("Preview Components"));
+}
 
 function run_create_breakdown(frm) {
 	var inquiry_name = frm.doc.inquiry;

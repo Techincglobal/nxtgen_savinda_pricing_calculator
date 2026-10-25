@@ -9,6 +9,13 @@ class CostSheet(Document):
 	def onload(self):
 		if self.inquiry:
 			self._fetch_inquiry_fields()
+		# Display names on older bundle rows without writing/amending the Cost Sheet.
+		names = {}
+		for row in self.get("custom_bundle_components") or []:
+			if row.cost_item and not row.get("cost_item_name"):
+				if row.cost_item not in names:
+					names[row.cost_item] = frappe.db.get_value("cost Item", row.cost_item, "cost_item_name") or ""
+				row.cost_item_name = names[row.cost_item]
 
 	def before_insert(self):
 		if self.inquiry:

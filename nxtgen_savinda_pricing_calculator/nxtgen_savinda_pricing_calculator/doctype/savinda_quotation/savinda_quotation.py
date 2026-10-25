@@ -105,16 +105,21 @@ class SavindaQuotation(Document):
 		if not self.conversion_rate:
 			self.conversion_rate = 1
 		if self.cost_sheet and frappe.db.get_value("Cost Sheet", self.cost_sheet, "custom_quote_as_bundle"):
-			from nxtgen_savinda_pricing_calculator.api.costing_bundle import quote_rows
+			from nxtgen_savinda_pricing_calculator.api.costing_bundle import quote_rows, combined_quote_defaults
 			cs = frappe.get_doc("Cost Sheet", self.cost_sheet)
 			cs.check_permission("read")
 			if cs.docstatus != 1:
 				frappe.throw("Submit the bundle Cost Sheet before creating its quotation.")
 			self.set("items", quote_rows(cs, self.currency, self.conversion_rate))
+			# Snapshot specs once; subsequent saves preserve customer-reviewed wording.
+			for field, value in combined_quote_defaults(cs).items():
+				if not self.get(field):
+					self.set(field, value)
 
 	def validate(self):
 		self._check_single_live_quotation()
 		if self.cost_sheet and frappe.db.get_value("Cost Sheet", self.cost_sheet, "custom_quote_as_bundle"):
+			self.custom_combined_quote = 1
 			if not self.items or any(r.get("custom_costing_bundle") != self.cost_sheet or r.cost_item or r.calculation_breakdown for r in self.items):
 				frappe.throw("A bundle quotation must contain only bundle price rows, not separate component rows.")
 			parent_fg = frappe.db.get_value("Cost Sheet", self.cost_sheet, "custom_bundle_fg")
@@ -238,20 +243,24 @@ class SavindaQuotation(Document):
 			self.conversion_rate = flt(self.conversion_rate) or 1
 
 	def _apply_common_material(self):
-		"""Show ONLY the Boards-and-Papers common (customer-facing) name on each line — never
-		the real material. Resolvable → common name; otherwise blank (the actual material is
-		never exposed). Configure common_name on Boards and Papers to show a material."""
+		"""Fill blank materials from the calculation, preserving user-entered text.
+
+		Autofill uses the existing customer-facing material resolver; an unresolved
+		material stays blank rather than falling back to the raw material code.
+		"""
 		from nxtgen_savinda_pricing_calculator.api.offset_calculator import (
 			resolve_common_material_name,
 		)
 		for it in (self.items or []):
+			if (it.material or "").strip():
+				continue
 			base_mat = ""
 			if it.calculation_breakdown:
 				base_mat = frappe.db.get_value(
 					"Calculation Breakdown", it.calculation_breakdown, "base_material"
 				) or ""
 			it.material = resolve_common_material_name(
-				raw_material=it.material or "", base_material=base_mat, calculation_breakdown=it.calculation_breakdown
+				base_material=base_mat, calculation_breakdown=it.calculation_breakdown
 			) or ""
 
 	# ── Inquiry (Opportunity) lifecycle — mirrors ERPNext Quotation→Opportunity ──

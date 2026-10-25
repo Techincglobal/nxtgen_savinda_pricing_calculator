@@ -7,6 +7,17 @@ def setup_bundle_fields():
 	from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 	visible = "eval:doc.custom_quote_as_bundle"
 	create_custom_fields({
+		"Savinda Quotation": [
+			{"fieldname": "custom_combined_quote", "label": "Combined Item Quotation", "fieldtype": "Check", "read_only": 1, "insert_after": "cost_sheet"},
+			{"fieldname": "custom_combined_specs", "label": "Combined Product — Customer-facing Specifications", "fieldtype": "Section Break", "insert_after": "items", "depends_on": "eval:doc.custom_combined_quote"},
+			{"fieldname": "custom_combined_title", "label": "Complete Product Name", "fieldtype": "Data", "insert_after": "custom_combined_specs", "depends_on": "eval:doc.custom_combined_quote"},
+			{"fieldname": "custom_combined_material", "label": "Printed In / Materials", "fieldtype": "Small Text", "insert_after": "custom_combined_title", "depends_on": "eval:doc.custom_combined_quote", "description": "Customer-facing material descriptions only. Review before issuing."},
+			{"fieldname": "custom_combined_colours", "label": "Colours", "fieldtype": "Data", "insert_after": "custom_combined_material", "depends_on": "eval:doc.custom_combined_quote"},
+			{"fieldname": "custom_combined_finishing", "label": "Combined Finishings", "fieldtype": "Small Text", "insert_after": "custom_combined_colours", "depends_on": "eval:doc.custom_combined_quote"},
+			{"fieldname": "custom_combined_size", "label": "Complete Product / Component Sizes", "fieldtype": "Small Text", "insert_after": "custom_combined_finishing", "depends_on": "eval:doc.custom_combined_quote"},
+			{"fieldname": "custom_combined_remarks", "label": "Combined Product Specifications / Remarks", "fieldtype": "Small Text", "insert_after": "custom_combined_size", "depends_on": "eval:doc.custom_combined_quote"},
+			{"fieldname": "custom_combined_specs_end", "fieldtype": "Section Break", "insert_after": "custom_combined_remarks", "depends_on": "eval:doc.custom_combined_quote"},
+		],
 		"Cost Sheet": [
 			{"fieldname": "custom_bundle_section", "label": "Quotation Bundle / Assembly", "fieldtype": "Section Break", "insert_after": "qty_breaks"},
 			{"fieldname": "custom_quote_as_bundle", "label": "Quote as One Bundle", "fieldtype": "Check", "insert_after": "custom_bundle_section"},
@@ -23,6 +34,63 @@ def setup_bundle_fields():
 		"Item": [{"fieldname": "custom_costing_bundle", "label": "Bundle Cost Sheet", "fieldtype": "Link", "options": "Cost Sheet", "insert_after": "custom_cost_item", "read_only": 1}],
 		"Product Library": [{"fieldname": "custom_costing_bundle", "label": "Bundle Cost Sheet", "fieldtype": "Link", "options": "Cost Sheet", "insert_after": "cost_item", "read_only": 1}],
 	}, update=True)
+	_ensure_combined_print_format()
+
+
+def _ensure_combined_print_format(overwrite=False):
+	"""Create the optional layout; explicit install/migration sync may update it."""
+	name = "Savinda Combined Item Quotation"
+	exists = frappe.db.exists("Print Format", name)
+	if exists and not overwrite:
+		return
+	from pathlib import Path
+	template = Path(frappe.get_app_path("nxtgen_savinda_pricing_calculator", "templates", "prints", "combined_item_quotation.html"))
+	values = {"doc_type": "Savinda Quotation",
+		"standard": "No", "custom_format": 1, "print_format_type": "Jinja", "html": template.read_text(encoding="utf-8"),
+		"font_size": 10, "margin_top": 12, "margin_bottom": 12, "margin_left": 12, "margin_right": 12}
+	if exists:
+		doc = frappe.get_doc("Print Format", name)
+		doc.update(values)
+		doc.save(ignore_permissions=True)
+	else:
+		frappe.get_doc({"doctype": "Print Format", "name": name, **values}).insert(ignore_permissions=True)
+
+
+def combined_quote_defaults(cs):
+	"""Snapshot safe customer specifications, never component prices or raw Item names."""
+	from nxtgen_savinda_pricing_calculator.api.offset_calculator import resolve_common_material_name
+	def distinct(values):
+		out, seen = [], set()
+		for value in values:
+			value = str(value or "").strip()
+			if value and value.casefold() not in seen:
+				out.append(value)
+				seen.add(value.casefold())
+		return out
+	materials, sizes, colours, remarks = [], [], [], []
+	for part in cs.get("custom_bundle_components") or []:
+		cb = frappe.get_doc("Calculation Breakdown", part.calculation_breakdown)
+		ci = frappe.get_doc("cost Item", part.cost_item)
+		materials.append(resolve_common_material_name(base_material=cb.get("base_material"), calculation_breakdown=cb.name))
+		sizes.append(ci.get("dimensions") or cb.get("carton_size"))
+		if flt(cb.get("no_of_colors")) > 0:
+			colours.append(str(int(cb.no_of_colors)))
+		remarks.append(ci.get("bom_remark"))
+	return {"custom_combined_quote": 1, "custom_combined_title": cs.custom_bundle_name,
+		"custom_combined_material": " / ".join(distinct(materials)),
+		"custom_combined_size": "; ".join(distinct(sizes)),
+		"custom_combined_colours": " / ".join(distinct(colours)),
+		"custom_combined_finishing": ", ".join(bundle_finishings(cs)),
+		"custom_combined_remarks": "\n".join(distinct(remarks))}
+
+
+@frappe.whitelist()
+def get_combined_quote_defaults(cost_sheet):
+	cs = frappe.get_doc("Cost Sheet", cost_sheet)
+	cs.check_permission("read")
+	if not cs.get("custom_quote_as_bundle"):
+		frappe.throw("This Cost Sheet is not a combined-item quotation bundle.")
+	return combined_quote_defaults(cs)
 
 
 def validate_bundle(cs):
@@ -136,7 +204,8 @@ def component_defaults(cost_sheet):
 			continue
 		cb = frappe.db.get_value("Cost Item Calculation", {"parent": row.item}, "calculation_breakdown", order_by="idx asc")
 		fgs = frappe.get_all("Item", filters={"custom_cost_item": row.item, "has_variants": 0}, pluck="name")
-		rows.append({"cost_item": row.item, "qty_per_bundle": 1, "calculation_breakdown": cb or "", "fg_item": fgs[0] if len(fgs) == 1 else ""})
+		item_name = frappe.db.get_value("cost Item", row.item, "cost_item_name") or row.get("item_name") or ""
+		rows.append({"cost_item": row.item, "cost_item_name": item_name, "qty_per_bundle": 1, "calculation_breakdown": cb or "", "fg_item": fgs[0] if len(fgs) == 1 else ""})
 	return rows
 
 

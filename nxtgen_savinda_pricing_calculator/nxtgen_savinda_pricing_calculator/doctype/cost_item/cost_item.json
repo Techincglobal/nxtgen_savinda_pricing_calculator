@@ -17,6 +17,8 @@
   "material",
   "dimensions",
   "no_of_pages",
+  "inquiry_component_key",
+  "inquiry_finishings",
   "section_break_cut_sizes",
   "cut_sheet_l",
   "cut_sheet_w",
@@ -44,6 +46,21 @@
   "bom_remark"
  ],
  "fields": [
+  {
+   "fieldname": "inquiry_component_key",
+   "fieldtype": "Data",
+   "label": "Inquiry Component Reference",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "inquiry_finishings",
+   "fieldtype": "Table MultiSelect",
+   "label": "Inquiry Component Finishings",
+   "options": "cost breakdown finishings",
+   "depends_on": "eval:doc.inquiry_component_key",
+   "description": "Copied from this inquiry component; used when you manually add a calculation."
+  },
   {
    "fieldname": "cost_item_name",
    "fieldtype": "Data",

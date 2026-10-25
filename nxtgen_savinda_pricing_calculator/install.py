@@ -8,10 +8,9 @@ from frappe.utils.nestedset import rebuild_tree
 
 ROOT_ITEM_GROUP = "All Item Groups"
 
-# ALL seed/master data imported ONCE on install only — NOTHING is re-synced on
-# migrate/update, so anything edited on the live site (machines, inks, specs,
-# cost facts, items, rates, config, print formats) is never overwritten by an
-# app update. Order matters: dependencies first.
+# Calculation seed/master data is imported only on install, skipping existing
+# records. Migrations update schema and app-managed print layouts, not masters,
+# rates, saved calculations or workspaces. Order matters: dependencies first.
 INSTALL_ONLY_FIXTURES = [
 	"role.json",                # roles first (independent)
 	"item_group.json",          # parent group for the rate items
@@ -61,19 +60,15 @@ def after_install():
 	_ensure_property_setters()
 	_ensure_roles()
 	_ensure_workflow()
-	_migrate_artwork_approval_plans_to_supply_chain()
 	_ensure_quotation_workflow()
 	_ensure_npd_request_workflow()
 	_ensure_packing_workflow()
-	_retire_sales_order_npd_workflow()
 	_seed_install_only_fixtures()
-	# Print formats are sourced from install_only/user_interface.json.  They are
-	# intentionally not overwritten from code after the reviewed source-site
-	# snapshot has been inserted.
 	from nxtgen_savinda_pricing_calculator.api.fg_approval import setup_fg_approval
 	setup_fg_approval()
 	from nxtgen_savinda_pricing_calculator.api.costing_bundle import setup_bundle_fields
 	setup_bundle_fields()
+	_sync_code_print_formats()
 
 
 def apply_install_only_configuration():
@@ -89,25 +84,24 @@ def after_migrate():
 	"""Runs on every migrate/update.
 
 	Master/seed data is intentionally NOT re-imported here. We only keep the
-	Item Group tree healthy and ensure our custom fields + roles + workflow exist.
+	Item Group tree healthy, ensure fields/roles/workflows exist, and update the
+	app-managed print layouts. Saved calculation data is never refreshed here.
 	"""
 	_ensure_item_group_tree()
 	_ensure_custom_fields()
-	_migrate_flexo_planning_rows()
 	_ensure_property_setters()
 	_ensure_roles()
 	_ensure_workflow()
-	_migrate_artwork_approval_plans_to_supply_chain()
 	_ensure_quotation_workflow()
 	_ensure_npd_request_workflow()
 	_ensure_packing_workflow()
-	_retire_sales_order_npd_workflow()
-	# Do not sync code-managed print formats on app updates. Live sites may have
-	# approved local print-format changes that must never be overwritten by migrate.
+	# Legacy transaction/workflow conversions are explicit repair operations only.
+	# Installing/updating must not rewrite existing plans or deactivate site workflows.
 	from nxtgen_savinda_pricing_calculator.api.fg_approval import setup_fg_approval
 	setup_fg_approval()
 	from nxtgen_savinda_pricing_calculator.api.costing_bundle import setup_bundle_fields
 	setup_bundle_fields()
+	_sync_code_print_formats()
 
 
 def _migrate_flexo_planning_rows():
@@ -155,10 +149,8 @@ def _migrate_flexo_planning_rows():
 		frappe.log_error(frappe.get_traceback(), "pricing_calculator: migrate Flexo planning rows failed")
 
 
-# Print formats that are CODE-MANAGED: their HTML lives in the app's print_format/*.json and the
-# code is the single source of truth. Unlike the install-only seed fixtures (which NEVER overwrite
-# live edits), these are re-imported from file on every install/migrate — so a DEPLOY REPLACES the
-# live copy. Edit them in the file, not the Print Builder. (Requested: ship via code, not patches.)
+# These named layouts are app-managed and updated on installation/migration.
+# Other site-created print formats are not included and remain untouched.
 CODE_PRINT_FORMATS = (
 	"offset_job_ticket", "flexo_job_ticket", "offset_npd_job_ticket", "flexo_npd_job_ticket",
 	"savinda_quotation", "product_costing_summary",
@@ -166,8 +158,7 @@ CODE_PRINT_FORMATS = (
 
 
 def _sync_code_print_formats():
-	"""Force the file (code) version of CODE_PRINT_FORMATS onto the live site (get_doc + save,
-	which persists reliably during migrate). Idempotent; never raises."""
+	"""Update only app-managed print layouts, never calculation/master records."""
 	import json
 	for slug in CODE_PRINT_FORMATS:
 		path = frappe.get_app_path(
@@ -185,14 +176,11 @@ def _sync_code_print_formats():
 			# Skip control/audit keys — we only push the presentation payload.
 			skip = {"creation", "modified", "modified_by", "owner", "docstatus", "idx", "doctype", "name"}
 			payload = {k: v for k, v in data.items() if k not in skip}
-			payload["standard"] = "Yes"
-			if frappe.db.exists("Print Format", name):
-				pf = frappe.get_doc("Print Format", name)
-				pf.update(payload)
-			else:
-				pf = frappe.new_doc("Print Format")
-				pf.update(payload)
-				pf.name = name  # Print Format autoname = Prompt
+			payload["standard"] = "No"
+			pf = (frappe.get_doc("Print Format", name)
+			      if frappe.db.exists("Print Format", name) else frappe.new_doc("Print Format"))
+			pf.update(payload)
+			pf.name = name  # Print Format autoname = Prompt
 			pf.save(ignore_permissions=True)
 			frappe.db.commit()
 		except Exception:
@@ -200,6 +188,8 @@ def _sync_code_print_formats():
 				title="pricing_calculator: sync code print format failed (%s)" % slug,
 				message=frappe.get_traceback(),
 			)
+	from nxtgen_savinda_pricing_calculator.api.costing_bundle import _ensure_combined_print_format
+	_ensure_combined_print_format(overwrite=True)
 
 
 def _ensure_roles():
@@ -279,14 +269,18 @@ def _ensure_property_setters():
 WORKFLOW_NAME = "Production Plan Approval"
 
 
-def _ensure_workflow():
-	"""Seed / reconcile the Production Plan approval Workflow.
+def _existing_workflow(name, document_type):
+	"""Preserve even renamed or disabled site workflows for this document type."""
+	return frappe.db.exists("Workflow", name) or frappe.db.exists(
+		"Workflow", {"document_type": document_type}
+	)
 
-	Artwork validation is an independent FG/Product Library record. The flow is
-	CS Team -> BOM Team (BOM Validation) -> Supply Chain -> submit. The
-	definition is code-owned: an existing Workflow of this name is RECONCILED to match the
-	code (states/transitions rebuilt) so definition changes apply on migrate."""
+
+def _ensure_workflow():
+	"""Create the default Production Plan workflow only when no site workflow exists."""
 	if not frappe.db.table_exists("Workflow"):
+		return
+	if _existing_workflow(WORKFLOW_NAME, "Production Plan"):
 		return
 	try:
 		# (state, doc_status, owning role, style)
@@ -381,6 +375,8 @@ def _ensure_quotation_workflow():
 	a Quotation Approver. An existing Workflow of this name is left untouched."""
 	if not frappe.db.table_exists("Workflow"):
 		return
+	if _existing_workflow(QUOTATION_WORKFLOW_NAME, "Savinda Quotation"):
+		return
 	try:
 		# (state, doc_status, owning role, style)
 		states = [
@@ -454,6 +450,8 @@ def _ensure_sales_order_npd_workflow():
 	Submit (a conditional transition). An existing Workflow of this name is left untouched."""
 	if not frappe.db.table_exists("Workflow"):
 		return
+	if _existing_workflow(SO_NPD_WORKFLOW_NAME, "Sales Order"):
+		return
 	try:
 		# (state, doc_status, owning role, style)
 		states = [
@@ -523,8 +521,10 @@ NPD_REQUEST_WORKFLOW_NAME = "NPD Request Approval"
 def _ensure_npd_request_workflow():
 	"""Seed the NPD Request approval Workflow — ISOLATED on the NPD Request doctype (no native
 	ERPNext document is governed). Draft -> Pending NPD Approval -> Approved (submits) / Rejected.
-	Reconciled on every migrate."""
+	Existing site workflows are left untouched."""
 	if not frappe.db.table_exists("Workflow"):
+		return
+	if _existing_workflow(NPD_REQUEST_WORKFLOW_NAME, "NPD Request"):
 		return
 	try:
 		states = [
@@ -572,6 +572,8 @@ PACKING_WORKFLOW_NAME = "Packing Approval"
 def _ensure_packing_workflow():
 	"""Packing: prepare -> locked pending approval -> approve/submit or return to edit."""
 	if not frappe.db.table_exists("Workflow"):
+		return
+	if _existing_workflow(PACKING_WORKFLOW_NAME, "Packing"):
 		return
 	try:
 		states = [

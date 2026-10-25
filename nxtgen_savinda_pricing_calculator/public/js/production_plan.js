@@ -162,6 +162,11 @@ frappe.ui.form.on("Production Plan", {
 
 
 	},
+	custom_req_date: function (frm, cdt, cdn) {
+		frm.doc.custom_ticket_items.forEach(function (r) {
+			r.exp_date = frm.doc.custom_req_date;
+		});
+	},
 	custom_ticket_type: function (frm, cdt, cdn) {
 		// alert("Ticket Type changed — clearing planning rows and resetting source document.");
 		if (frm.doc.custom_ticket_type == "Job") {

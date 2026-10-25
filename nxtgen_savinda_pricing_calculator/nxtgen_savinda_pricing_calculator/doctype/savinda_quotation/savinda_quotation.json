@@ -231,7 +231,8 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Status",
-   "options": "Draft\nSent\nAccepted\nWon\nLost\nCancelled"
+   "options": "Draft\nSent\nAccepted\nWon\nLost\nCancelled",
+   "read_only": 1
   },
   {
    "allow_on_submit": 1,
@@ -282,7 +283,7 @@
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-07-25 17:00:02.343433",
+ "modified": "2026-10-25 05:19:49.824938",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Savinda Quotation",
