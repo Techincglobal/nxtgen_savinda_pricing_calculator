@@ -70,6 +70,7 @@ def after_install():
 	setup_bundle_fields()
 	_sync_code_print_formats()
 	_upgrade_quotation_price_layouts()
+	_upgrade_offset_ticket_variant_expiry()
 
 
 def apply_install_only_configuration():
@@ -104,6 +105,7 @@ def after_migrate():
 	setup_bundle_fields()
 	_sync_code_print_formats()
 	_upgrade_quotation_price_layouts()
+	_upgrade_offset_ticket_variant_expiry()
 
 
 def _migrate_flexo_planning_rows():
@@ -156,6 +158,7 @@ def _migrate_flexo_planning_rows():
 CODE_PRINT_FORMATS = (
 	"offset_job_ticket", "flexo_job_ticket", "offset_npd_job_ticket", "flexo_npd_job_ticket",
 	"savinda_quotation", "product_costing_summary",
+	"aod",
 )
 
 
@@ -206,6 +209,28 @@ def _upgrade_quotation_price_layouts():
 		html = html.replace(heading, "{{ get_quotation_price_basis(doc.currency).label | e }}").replace(
 			rate, "{{ get_quotation_print_rate(doc, row) }}")
 		pf = frappe.get_doc("Print Format", row.name)
+		pf.html = html
+		pf.save(ignore_permissions=True)
+
+
+def _offset_ticket_variant_expiry_html(html):
+	"""Targeted bindings only: leave dimensions in the header and expected dates alone."""
+	return html.replace("{{ item.variant_value or item.size }}", '{{ item.variant_value or "" }}').replace(
+		"{% if item.exp_date %}{{ frappe.utils.formatdate(item.exp_date) }}{% endif %}",
+		'{{ (item.expiry_date or "") | e }}',
+	)
+
+
+def _upgrade_offset_ticket_variant_expiry():
+	"""Update the requested custom layout without replacing its site-owned HTML."""
+	name = "Offset Job Ticket - 1"
+	if not frappe.db.exists("Print Format", name):
+		return
+	pf = frappe.get_doc("Print Format", name)
+	if pf.doc_type != "Production Plan":
+		return
+	html = _offset_ticket_variant_expiry_html(pf.html or "")
+	if html != (pf.html or ""):
 		pf.html = html
 		pf.save(ignore_permissions=True)
 

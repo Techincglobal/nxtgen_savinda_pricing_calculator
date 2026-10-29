@@ -741,7 +741,7 @@ function show_add_calc_popup(frm, cdt, cdn, item_name) {
 				},
 				{
 					fieldtype: "Data", fieldname: "carton_size",
-					label: "Carton Size",
+					label: pricingType=="Offset"?"Carton Size":"Lable Size ",
 					default: default_carton_size,
 					description: default_carton_size
 						? "From the Inquiry's Dimensions (L*W*H). Edit if this calculation packs differently."

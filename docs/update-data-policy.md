@@ -21,6 +21,7 @@ called automatically.
 - Savinda Quotation
 - Product Costing Summary
 - Savinda Combined Item Quotation
+- AOD (40 mm top margin reserved for preprinted letterhead)
 
 These layouts come from the app's corresponding JSON/template files. Any local
 changes to these **specific formats** will be replaced on migration; put approved
@@ -43,3 +44,10 @@ currency display value. Conversion/scaling happens before display rounding.
 
 Before production deployment, take a backup and review the updated layouts.
 No production deployment or migration is performed merely by editing these files.
+
+The custom `Offset Job Ticket - 1` format also receives a targeted binding repair
+when it exists: row Size shows only `variant_value` (never actual dimensions),
+and Exp Date uses `expiry_date`, not `exp_date` (Expected Date). Header dimensions
+and all other layout HTML are preserved. Expiry is free text on Job Ticket Item;
+the print preserves that text and may fall back to the Sales Order's actual expiry
+date, but never to an expected/delivery date. These setup changes do not edit PP rows.

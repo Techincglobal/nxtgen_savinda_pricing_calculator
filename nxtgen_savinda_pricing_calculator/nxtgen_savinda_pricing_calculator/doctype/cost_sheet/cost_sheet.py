@@ -128,7 +128,7 @@ class CostSheet(Document):
 			"Opportunity",
 			self.inquiry,
 			["custom_subject", "customer_name", "custom_colour",
-			 "custom_item_group", "custom_tiep"],
+			 "custom_item_group", "custom_tiep","custom_department"],
 			as_dict=True,
 		)
 		if not opp:
@@ -143,6 +143,14 @@ class CostSheet(Document):
 			self.item_group    = opp["custom_item_group"]
 		if opp.get("custom_tiep")     and not self.tiep:
 			self.tiep          = opp["custom_tiep"]
+		if opp.get("custom_department") :
+			department = opp.get("custom_department")
+			if department =="Offset - SGSPL":
+				self.pricing_type = "Offset"
+			elif department =="Flexo - SGSPL":
+				self.pricing_type = "Flexo"
+			
+			
 
 	# ── Backfill row dimensions from the Cost Item / Inquiry ───
 	def _fill_row_dimensions(self):

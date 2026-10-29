@@ -8,9 +8,9 @@ from nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.utils i
 
 
 class TestTicketGrouping(unittest.TestCase):
-	def print_data(self, rows):
+	def print_data(self, rows, tickets=None):
 		doc = frappe._dict(name="TEST-PP", creation="2026-10-05", posting_date="2026-10-05",
-			custom_pricing_type="Offset", custom_offset_planning=rows, custom_ticket_items=[], po_items=[], mr_items=[])
+			custom_pricing_type="Offset", custom_offset_planning=rows, custom_ticket_items=tickets or [], po_items=[], mr_items=[])
 		db = Mock()
 		db.get_value.return_value = None
 		db.exists.return_value = False
@@ -22,6 +22,20 @@ class TestTicketGrouping(unittest.TestCase):
 			for helper, result in (("_fg_bom_calc", {}), ("_fg_pl", {}), ("_job_costing_cfg", {}), ("_company_logo", ""), ("_ticket_base_materials", [])):
 				stack.enter_context(patch.object(jinja, helper, return_value=result))
 			return jinja.get_ticket_print_data(doc.name)
+
+	def test_expiry_date_is_separate_from_expected_date_on_planned_rows(self):
+		for grouped in (0, 1):
+			with self.subTest(grouped=grouped):
+				data = self.print_data([frappe._dict(fg_item="FG", qty=10, is_group=grouped)],
+					[frappe._dict(fg_item="FG", exp_date="2026-11-01", expiry_date="DEC 2028", size="150 x 200")])
+				line = data["lines"][0]
+				self.assertEqual(line["exp_date"], "2026-11-01")
+				self.assertEqual(line["expiry_date"], "DEC 2028")
+
+	def test_ticket_only_expiry_is_not_filled_from_expected_date(self):
+		data = self.print_data([], [frappe._dict(fg_item="FG", qty=10, exp_date="2026-11-01")])
+		self.assertEqual(data["lines"][0]["expiry_date"], "")
+		self.assertEqual(data["lines"][0]["exp_date"], "2026-11-01")
 
 	def test_grouped_assembly_parent_has_two_component_breakdowns(self):
 		rows = [

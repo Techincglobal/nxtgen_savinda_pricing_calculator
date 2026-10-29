@@ -76,6 +76,7 @@ def get_cb_print_data(doc_name):
 		pass
 
 	form		 = state.get("form", {}) or {}
+	form.setdefault("remarks", doc.get("remarks") or "")
 	calc_result  = state.get("calc_result", {}) or {}
 
 	# Recompute the calculation live so the print always reflects the CURRENT
@@ -370,6 +371,7 @@ def get_ticket_print_data(production_plan_name):
 								"product_code": p.get("product_code") or r.get("product_code") or "", "size": p.get("size") or r.get("size") or "",
 								"variant_value": (frappe.db.get_value("Item", p.get("fg_item"), "custom_variant_value") if p.get("fg_item") else "") or "",
 								"batch_no": p.get("batch_no") or r.get("batch_no") or "", "pack_date": p.get("pack_date") or r.get("pack_date"), "exp_date": p.get("exp_date") or r.get("exp_date"),
+								"expiry_date": p.get("expiry_date") or r.get("expiry_date") or "",
 								"line_item_bk": line_item_bk,
 								# Keep the normal line contract for downstream header/print logic.
 								# Component geometry stays in line_item_bk, not summed onto the FG.
@@ -389,6 +391,7 @@ def get_ticket_print_data(production_plan_name):
 					"product_code": p.get("product_code") or r.get("product_code") or "", "size": p.get("size") or r.get("size") or "",
 					"variant_value": (frappe.db.get_value("Item", p.get("fg_item"), "custom_variant_value") if p.get("fg_item") else "") or "",
 					"batch_no": p.get("batch_no") or r.get("batch_no") or "", "pack_date": p.get("pack_date") or r.get("pack_date"), "exp_date": p.get("exp_date") or r.get("exp_date"),
+					"expiry_date": p.get("expiry_date") or r.get("expiry_date") or "",
 					"full_sheets": _num(p.get("full_sheet_qty")), "cut_sheets": _num(p.get("cut_sheet_qty")),
 					"wastage": _num(p.get("wastage")), "cuts": int(p.get("cuts") or 0), "ups": int(p.get("ups") or 0),
 					"full_sheet_size": p.get("full_sheet_size") or r.get("full_sheet_size") or "", "cut_sheet_size": p.get("cut_sheet_size") or r.get("cut_sheet_size") or "",
@@ -412,6 +415,8 @@ def get_ticket_print_data(production_plan_name):
 				"batch_no": r.get("batch_no") or "",
 				"pack_date": r.get("pack_date"),
 				"exp_date": r.get("exp_date"),
+				# exp_date is Expected Date; expiry is separately entered free text.
+				"expiry_date": r.get("expiry_date") or "",
 				# Planning table overrides the CB geometry for the sheet figures when present.
 				"full_sheets": _num(pl.full_sheet_qty if pl else r.get("full_sheets")),
 				"cut_sheets": _num(pl.cut_sheet_qty if pl else r.get("cut_sheets")),
@@ -436,6 +441,7 @@ def get_ticket_print_data(production_plan_name):
 				"variant_value": frappe.db.get_value("Item", r.item_code, "custom_variant_value") or "",
 				"batch_no": r.get("custom_batch_no") or "",
 				"pack_date": r.get("custom_pack_date"), "exp_date": r.get("custom_exp_date"),
+				"expiry_date": r.get("custom_expiry_date") or "",
 				"full_sheets": _num(r.get("custom_full_sheets")), "cut_sheets": _num(r.get("custom_cut_sheets")),
 				"wastage": 0,
 				"full_sheet_size": r.get("custom_full_sheet_size") or "", "cut_sheet_size": r.get("custom_cut_sheet_size") or "",
@@ -598,6 +604,7 @@ def get_ticket_print_data(production_plan_name):
 				continue
 			l["pack_date"] = l["pack_date"] or si.get("custom_packing_date")
 			l["exp_date"] = l["exp_date"] or si.get("custom_expiry_date")
+			l["expiry_date"] = l.get("expiry_date") or si.get("custom_expiry_date") or ""
 			l["batch_no"] = l["batch_no"] or si.get("custom_batch_no")
 			l["product_code"] = l["product_code"] or si.get("custom_product_code")
 	quantity = sum(l["qty"] for l in lines)

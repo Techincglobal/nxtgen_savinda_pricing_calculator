@@ -702,6 +702,8 @@ def save_costing(payload):
             doc.custom_material_name = ""
     doc.material_rate = flt(form.get("material_rate", 0))
     doc.carton_size   = form.get("carton_size", "")
+    if hasattr(doc, "remarks"):
+        doc.remarks = form.get("remarks") or ""
     doc.full_sheet_l  = flt(form.get("full_sheet_l", 0))
     doc.full_sheet_w  = flt(form.get("full_sheet_w", 0))
     doc.cut_sheet_l   = flt(form.get("cut_sheet_l", 0))
@@ -814,6 +816,7 @@ def load_costing(name):
             # the state was stored — show that value rather than an empty box.
             if doc.carton_size and not (state.get("form") or {}).get("carton_size"):
                 state.setdefault("form", {})["carton_size"] = doc.carton_size
+            state.setdefault("form", {}).setdefault("remarks", doc.get("remarks") or "")
             return state
         except Exception:
             pass
@@ -823,6 +826,7 @@ def load_costing(name):
         "ref":           doc.ref or "",
         "price_list":    doc.price_list or "",
         "carton_size":   doc.carton_size or "",
+        "remarks":       doc.get("remarks") or "",
         "material_type":          (getattr(doc, "material_type", None) or "Existing"),
         "base_material":          doc.base_material or "",
         "custom_material_name":   (getattr(doc, "custom_material_name", None) or ""),

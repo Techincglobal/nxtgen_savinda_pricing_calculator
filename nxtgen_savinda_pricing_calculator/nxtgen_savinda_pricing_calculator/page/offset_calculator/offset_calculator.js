@@ -134,7 +134,7 @@ function oc_mount_app(el) {
 					customer_name: '', ref: '', price_list: '', carton_size: '',
 					material_type: 'Existing', base_material: '', custom_material_name: '', material_rate: 0,
 					no_of_colors: 4, item_qty: 1000,
-					profit_margin: 15, extra_prod_cost_pct: 10, tax_sscl: false, tax_vat: false,
+					profit_margin: 15, extra_prod_cost_pct: 10, tax_sscl: false, tax_vat: false, remarks: '',
 					// Offset-specific
 					full_sheet_l: 0, full_sheet_w: 0,
 					cut_sheet_l: 0, cut_sheet_w: 0,
@@ -404,6 +404,7 @@ function oc_mount_app(el) {
 			if (pt === 'Flexo' || pt === 'Offset') {
 				this.form.pricing_type = pt;
 			}
+			if (this.form.pricing_type === 'Flexo') this.form.extra_prod_cost_pct = 0;
 			var ops = urlParams.get('operations');
 			if (ops) {
 				this.autoSelectOperations = ops.split('|').filter(Boolean);
@@ -502,6 +503,7 @@ function oc_mount_app(el) {
 			// Reload specs when pricing type changes
 			onPricingTypeChange() {
 				var self = this;
+				self.form.extra_prod_cost_pct = self.form.pricing_type === 'Flexo' ? 0 : 10;
 				self.loading = true;
 				self.selectedSpecNames = [];
 				self.specState = {};
@@ -1333,6 +1335,11 @@ function oc_mount_app(el) {
 						}
 						if (d.form) {
 							Object.assign(self.form, d.form);
+							// Older states without a percentage use the pricing-type default.
+							// Explicitly saved values (including zero) remain unchanged.
+							if (!Object.prototype.hasOwnProperty.call(d.form, 'extra_prod_cost_pct')) {
+								self.form.extra_prod_cost_pct = self.form.pricing_type === 'Flexo' ? 0 : 10;
+							}
 							// Restore manual ad-hoc cost lines
 							self.manualCosts = Array.isArray(d.form.manual_costs)
 								? d.form.manual_costs.map(function (m) {
@@ -1980,7 +1987,7 @@ function oc_mount_app(el) {
           </div>
           <div class="oc-field"><label class="oc-lbl">Plate Price (per plate)</label><input v-model.number="form.plate_price" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
         </div>
-    	<!-- <div class="oc-2col">
+        <!-- <div class="oc-2col">
            <div class="oc-field"><label class="oc-lbl">Profit Margin (%)</label><input v-model.number="form.profit_margin" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>
            <div class="oc-field"><label class="oc-lbl">Extra Production Cost (%)</label><input v-model.number="form.extra_prod_cost_pct" type="number" min="0" step="0.5" class="oc-inp" @change="scheduleCalc" /></div>
     	</div>  -->
@@ -2171,6 +2178,10 @@ function oc_mount_app(el) {
     </div>
 	<div class="" style="padding:12px 16px;border-top:1px solid #e5e7eb; background:#f9fafb">
 	
+	<div v-if="isFlexo" class="oc-field">
+    <label class="oc-lbl">Remark</label>
+    <textarea v-model="form.remarks" rows="3" class="oc-inp" style="height:auto;padding:7px 9px;resize:vertical" :disabled="viewOnly" placeholder="Enter remarks for this Flexo calculation"></textarea>
+	</div>
 	<div class="oc-divider-label">Profit & Extra Costs</div>
 	<div class="oc-2col">
     <div class="oc-field"><label class="oc-lbl">Profit Margin (%)</label><input v-model.number="form.profit_margin" type="number" min="0" class="oc-inp" @change="scheduleCalc" /></div>

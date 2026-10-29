@@ -9,6 +9,7 @@
   "section_break_wxyj",
   "customer_name",
   "carton_size",
+  "remarks",
   "column_break_howj",
   "ref",
   "price_list",
@@ -59,6 +60,12 @@
   "amended_from"
  ],
  "fields": [
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remark",
+   "depends_on": "eval:doc.pricing_type=='Flexo'"
+  },
   {
    "fieldname": "section_break_rwed",
    "fieldtype": "Section Break"
