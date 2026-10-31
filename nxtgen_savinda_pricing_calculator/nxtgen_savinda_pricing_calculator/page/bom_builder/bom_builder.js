@@ -61,6 +61,7 @@ function bb_mount_app(el) {
 				sheetData: {},    // sheet calculation results for display
 				sheetExpanded: true,
 				dragIdx: null,
+				compact: false,   // collapsed chain view for easy reordering
 				// All calculation-dependency inputs — editable, recompute via calculator.
 				pricingType: 'Offset',
 				drivers: {
@@ -573,7 +574,17 @@ function bb_mount_app(el) {
 				this.dragIdx = null;
 				this.syncChain();
 			},
-			onSFGChange(op) {
+			// Move one step up/down — precise reordering without dragging.
+				moveOp(idx, dir) {
+					var j = idx + dir;
+					if (j < 0 || j >= this.operations.length) return;
+					var ops = this.operations.slice();
+					var moved = ops.splice(idx, 1)[0];
+					ops.splice(j, 0, moved);
+					this.operations = ops;
+					this.syncChain();
+				},
+				onSFGChange(op) {
 				// When user changes SFG name/code, re-sync downstream
 				this.syncChain();
 			},
@@ -1051,7 +1062,8 @@ function bb_mount_app(el) {
         <div class="bb-card-title">
           {{ pricingType === 'Flexo' ? 'Flexo SFG Operation Chain' : 'Offset SFG Operation Chain' }}
           <span class="bb-count">{{ operations.length }} ops</span>
-          <span class="bb-hint" style="margin-left:8px">Drag ≡ to reorder — chain updates automatically</span>
+          <span class="bb-hint" style="margin-left:8px">Drag ≡ or use ▲▼ to reorder — chain updates automatically</span>
+          <button v-if="operations.length" class="bb-btn-compact" @click="compact = !compact" :title="compact ? 'Show full details' : 'Collapse to short rows — see the whole chain and reorder easily'">{{ compact ? '⊞ Expand rows' : '▤ Compact view' }}</button>
         </div>
       </div>
 
@@ -1059,7 +1071,7 @@ function bb_mount_app(el) {
         No operations. Click ↻ Load after selecting FG + CB.
       </div>
 
-      <div v-else>
+      <div v-else :class="{'bb-chain-compact': compact}">
         <div v-if="outputFgOrderError" class="bb-error" style="margin:10px 14px 0">
           <b>Output = FG must be the final active operation.</b> Drag that operation to the end,
           or clear the marker. Creating the BOM is blocked until the chain is complete.
@@ -1089,8 +1101,10 @@ function bb_mount_app(el) {
 
           <!-- Drag handle + seq -->
           <div class="bb-op-drag">
-            <span class="bb-drag-handle">≡</span>
+            <button class="bb-move-btn" @click.stop="moveOp(i, -1)" :disabled="i === 0" title="Move up">▲</button>
+            <span class="bb-drag-handle" title="Drag to reorder">≡</span>
             <span class="bb-op-seq">{{ i + 1 }}</span>
+            <button class="bb-move-btn" @click.stop="moveOp(i, 1)" :disabled="i === operations.length - 1" title="Move down">▼</button>
           </div>
 
           <!-- Input Material -->
@@ -1127,6 +1141,7 @@ function bb_mount_app(el) {
                 style="width:84px;padding:2px 5px;font-size:10px" placeholder="Workstation" />
               <button class="bb-btn-link" @click="pickWorkstation(op)" title="Pick from ERPNext Workstations">🔍</button>
             </div>
+            <div class="bb-op-actions">
             <!-- Split to item unit button -->
             <button :class="['bb-split-btn', op.split_to_item_unit ? 'bb-split-on' : '']"
               @click="setSplitPoint(i)"
@@ -1156,6 +1171,7 @@ function bb_mount_app(el) {
               <input type="checkbox" v-model="op.has_quality_inspection" style="margin-right:3px" />
               QI Required
             </label>
+            </div><!-- /bb-op-actions -->
             <div v-if="op.has_quality_inspection" class="bb-op-erp-row" style="margin-top:2px">
               <input type="text" v-model="op.quality_inspection_template" class="bb-inp"
                 style="width:84px;padding:2px 5px;font-size:10px" placeholder="QI Template" />
@@ -1355,7 +1371,7 @@ select.bb-inp-uom{width:100px!important}
 .bb-drag-handle{font-size:16px;color:#9ca3af;line-height:1}
 .bb-op-seq{font-size:10px;font-weight:700;color:#9ca3af}
 .bb-op-input,.bb-op-output{display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px}
-.bb-op-center{display:flex;flex-direction:column;gap:4px;min-width:130px;align-items:center;padding:0 4px}
+.bb-op-center{display:flex;flex-direction:column;gap:4px;min-width:240px;max-width:380px;align-items:center;padding:0 4px}
 .bb-op-label{font-size:9.5px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.04em}
 .bb-op-item-badge{font-size:11px;font-weight:600;padding:3px 8px;border-radius:3px;word-break:break-word}
 .bb-badge-in{background:#dbeafe;color:#1e40af}
@@ -1392,6 +1408,18 @@ select.bb-inp-uom{width:100px!important}
 .bb-op-erp-row{display:flex;align-items:center;gap:3px;margin-top:3px;width:100%}
 .bb-btn-link{background:none;border:none;cursor:pointer;color:#1a3a5c;font-size:13px;padding:0 2px;line-height:1;flex-shrink:0}
 .bb-btn-link:hover{color:#2c5f8a}
+/* Compact view toggle + horizontal op actions + move up/down buttons */
+.bb-op-actions{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-top:4px}
+.bb-op-actions .bb-split-btn,.bb-op-actions .bb-excl-btn,.bb-op-actions .bb-chk-lbl{margin-top:0}
+.bb-move-btn{border:1px solid #d1d5db;background:#f9fafb;color:#6b7280;border-radius:3px;cursor:pointer;font-size:9px;line-height:1;padding:2px 5px}
+.bb-move-btn:hover:not(:disabled){background:#dbeafe;border-color:#2c7be5;color:#1e40af}
+.bb-move-btn:disabled{opacity:.3;cursor:default}
+.bb-btn-compact{margin-left:12px;border:1px solid #cbd5e1;background:#fff;color:#334155;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;padding:3px 10px}
+.bb-btn-compact:hover{background:#f1f5f9;border-color:#2c7be5;color:#1e40af}
+.bb-chain-compact .bb-op-mats,.bb-chain-compact .bb-op-mats-empty,.bb-chain-compact .bb-op-actions,.bb-chain-compact .bb-op-erp-row,.bb-chain-compact .bb-op-time,.bb-chain-compact .bb-op-qty,.bb-chain-compact .bb-op-label,.bb-chain-compact .bb-op-machine{display:none}
+.bb-chain-compact .bb-op-row{padding:5px 14px}
+.bb-chain-compact .bb-op-arrow{padding-top:6px}
+.bb-chain-compact .bb-inp-sm{padding:2px 6px}
 `;
 	document.head.appendChild(s);
 }
