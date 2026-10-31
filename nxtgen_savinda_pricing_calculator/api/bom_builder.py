@@ -12,8 +12,8 @@ from nxtgen_savinda_pricing_calculator.api import job_ticket as jt_api
 
 @frappe.whitelist()
 def get_uoms():
-	"""UOM master names for the builder; respect the user's normal read permissions."""
-	return frappe.get_list("UOM", pluck="name", order_by="name asc", limit_page_length=0)
+	"""Enabled UOM master names for the builder; respect the user's normal read permissions."""
+	return frappe.get_list("UOM", filters={"enabled": 1}, pluck="name", order_by="name asc", limit_page_length=0)
 
 
 def _library_sheet_size(value):
