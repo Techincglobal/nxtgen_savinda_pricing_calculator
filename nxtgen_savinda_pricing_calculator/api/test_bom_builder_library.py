@@ -36,10 +36,25 @@ class TestBOMBuilderLibrary(unittest.TestCase):
 	def test_optional_site_cuts_field_is_used_if_populated(self):
 		self.assertEqual(self.inputs(self.library(no_of_cuts=4)), {"no_of_cuts":4})
 
-	def test_flexo_library_width_is_reel_width_and_length_is_label_length(self):
-		values = self.inputs(self.library(width_mm=333, length_mm=80, full_sheet_size="31x43"), "Flexo")
-		self.assertEqual(values, {"reel_width_mm":333,"product_length_mm":80})
+	def test_flexo_legacy_library_length_cannot_override_product_length(self):
+		values = self.inputs(self.library(width_mm=333, length_mm=1124, full_sheet_size="31x43"), "Flexo")
+		self.assertEqual(values, {"reel_width_mm":333})
 		self.assertNotIn("product_width_mm", values)
+		self.assertNotIn("product_length_mm", values)
+
+	def test_flexo_product_length_stays_separate_and_can_be_edited(self):
+		state = {"form": {"pricing_type": "Flexo", "product_length_mm": 80,
+			"reel_length_m": 1124, "reel_width_mm": 333}, "selected_specs": []}
+		cb = frappe._dict(ui_state=json.dumps(state), pricing_type="Flexo")
+		for overrides, expected in ((None, 80), ({"product_length_mm": 90}, 90)):
+			with self.subTest(overrides=overrides), \
+				patch.object(frappe, "get_doc", return_value=cb), \
+				patch.object(frappe.db, "get_value", return_value=""), \
+				patch.object(bom_builder, "_library_bom_inputs", return_value={"reel_width_mm": 333}), \
+				patch.object(offset_calculator, "calculate", return_value={"sheet": {"reel_area": 400, "ups": 4}, "cost_rows": []}):
+				result = bom_builder.get_bom_data("CB", 1000, "FG", overrides)
+				self.assertEqual(result["drivers"]["product_length_mm"], expected)
+				self.assertEqual(result["drivers"]["reel_length_m"], 1124)
 
 	def test_missing_library_preserves_original_behaviour(self):
 		with patch.object(frappe.db, "get_value", return_value=None), patch.object(frappe, "get_doc") as get_doc:
@@ -96,3 +111,66 @@ class TestBOMBuilderLibrary(unittest.TestCase):
 		self.assertEqual(values["custom_no_of_cuts"], 2)
 		self.assertEqual(values["custom_cut_sheet_ups"], 4)
 		self.assertEqual(values["custom_cut_sheet_size"], "15.5 x 21.5")
+
+	def test_bom_details_use_selected_calculation_and_reviewed_offset_values(self):
+		with patch.object(bom_builder.jt_api, "_cb_fields", return_value={"pricing_type": "Offset",
+			"no_of_ups": 2, "no_of_cuts": 1, "carton_size": "OLD"}) as cb, \
+			patch.object(bom_builder, "_library_bom_inputs", return_value={"cut_sheet_l": 24, "cut_sheet_w": 17}), \
+			patch.object(frappe.db, "get_value", return_value=None):
+			values = bom_builder._bom_calc_field_values("FG", "SELECTED-CB",
+				{"no_of_ups": 8, "no_of_cuts": 2, "cut_sheet_l": 15.5, "cut_sheet_w": 21.5,
+				 "full_sheet_l": 31, "full_sheet_w": 43, "carton_size": "150 x 40 x 60"}, 5000)
+		cb.assert_called_once_with("SELECTED-CB")
+		self.assertEqual(values["custom_cut_sheet_size"], "15.5 x 21.5")
+		self.assertEqual(values["custom_full_sheet_size"], "31.0 x 43.0")
+		self.assertEqual(values["custom_carton_size"], "150 x 40 x 60")
+		self.assertEqual(values["custom_cut_sheet_ups"], 4)
+		self.assertEqual(values["custom_base_item_qty"], 5000)
+
+	def test_flexo_bom_keeps_product_and_reel_dimensions_separate(self):
+		form = {"pricing_type": "Flexo", "reel_width_mm": 333, "product_width_mm": 70,
+			"product_length_mm": 80, "product_gap_mm": 0, "product_margin_mm": 0,
+			"no_of_colors": 4, "item_qty": 1000}
+		with patch.object(bom_builder.jt_api, "_cb_fields", return_value={"pricing_type": "Flexo",
+			"ui_state": json.dumps({"form": form})}), \
+			patch.object(bom_builder, "_library_bom_inputs", return_value={}), \
+			patch.object(offset_calculator, "_get_config", return_value={"flexo_wastage": [(99, 0, 0)]}), \
+			patch.object(frappe.db, "get_value", return_value=None):
+			values = bom_builder._bom_calc_field_values("FG", "CB", {"product_length_mm": 100, "carton_size": "70 x 100"}, 2000)
+		self.assertEqual(values["custom_product_width_mm"], 70)
+		self.assertEqual(values["custom_product_length_mm"], 100)
+		self.assertEqual(values["custom_reel_width_mm"], 333)
+		self.assertEqual(values["custom_reel_length_m"], 50)
+		self.assertEqual(values["custom_no_of_ups"], 4)
+		self.assertEqual(values["custom_carton_size"], "70 x 100")
+		self.assertEqual(values["custom_flexo_repeat_count"], 500)
+		self.assertAlmostEqual(values["custom_length_per_repeat_m"], .1)
+
+	def test_flexo_10000_labels_four_ups_consumes_length_per_2500_repeats(self):
+		form = {"pricing_type": "Flexo", "base_material": "FILM", "reel_width_mm": 330,
+			"product_width_mm": 70, "product_length_mm": 80, "product_gap_mm": 0,
+			"product_margin_mm": 0, "no_of_colors": 4, "item_qty": 10000}
+		cb = frappe._dict(ui_state=json.dumps({"form": form, "selected_specs": []}), pricing_type="Flexo")
+		for uom, expected in (("Meter", 240), ("M2", 79.2), ("sqmt", 79.2),
+			("sqm", 79.2), ("Sq. M", 79.2), ("Square Metre", 79.2)):
+			def get_value(dt, name, field, **kwargs):
+				return uom if dt == "Item" and field == "stock_uom" else ""
+			def calculate(payload):
+				return {"sheet": offset_calculator._calc_flexo(json.loads(payload)["form"]), "cost_rows": []}
+			with self.subTest(uom=uom), patch.object(frappe, "get_doc", return_value=cb), \
+				patch.object(frappe.db, "get_value", side_effect=get_value), \
+				patch.object(bom_builder, "_library_bom_inputs", return_value={}), \
+				patch.object(offset_calculator, "_get_config", return_value={"flexo_wastage": [(99, 0, .2)]}), \
+				patch.object(offset_calculator, "calculate", side_effect=calculate):
+				result = bom_builder.get_bom_data("CB", 10000, "FG")
+			self.assertAlmostEqual(result["base_material_qty"], expected)
+			self.assertEqual(result["base_material_uom"], uom)
+			self.assertEqual(result["after_print_qty"], 240)
+			self.assertEqual(result["sheet"]["bom_repeat_count"], 2500)
+			self.assertAlmostEqual(result["sheet"]["required_reel_length_m"], 240)
+			self.assertAlmostEqual(result["sheet"]["length_per_repeat_m"], .096)
+
+	def test_flexo_repeat_count_is_order_qty_divided_by_ups(self):
+		basis = bom_builder._flexo_repeat_basis({"reel_width_mm": 330}, {"ups": 4, "reel_area": 79.2}, 10001)
+		self.assertEqual(basis["repeat_count"], 2500.25)
+		self.assertAlmostEqual(basis["length_per_repeat_m"], 240 / 2500.25)

@@ -72,7 +72,7 @@ def _cb_fields(cb_name):
 		 "base_material", "custom_material_name", "item_qty", "carton_size", "ui_state"],
 		as_dict=True,
 	) or {}
-	reel_w = reel_l = reel_area = 0
+	reel_w = reel_l = reel_area = product_l = 0
 	if d.get("ui_state"):
 		try:
 			state = json.loads(d["ui_state"]) or {}
@@ -82,11 +82,13 @@ def _cb_fields(cb_name):
 			reel_w = flt(form.get("reel_width_mm") or form.get("product_width_mm") or 0)
 			reel_l = flt(sheet.get("reel_length") or form.get("reel_length_m") or 0)
 			reel_area = flt(sheet.get("reel_area") or 0)
+			product_l = flt(form.get("product_length_mm") or 0)
 		except Exception:
 			pass
 	d["_reel_width"] = reel_w
 	d["_reel_length"] = reel_l
 	d["_reel_area"] = reel_area
+	d["_product_length_mm"] = product_l
 	return d
 
 
@@ -586,6 +588,7 @@ def create_sample_fg_and_bom(job_ticket):
 			res = create_fg_item(
 				item_name=name, description=name, item_group=ig, department=dept,
 				stock_uom="Nos", cost_item=(row.cost_item or None),
+				pl_overrides={"artwork_no": jt.get("art_no") or ""},
 			)
 			fg = res["item_code"]
 			# Write directly on the child row so it works whether or not the ticket is submitted.

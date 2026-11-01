@@ -19,6 +19,9 @@
   "customer_product_code",
   "category",
   "department",
+  "product_size",
+  "no_of_colors",
+  "no_of_ups",
   "column_break_gen",
   "customer",
   "fg_item",
@@ -39,11 +42,8 @@
   "section_tech_offset",
   "full_sheet_size",
   "cut_sheet_size",
-  "product_size",
   "pasting_type",
   "column_break_off",
-  "no_of_colors",
-  "no_of_ups",
   "proof_standard",
   "printing_machine",
   "section_tech_flexo",
@@ -171,7 +171,8 @@
   {
    "fieldname": "artwork_no",
    "fieldtype": "Data",
-   "label": "Artwork No"
+   "label": "Artwork No",
+   "reqd": 1
   },
   {
    "fieldname": "artwork_version",

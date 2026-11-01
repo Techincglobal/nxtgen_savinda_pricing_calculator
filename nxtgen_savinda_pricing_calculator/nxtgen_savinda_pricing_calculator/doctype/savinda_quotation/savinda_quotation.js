@@ -847,7 +847,7 @@ function _create_fg_for_item(frm, pending_rows, idx, ig_default, created) {
 	// Fetch the Product Library review defaults for this cost item, then open the dialog.
 	frappe.call({
 		method: "nxtgen_savinda_pricing_calculator.api.production_plan.get_cost_item_fg_defaults",
-		args: { cost_item: row.cost_item || "", quotation: frm.doc.name },
+		args: { cost_item: row.cost_item || "", quotation: frm.doc.name, quotation_item: row.name },
 		callback: function (r) {
 			_build_fg_dialog(frm, pending_rows, idx, ig_default, row, r.message || {}, created);
 		},
@@ -859,7 +859,10 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) 
 	var suggested_name = (row.item_name || "FG").substring(0, 60);
 	var suggested_desc = [row.size, row.material, row.finishing].filter(Boolean).join(" | ");
 	var pl_fields = pd.pl_fields || [];
-	var pl_defaults = pd.defaults || {};
+	var pl_defaults = Object.assign({}, pd.defaults || {});
+	// Include edits on the selected quotation line that have not been saved yet.
+	if (row.pcs_per_role) pl_defaults.pl_pcs_per_roll = row.pcs_per_role;
+	if (row.winding_direction) pl_defaults.pl_winding_direction = row.winding_direction;
 	var fields = [
 		{
 			fieldtype: "HTML",
@@ -906,15 +909,21 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) 
 
 	// Product Library details — reviewed here, saved into the Product Library record.
 	if (pl_fields.length) {
-		fields.push({ fieldtype: "Section Break", label: "Product Library Details", collapsible: 1 });
-		nxtgen_pl.fields(pl_fields, pd.is_flexo, "", pl_defaults).forEach(function (f) { fields.push(f); });
+		fields.push({ fieldtype: "Section Break", label: "Product Library Details" });
+		nxtgen_pl.fields(pl_fields, pd.is_flexo, "", pl_defaults).forEach(function (f) {
+			if (f.fieldname === "pl_artwork_no") {
+				f.reqd = 0;
+				f.mandatory_depends_on = "eval:!doc.has_variant && !doc.existing_item";
+			}
+			fields.push(f);
+		});
 	}
 
 	fields.push({ fieldtype: "Section Break", label: "Variants (optional)" });
 	fields.push({
 		fieldtype: "Check", fieldname: "has_variant",
 		label: "Has Variant (create S / M / L … as variant items)",
-		description: "Tick to make this a template and create ERPNext variants. Each variant is its own FG item; all share this Cost Item.",
+		description: "Each variant is its own FG item and needs its own Artwork No. All share this Cost Item; the main Artwork No is optional.",
 	});
 	fields.push({
 		fieldtype: "Data", fieldname: "variant_attribute",
@@ -928,8 +937,9 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) 
 		cannot_add_rows: false, in_place_edit: false, data: [],
 		fields: [
 			{ fieldtype: "Data", fieldname: "value", label: "Variant (e.g. S)", in_list_view: 1, reqd: 1, columns: 2 },
-			{ fieldtype: "Data", fieldname: "item_name", label: "Item Name (blank = auto)", in_list_view: 1, columns: 5 },
-			{ fieldtype: "Data", fieldname: "customer_ref", label: "Customer Ref", in_list_view: 1, columns: 3 },
+			{ fieldtype: "Data", fieldname: "item_name", label: "Item Name (blank = auto)", in_list_view: 1, columns: 3 },
+			{ fieldtype: "Data", fieldname: "customer_ref", label: "Customer Ref", in_list_view: 1, columns: 2 },
+			{ fieldtype: "Data", fieldname: "artwork_no", label: "Artwork No", in_list_view: 1, reqd: 1, columns: 3 },
 		],
 	});
 
@@ -955,6 +965,7 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) 
 
 			// Reviewed Product Library values (shared across variants).
 			var pl_overrides = nxtgen_pl.overrides(pl_fields, vals, "");
+			pl_overrides.quotation_no = frm.doc.name;
 
 			// ── Variant path: create a template + native ERPNext variants ──
 			if (vals.has_variant) {
@@ -964,6 +975,11 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) 
 				if (!variants.length) {
 					frappe.msgprint({ message: "Add at least one variant row, or untick 'Has Variant'.", indicator: "orange" });
 					d.show();
+					return;
+				}
+				var missing_artwork = variants.findIndex(function (v) { return !(v.artwork_no || "").trim(); });
+				if (missing_artwork !== -1) {
+					frappe.msgprint(__("Artwork No is required for variant row {0}.", [missing_artwork + 1]));
 					return;
 				}
 				d.disable_primary_action();

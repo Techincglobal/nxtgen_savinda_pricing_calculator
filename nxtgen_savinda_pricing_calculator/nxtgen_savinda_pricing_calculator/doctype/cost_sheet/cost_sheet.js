@@ -248,19 +248,37 @@ function _cs_bundle_fg(frm) {
 		frappe.set_route("Form", "Item", frm.doc.custom_bundle_fg);
 		return;
 	}
-	frappe.prompt([
-		{fieldname: "item_group", label: __("Item Group"), fieldtype: "Link", options: "Item Group", reqd: 1, default: "Finished Goods"},
-		{fieldname: "department", label: __("Department"), fieldtype: "Link", options: "Department", reqd: 1},
-		{fieldname: "customer", label: __("Customer"), fieldtype: "Link", options: "Customer"}
-	], function (values) {
-		frappe.call({method: "nxtgen_savinda_pricing_calculator.api.costing_bundle.create_bundle_fg",
-			args: Object.assign({cost_sheet: frm.doc.name}, values), freeze: true,
-			callback: function (r) {
-				frm.reload_doc();
-				frappe.msgprint(__("Bundle FG created disabled. Open Product Library to review its details and combined pricing, then Approve & Enable FG."));
-				if (r.message.product_library) frappe.set_route("Form", "Product Library", r.message.product_library);
-			}});
-	}, __("Create Assembled Bundle FG"), __("Create"));
+	frappe.call({
+		method: "nxtgen_savinda_pricing_calculator.api.costing_bundle.get_bundle_fg_preview",
+		args: { cost_sheet: frm.doc.name },
+		callback: function (r) {
+			var m = r.message || {};
+			var fields = nxtgen_pl.item_fields(m.defaults);
+			fields = fields.concat(nxtgen_pl.fields(m.pl_fields, m.is_flexo, "", m.defaults));
+			var d = new frappe.ui.Dialog({
+				title: __("Create Assembled Bundle FG"), size: "extra-large", fields: fields,
+				primary_action_label: __("Create FG"),
+				primary_action: function (values) {
+					d.disable_primary_action();
+					frappe.call({
+						method: "nxtgen_savinda_pricing_calculator.api.costing_bundle.create_bundle_fg",
+						args: { cost_sheet: frm.doc.name, item_name: values.item_name, description: values.description,
+							item_group: values.item_group, department: values.department, stock_uom: values.stock_uom,
+							customer_ref: values.customer_ref,
+							pl_overrides: JSON.stringify(nxtgen_pl.overrides(m.pl_fields, values)) },
+						freeze: true,
+						callback: function (res) {
+							d.hide(); frm.reload_doc();
+							frappe.msgprint(__("Bundle FG created disabled and sent for Product Library validation."));
+							if (res.message.product_library) frappe.set_route("Form", "Product Library", res.message.product_library);
+						},
+						always: function () { d.enable_primary_action(); }
+					});
+				}
+			});
+			d.show();
+		}
+	});
 }
 
 // ── Child table events ────────────────────────────────────────
@@ -310,19 +328,14 @@ function _cs_fg_create_popup(frm) {
 				var p = "l" + i + "__";
 				meta.push({ idx: i, cost_item: ln.cost_item });
 				fields.push({ fieldtype: "Section Break", label: __("Product: ") + (ln.item_name || ln.cost_item) });
-				fields.push({ fieldtype: "Data", fieldname: p + "item_name", label: __("Item Name"), reqd: 1, default: ln.item_name });
-				fields.push({ fieldtype: "Link", options: "Item Group", fieldname: p + "item_group", label: __("Item Group"), default: ln.item_group });
-				fields.push({ fieldtype: "Link", options: "Department", fieldname: p + "department", label: __("Department"), default: ln.department });
-				fields.push({ fieldtype: "Link", options: "UOM", fieldname: p + "stock_uom", label: __("Stock UOM"), default: ln.stock_uom });
-				fields.push({ fieldtype: "Data", fieldname: p + "customer_ref", label: __("Customer Ref"), default: ln.customer_ref });
-				fields.push({ fieldtype: "Column Break" });
+				fields = fields.concat(nxtgen_pl.item_fields(ln, p));
 				// All reviewable Product Library fields (schema from the server).
 				nxtgen_pl.fields(m.pl_fields, ln.pl_department === "Flexo", p, ln).forEach(function (f) {
 					fields.push(f);
 				});
 			});
 			var d = new frappe.ui.Dialog({
-				title: __("Create FG Items — Review Details"), size: "large", fields: fields,
+				title: __("Create FG Items — Review Details"), size: "extra-large", fields: fields,
 				primary_action_label: __("Create FG"),
 				primary_action: function (v) {
 					var details = meta.map(function (mt) {
@@ -330,6 +343,7 @@ function _cs_fg_create_popup(frm) {
 						var detail = {
 							cost_item: mt.cost_item,
 							item_name: v[p + "item_name"], item_group: v[p + "item_group"],
+							description: v[p + "description"],
 							department: v[p + "department"], stock_uom: v[p + "stock_uom"], customer_ref: v[p + "customer_ref"],
 						};
 						var ov = nxtgen_pl.overrides(m.pl_fields, v, p);

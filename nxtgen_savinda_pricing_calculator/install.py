@@ -955,9 +955,14 @@ def _custom_field_definitions():
 				{"fieldname": "custom_carton_size", "label": "Product / Carton Size", "fieldtype": "Data", "insert_after": "custom_cut_sheet_size", "read_only": 1, "allow_on_submit": 1},
 				{"fieldname": "custom_reel_width_mm", "label": "Reel Width (mm)", "fieldtype": "Float", "insert_after": "custom_carton_size", "read_only": 1, "allow_on_submit": 1, "depends_on": "eval:doc.custom_pricing_type=='Flexo'"},
 				{"fieldname": "custom_reel_length_m", "label": "Reel Length (m)", "fieldtype": "Float", "insert_after": "custom_reel_width_mm", "read_only": 1, "allow_on_submit": 1, "depends_on": "eval:doc.custom_pricing_type=='Flexo'"},
+				{"fieldname": "custom_product_width_mm", "label": "Product Width (mm)", "fieldtype": "Float", "insert_after": "custom_reel_length_m", "read_only": 1, "allow_on_submit": 1, "depends_on": "eval:doc.custom_pricing_type=='Flexo'"},
+				{"fieldname": "custom_product_length_mm", "label": "Product Length (mm)", "fieldtype": "Float", "insert_after": "custom_product_width_mm", "read_only": 1, "allow_on_submit": 1, "depends_on": "eval:doc.custom_pricing_type=='Flexo'"},
+				{"fieldname": "custom_flexo_repeat_count", "label": "Repeat Count (Qty / Ups)", "fieldtype": "Float", "insert_after": "custom_product_length_mm", "read_only": 1, "allow_on_submit": 1, "depends_on": "eval:doc.custom_pricing_type=='Flexo'"},
+				{"fieldname": "custom_required_reel_length_m", "label": "Required Reel Length incl. Wastage (m)", "fieldtype": "Float", "insert_after": "custom_flexo_repeat_count", "read_only": 1, "allow_on_submit": 1, "depends_on": "eval:doc.custom_pricing_type=='Flexo'"},
+				{"fieldname": "custom_length_per_repeat_m", "label": "Length per Repeat (m)", "fieldtype": "Float", "precision": "9", "insert_after": "custom_required_reel_length_m", "read_only": 1, "allow_on_submit": 1, "depends_on": "eval:doc.custom_pricing_type=='Flexo'"},
 				# BOM remark entered on the costing form (Cost Sheet item) and copied here + to the
 				# Product Library, so it prints on the Job Ticket / planning list.
-				{"fieldname": "custom_bom_remark", "label": "BOM Remark", "fieldtype": "Small Text", "insert_after": "custom_reel_length_m", "allow_on_submit": 1},
+				{"fieldname": "custom_bom_remark", "label": "BOM Remark", "fieldtype": "Small Text", "insert_after": "custom_length_per_repeat_m", "allow_on_submit": 1},
 			],
 			"Production Plan": [
 				{"fieldname": "custom_ticket_section", "label": "Job Ticket", "fieldtype": "Section Break", "insert_after": "naming_series"},

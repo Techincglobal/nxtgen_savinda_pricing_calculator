@@ -65,6 +65,7 @@ function bb_mount_app(el) {
 				// All calculation-dependency inputs — editable, recompute via calculator.
 				pricingType: 'Offset',
 				drivers: {
+					carton_size: '',
 					no_of_colors: 0, material_rate: 0, base_material: '',
 					no_of_cuts: 0, no_of_ups: 0, cut_sheet_ups: 0,
 					full_sheet_l: 0, full_sheet_w: 0, cut_sheet_l: 0, cut_sheet_w: 0,
@@ -240,6 +241,10 @@ function bb_mount_app(el) {
 
 			// ── Editable drivers → recompute consumption via the calculator ──
 			onDriverChange() { this.driversDirty = true; },
+			openCosting() {
+				if (!this.calcBreakdown) { frappe.msgprint('No Calculation Breakdown linked for this FG.'); return; }
+				window.open('/app/offset-calculator?ref=' + encodeURIComponent(this.calcBreakdown), '_blank');
+			},
 
 			changeBaseMaterial() {
 				var self = this;
@@ -253,7 +258,6 @@ function bb_mount_app(el) {
 
 			recomputeDrivers() {
 				// Re-run the calculator with the edited drivers/base material; keep the arranged order.
-				this.driversDirty = false;
 				this.loadBomData(true, true);
 			},
 
@@ -262,6 +266,8 @@ function bb_mount_app(el) {
 			// own independent SFG codes (variant tag suffix).
 			createVariant() {
 				var self = this;
+				if (self.loading) return;
+				if (self.driversDirty || self.qtyChanged) { frappe.msgprint('Recompute the edited dimensions / quantity before creating the BOM.'); return; }
 				if (!self.selectedFG || !self.operations.length) { frappe.msgprint('Load a BOM first.'); return; }
 				frappe.prompt(
 					[{ fieldtype: 'Data', fieldname: 'suffix', label: 'Variant Tag (e.g. SMALL, A3)', reqd: 1,
@@ -274,12 +280,14 @@ function bb_mount_app(el) {
 							method: API.createBomChain,
 							args: {
 								fg_item:         self.selectedFG,
+									calculation_breakdown: self.calcBreakdown,
+									overrides: JSON.stringify(self.drivers),
 								mfg_qty:         self.mfgQty,
 								operations:      JSON.stringify(self.operations),
 								extra_materials: JSON.stringify(self.extraMaterials),
 								is_default:      0,
 								variant_suffix:  suffix,
-								submit:          0,
+									submit:          1,
 							},
 							freeze: true, freeze_message: 'Creating variant BOM…',
 							callback: function (r) {
@@ -360,7 +368,6 @@ function bb_mount_app(el) {
 				var self = this;
 				if (!self.calcBreakdown || !self.mfgQty) return;
 				self.loading = true;
-				self.qtyChanged = false;
 				var args = { calculation_breakdown: self.calcBreakdown, mfg_qty: self.mfgQty, fg_item: self.selectedFG };
 				// Only send driver overrides once the user has edited them (else the CB's own values are used).
 				if (useDrivers) args.overrides = JSON.stringify(self.drivers);
@@ -371,6 +378,8 @@ function bb_mount_app(el) {
 						self.loading = false;
 						if (!r.message) return;
 						var d = r.message;
+						self.qtyChanged = false;
+						self.driversDirty = false;
 						// Seed the editable drivers from the effective calculation.
 						if (d.pricing_type) self.pricingType = d.pricing_type;
 						if (d.drivers && !useDrivers) { self.drivers = Object.assign({}, self.drivers, d.drivers); self.driversDirty = false; }
@@ -440,7 +449,7 @@ function bb_mount_app(el) {
 									var saved = savedByKey[op.operation_key]
 										|| legacySavedOps.find(function(s){ return s.spec_name === op.spec_name; });
 									if (!saved) return;
-									if (saved.sfg_code)          op.sfg_code = saved.sfg_code;
+									if (saved.sfg_code && (self.pricingType !== 'Flexo' || /-(MTR|PCS)-SFG$/.test(saved.sfg_code))) op.sfg_code = saved.sfg_code;
 									if (saved.sfg_name)          op.sfg_name = saved.sfg_name;
 									if (saved.split_to_item_unit) op.split_to_item_unit = true;
 									if (saved.common_sfg_point)  op.common_sfg_point = true;
@@ -480,6 +489,7 @@ function bb_mount_app(el) {
 			syncChain() {
 				var self = this;
 				var afterSplit = false;
+				var previousActive = null;
 
 				self.operations.forEach(function (op, i) {
 					if (!Array.isArray(op.materials))           op.materials = [];
@@ -493,12 +503,13 @@ function bb_mount_app(el) {
 
 					// Auto-generate SFG names
 					if (!op.sfg_code && self.selectedFG)
-						op.sfg_code = self.selectedFG + '-' + sanitize(op.spec_name) + '-SFG';
+						op.sfg_code = self.selectedFG + '-' + sanitize(op.spec_name) + (self.pricingType === 'Flexo' ? '-MTR-SFG' : '-SFG');
 					if (!op.sfg_name && self.selectedFG)
 						op.sfg_name = (self.selectedFGData ? self.selectedFGData.item_name : self.selectedFG) + ' — ' + op.spec_name;
+					if (self.pricingType === 'Flexo' && op.exclude_from_bom) return;
 
 					// Update input chain
-					if (i === 0) {
+					if (self.pricingType === 'Flexo' ? !previousActive : i === 0) {
 						// The FIRST operation always consumes the base material (full sheet),
 						// at the full-sheet quantity from the costing calculation — whatever
 						// operation ends up first after reordering.
@@ -511,7 +522,7 @@ function bb_mount_app(el) {
 							op.input_uom = self.baseMatUom;
 						}
 					} else {
-						var prev = self.operations[i - 1];
+						var prev = self.pricingType === 'Flexo' ? previousActive : self.operations[i - 1];
 						op.input_item_code = prev.sfg_code;
 						op.input_item_name = prev.sfg_name;
 						if (!afterSplit) {
@@ -525,14 +536,21 @@ function bb_mount_app(el) {
 					}
 
 					// Handle split point: output changes to item_qty
-					if (op.split_to_item_unit && !afterSplit) {
+					if ((op.split_to_item_unit || (self.pricingType === 'Flexo' && op.output_is_fg)) && !afterSplit) {
 						op.output_qty = self.itemQty || self.mfgQty;
 						op.output_uom = 'Nos';
 						afterSplit = true;
 					} else if (afterSplit) {
 						op.output_qty = self.itemQty || self.mfgQty;
 						op.output_uom = 'Nos';
+					} else if (self.pricingType === 'Flexo') {
+						op.output_qty = self.sheetData.required_reel_length_m || 0;
+						op.output_uom = 'Meter';
 					}
+					if (self.pricingType === 'Flexo') {
+						op.sfg_code = op.sfg_code.replace(/-(MTR|PCS)-SFG$/, op.output_uom === 'Meter' ? '-MTR-SFG' : '-PCS-SFG');
+					}
+					previousActive = op;
 				});
 			},
 
@@ -604,7 +622,7 @@ function bb_mount_app(el) {
 						spec_name: nm, machine: '', workstation: v.workstation || '',
 						time_in_mins: 60,
 						input_item_code: '', input_item_name: '', input_qty: 0, input_uom: 'Nos',
-						sfg_code: self.selectedFG ? (self.selectedFG + '-' + sanitize(nm) + '-SFG') : (sanitize(nm) + '-SFG'),
+						sfg_code: (self.selectedFG ? self.selectedFG + '-' : '') + sanitize(nm) + (self.pricingType === 'Flexo' ? '-MTR-SFG' : '-SFG'),
 						sfg_name: (self.selectedFGData ? self.selectedFGData.item_name + ' — ' : '') + nm,
 						output_qty: self.itemQty || self.mfgQty, output_uom: 'Nos',
 						materials: [], is_print: false, no_of_colors: 0,
@@ -719,6 +737,8 @@ function bb_mount_app(el) {
 			createBOM() {
 				var self = this;
 				if (!self.canCreate) return;
+				if (self.loading) return;
+				if (self.driversDirty || self.qtyChanged) { frappe.msgprint('Recompute the edited dimensions / quantity before creating the BOM.'); return; }
 
 				// Multiple FGs → consolidated multi-FG build (backend guards per-FG)
 				if (self.selectedFGs.length > 1) { self._doCreateMulti(); return; }
@@ -764,32 +784,12 @@ function bb_mount_app(el) {
 			},
 
 			// Consolidated build for several FGs (common SFGs shared)
-			// Show created (DRAFT) BOMs + a Submit BOMs action (submit bottom-up + link the chain).
+			// New builder runs submit and cost the chain bottom-up on the server.
 			_showBomResult(title, message, result) {
-				var names = (result.created_boms || []).map(function (b) { return b.bom_name; }).filter(Boolean);
-				var d = frappe.msgprint({
+				frappe.msgprint({
 					title: title,
-					message: message + '<br><br><b>All BOMs are DRAFTS.</b> Review / edit them, then click <b>Submit BOMs</b> to submit them bottom-up and link the chain.',
-					indicator: 'blue',
-					primary_action: names.length ? {
-						label: 'Submit BOMs',
-						action: function () {
-							frappe.call({
-								method: API.submitBoms,
-								args: { bom_names: JSON.stringify(names) },
-								freeze: true, freeze_message: 'Submitting BOMs…',
-								callback: function (r) {
-									var m = r.message || {};
-									if (d && d.hide) { d.hide(); }
-									var msg = '✓ Submitted <b>' + (m.submitted || []).length + '</b> BOM(s).';
-									if ((m.failed || []).length) {
-										msg += '<br>⚠ Failed: ' + m.failed.map(function (f) { return f.bom; }).join(', ');
-									}
-									frappe.msgprint({ title: 'Submit BOMs', message: msg, indicator: (m.failed || []).length ? 'orange' : 'green' });
-								},
-							});
-						}
-					} : null,
+					message: message + '<br><br><b>New BOMs submitted automatically, bottom-up.</b> Sub-BOM links and costs have been updated.',
+					indicator: 'green',
 				});
 			},
 
@@ -797,6 +797,7 @@ function bb_mount_app(el) {
 				var self = this;
 				var msg = 'Create a <b>consolidated BOM</b> for <b>' + self.selectedFGs.length + ' FGs</b>?<br>'
 					+ 'Common SFGs (up to the 🧩 point) are shared; each FG gets its own tail + FG BOM.<br>'
+					+ 'BOMs will be submitted automatically from bottom to top, with costs updated.<br>'
 					+ 'FGs: ' + self.selectedFGs.join(', ');
 				frappe.confirm(msg, function () {
 					self.saving = true;
@@ -804,13 +805,15 @@ function bb_mount_app(el) {
 						method: API.createMultiBom,
 						args: {
 							fg_items:        JSON.stringify(self.selectedFGs),
+							calculation_breakdown: self.calcBreakdown,
+							overrides: JSON.stringify(self.drivers),
 							cost_item:       self.costItem || '',
 							mfg_qty:         self.mfgQty,
 							operations:      JSON.stringify(self.operations),
 							extra_materials: JSON.stringify(self.extraMaterials),
 							is_default:      self.isDefault ? 1 : 0,
 							sfg_item_group: self.sfgItemGroup || '',
-							submit:          0,
+							submit:          1,
 						},
 						freeze: true,
 						freeze_message: 'Creating consolidated BOM…',
@@ -837,7 +840,8 @@ function bb_mount_app(el) {
 				var excluded_count = self.operations.length - active_ops.length;
 				var missing_ws = active_ops.filter(function (op) { return !op.workstation; });
 				var msg = 'Create <b>' + active_ops.length + ' SFG BOM(s)</b> + 1 FG BOM for <b>'
-					+ self.selectedFG + '</b>?<br>Mfg Qty: <b>' + self.mfgQty + '</b>';
+					+ self.selectedFG + '</b>?<br>Mfg Qty: <b>' + self.mfgQty + '</b>'
+					+ '<br>BOMs will be submitted automatically from bottom to top, with costs updated.';
 				if (excluded_count) {
 					msg += '<br><span style="color:#6b7280">ℹ ' + excluded_count + ' operation(s) excluded from BOM chain.</span>';
 				}
@@ -850,12 +854,14 @@ function bb_mount_app(el) {
 						method: API.createBomChain,
 						args: {
 							fg_item:          self.selectedFG,
+							calculation_breakdown: self.calcBreakdown,
+							overrides: JSON.stringify(self.drivers),
 							mfg_qty:          self.mfgQty,
 							operations:       JSON.stringify(self.operations),
 							extra_materials:  JSON.stringify(self.extraMaterials),
 							is_default:       self.isDefault ? 1 : 0,
 							sfg_item_group:  self.sfgItemGroup || '',
-							submit:           0,
+							submit:           1,
 						},
 						freeze: true,
 						freeze_message: 'Creating BOM chain…',
@@ -904,7 +910,9 @@ function bb_mount_app(el) {
 
     <!-- FG + CB -->
     <div class="bb-card">
-      <div class="bb-card-title">Select Finish Good</div>
+      <div class="bb-card-title">Select Finish Good
+        <button v-if="calcBreakdown" class="bb-btn bb-btn-sm" style="margin-left:10px" @click="openCosting" title="Open the costing calculator (cost breakdown) in a new tab">🧮 View Costing</button>
+      </div>
 
       <!-- Global CB — when all FGs share one Calculation Breakdown -->
       <div class="bb-global-cb-row">
@@ -965,16 +973,16 @@ function bb_mount_app(el) {
     </div>
 
     <!-- Sheet Requirements -->
-    <div class="bb-card" v-if="selectedFG && sheetData && sheetData.full_sheet_qty">
+    <div class="bb-card" v-if="selectedFG && sheetData && (sheetData.full_sheet_qty || sheetData.reel_area)">
       <div class="bb-card-title-row">
         <div class="bb-card-title">
-          Sheet Requirements
+          {{ pricingType === 'Flexo' ? 'Reel Requirements' : 'Sheet Requirements' }}
           <span class="bb-hint" style="margin-left:6px">calculated at mfg qty {{ fmtN(mfgQty) }}</span>
         </div>
         <button class="bb-btn bb-btn-sm" @click="sheetExpanded = !sheetExpanded">{{ sheetExpanded ? '▴' : '▾' }}</button>
       </div>
       <div v-show="sheetExpanded" style="padding:12px 14px">
-        <div class="bb-sheet-grid">
+        <div class="bb-sheet-grid" v-if="pricingType !== 'Flexo'">
           <div class="bb-sheet-kv">
             <div class="bb-sheet-lbl">Cut Sheet Ups</div>
             <div class="bb-sheet-val">{{ sheetData.cut_sheet_ups || 0 }}</div>
@@ -996,7 +1004,24 @@ function bb_mount_app(el) {
             <div class="bb-sheet-val bb-sheet-blue">{{ fmtN(sheetData.req_cut_sheets) }}</div>
           </div>
         </div>
-        <div class="bb-sheet-note">
+        <div class="bb-sheet-grid" v-if="pricingType === 'Flexo'">
+          <div class="bb-sheet-kv"><div class="bb-sheet-lbl">Ups (across)</div><div class="bb-sheet-val">{{ sheetData.ups || 0 }}</div></div>
+          <div class="bb-sheet-kv"><div class="bb-sheet-lbl">Repeat Count (Qty ÷ Ups)</div><div class="bb-sheet-val">{{ fmt(sheetData.bom_repeat_count) }}</div></div>
+          <div class="bb-sheet-kv"><div class="bb-sheet-lbl">Reel Length (m)</div><div class="bb-sheet-val">{{ fmtN(sheetData.reel_length) }}</div></div>
+          <div class="bb-sheet-kv"><div class="bb-sheet-lbl">Required Length incl. Wastage (m)</div><div class="bb-sheet-val">{{ fmt(sheetData.required_reel_length_m) }}</div></div>
+          <div class="bb-sheet-kv"><div class="bb-sheet-lbl">Length per Repeat (m)</div><div class="bb-sheet-val">{{ fmt(sheetData.length_per_repeat_m) }}</div></div>
+          <div class="bb-sheet-kv"><div class="bb-sheet-lbl">Reel Area Net (m²)</div><div class="bb-sheet-val">{{ fmtN(sheetData.reel_area_net) }}</div></div>
+          <div class="bb-sheet-kv"><div class="bb-sheet-lbl">Wastage Area (m²)</div><div class="bb-sheet-val">{{ fmtN(sheetData.wastage_area) }}</div></div>
+          <div class="bb-sheet-kv bb-sheet-kv-highlight"><div class="bb-sheet-lbl">Reel Area (m²) <span class="bb-sheet-tag">🎞 Film input</span></div><div class="bb-sheet-val bb-sheet-blue">{{ fmtN(sheetData.reel_area) }}</div></div>
+        </div>
+        <div class="bb-sheet-note" v-if="pricingType === 'Flexo'">
+          🎞 <b>{{ baseMatName || baseMat }}</b> film → <b>{{ fmt(baseMatQty) }} {{ baseMatUom }}</b> into press
+          &nbsp;→&nbsp;
+          SFGs flow as <b>{{ fmt(sheetData.required_reel_length_m) }} metres</b> through finishing operations
+          &nbsp;→&nbsp;
+          🔀 split to <b>{{ fmtN(itemQty) }} pcs</b> at the split point
+        </div>
+        <div class="bb-sheet-note" v-if="pricingType !== 'Flexo'">
           📄 <b>{{ baseMatName || baseMat }}</b> board → <b>{{ fmtN(sheetData.full_sheet_qty) }} {{ baseMatUom }}</b> into press
           &nbsp;→&nbsp;
           ✂ <b>{{ fmtN(sheetData.req_cut_sheets) }} cut sheets</b> flow through all SFG operations
@@ -1012,6 +1037,8 @@ function bb_mount_app(el) {
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
             <!-- Common -->
+            <div><div class="bb-sheet-lbl">Product / Carton Size</div>
+              <input type="text" class="bb-inp" style="width:160px" v-model="drivers.carton_size" @input="onDriverChange" /></div>
             <div><div class="bb-sheet-lbl">Base Material</div>
               <button class="bb-btn bb-btn-sm" @click="changeBaseMaterial" :title="drivers.base_material" style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ drivers.base_material || 'Pick' }} ✎</button></div>
             <div><div class="bb-sheet-lbl">Material Rate</div>

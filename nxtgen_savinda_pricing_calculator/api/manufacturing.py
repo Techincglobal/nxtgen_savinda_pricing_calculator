@@ -5,7 +5,7 @@ import json
 import re
 
 import frappe
-from frappe.utils import cint, flt
+from frappe.utils import cint, flt, now
 
 
 def _fmt_sheets(v):
@@ -115,6 +115,11 @@ def validate_base_material_transfer_cap(doc, method=None):
 				base_name, wo_name, _fmt_sheets(fs), _fmt_sheets(reissue), _fmt_sheets(cap),
 				_fmt_sheets(prior), _fmt_sheets(this_qty), _fmt_sheets(total)),
 			title="Base Material Transfer Limit")
+
+
+def _require_fg_artwork(overrides):
+	if not (overrides.get("artwork_no") or "").strip():
+		frappe.throw("Artwork No is required in Product Library Details before creating an FG.")
 
 
 def _reviewed_pl_overrides(overrides):
@@ -288,6 +293,13 @@ def _upsert_product_library(fg_item_code, cost_item=None, customer_ref=None, ove
 				pl_data[k] = v
 		if require_approval:
 			pl_data.update(approval_required=1, approval_status="Pending Validation", approved_by=None, approved_on=None, approval_remarks="")
+			if (pl_data.get("artwork_no") or "").strip():
+				pl_data.update(
+					artwork_validation_status="Approved",
+					artwork_validated_by=frappe.session.user,
+					artwork_validated_on=now(),
+					artwork_validation_remarks="Automatically approved on FG creation because Artwork No was supplied.",
+				)
 		pl = frappe.get_doc(pl_data)
 		pl.flags.ignore_permissions = True
 		pl.insert(ignore_permissions=True)
@@ -320,6 +332,7 @@ def create_fg_item(item_name, description, item_group, department, stock_uom="No
 	if not department:
 		frappe.throw("Department is required")
 	pl_overrides = _reviewed_pl_overrides(pl_overrides)
+	_require_fg_artwork(pl_overrides)
 	if costing_bundle:
 		from nxtgen_savinda_pricing_calculator.api.costing_bundle import validate_bundle
 		bundle = frappe.get_doc("Cost Sheet", costing_bundle)
@@ -412,10 +425,11 @@ def create_fg_variants(template_name, description, item_group, department,
 	Create each variation as its OWN independent Finished Good Item (no ERPNext
 	template/variant relationship). All variants share one Cost Item.
 
-	variants = JSON list of {value, item_name, customer_ref}.
+	variants = JSON list of {value, item_name, customer_ref, artwork_no}.
 	  • value        — short label used to auto-name the item (e.g. "S"); optional
 	  • item_name    — item name (auto = base + " - " + value if blank); editable
 	  • customer_ref — per-item customer reference code
+	  • artwork_no   — required artwork number for this variant's Product Library
 
 	pl_overrides = reviewed Product Library values (shared across variants). Each variant's
 	Product Library Customer Product Code is set from its own customer_ref; each variant Item
@@ -428,6 +442,11 @@ def create_fg_variants(template_name, description, item_group, department,
 	rows = [v for v in variants if (v.get("value") or v.get("item_name") or "").strip()]
 	if not rows:
 		frappe.throw("Add at least one variation (a value like S/M/L or an item name).")
+	# Validate every row before inserting anything. Shared artwork is optional here
+	# and must never stand in for a missing variant artwork number.
+	for idx, row in enumerate(rows, 1):
+		if not (row.get("artwork_no") or "").strip():
+			frappe.throw(f"Artwork No is required for variant row {idx}.")
 	if not item_group:
 		frappe.throw("Item Group is required")
 	if not department:
@@ -468,6 +487,7 @@ def create_fg_variants(template_name, description, item_group, department,
 			doc.custom_cost_item = cost_item
 		# Shared reviewed PL values, but each variant keeps its own customer product code.
 		row_over = dict(pl_overrides)
+		row_over["artwork_no"] = r["artwork_no"].strip()
 		if r.get("customer_ref"):
 			row_over["customer_product_code"] = r.get("customer_ref")
 		from nxtgen_savinda_pricing_calculator.api.fg_approval import insert_pending_fg

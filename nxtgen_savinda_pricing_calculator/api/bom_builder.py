@@ -58,10 +58,11 @@ def _library_bom_inputs(fg_item, pricing_type):
 	if (pl.get("product_size") or "").strip():
 		values["carton_size"] = pl.product_size.strip()
 	if pricing_type == "Flexo":
-		# Same meaning used by FG creation: width = reel width, length = label length.
-		for source, target in (("width_mm", "reel_width_mm"), ("length_mm", "product_length_mm")):
-			if flt(pl.get(source)) > 0:
-				values[target] = flt(pl.get(source))
+		# Legacy FG popups populated library length_mm with reel length (metres).
+		# Product L must retain the calculation's product_length_mm, never this
+		# ambiguous library value. Explicit builder edits are applied afterwards.
+		if flt(pl.get("width_mm")) > 0:
+			values["reel_width_mm"] = flt(pl.get("width_mm"))
 	else:
 		for source, targets in (("full_sheet_size", ("full_sheet_l", "full_sheet_w")),
 			("cut_sheet_size", ("cut_sheet_l", "cut_sheet_w"))):
@@ -71,16 +72,63 @@ def _library_bom_inputs(fg_item, pricing_type):
 	return values
 
 
-def _bom_calc_field_values(fg_item):
+def _flexo_repeat_basis(form, sheet, quantity):
+	"""Repeat counts derive the SFG metre requirement and length per finished label."""
+	ups = cint(sheet.get("ups"))
+	width_m = flt(form.get("reel_width_mm")) / 1000
+	if ups <= 0 or width_m <= 0 or flt(quantity) <= 0:
+		frappe.throw("Set valid Flexo reel/product dimensions and manufacturing quantity before building the BOM.")
+	repeats = flt(quantity) / ups
+	area = flt(sheet.get("reel_area") or sheet.get("reel_area_net"))
+	length = area / width_m
+	return {"repeat_count": repeats, "required_reel_length_m": length,
+		"length_per_repeat_m": length / repeats, "area_m2": area, "ups": ups}
+
+
+def _builder_is_flexo(fg_item, calculation_breakdown=None):
+	cb = calculation_breakdown or _find_cb_for_fg(fg_item)
+	return bool(cb and frappe.db.get_value("Calculation Breakdown", cb, "pricing_type") == "Flexo")
+
+
+def _validate_flexo_flow(operations):
+	after_split = False
+	for op in operations:
+		if op.get("exclude_from_bom"):
+			continue
+		if op.get("split_to_item_unit"):
+			after_split = True
+		if not op.get("output_is_fg") and op.get("output_uom") != ("Nos" if after_split else "Meter"):
+			frappe.throw("Flexo SFG output must be Meter before Split and Nos from Split onward. Recalculate the builder before creating this BOM.")
+
+
+def _bom_calc_field_values(fg_item, calculation_breakdown=None, overrides=None, mfg_qty=None):
 	"""Library-first costing/planning variables to stamp on the BOM's
 	Calculation Details section — used to compute sheet counts in the Production Plan."""
-	cb = _find_cb_for_fg(fg_item)
+	cb = calculation_breakdown or _find_cb_for_fg(fg_item)
 	if not cb:
 		return {}
 	d = jt_api._cb_fields(cb)
+	form = (json.loads(d.get("ui_state") or "{}") or {}).get("form") or {}
+	form = dict(form)
 	inputs = _library_bom_inputs(fg_item, d.get("pricing_type") or "Offset")
+	if isinstance(overrides, str):
+		overrides = json.loads(overrides or "{}")
+	inputs.update({key: value for key, value in (overrides or {}).items() if value not in (None, "")})
+	form.update(inputs)
+	if mfg_qty is not None:
+		form["item_qty"] = flt(mfg_qty)
+		form.pop("breakdown_qtys", None)
+		d["item_qty"] = flt(mfg_qty)
 	for field, value in inputs.items():
 		d[{"cut_sheet_w": "cut_sheetw", "reel_width_mm": "_reel_width"}.get(field, field)] = value
+	pricing_type = d.get("pricing_type") or form.get("pricing_type") or "Offset"
+	if pricing_type == "Flexo":
+		from nxtgen_savinda_pricing_calculator.api.offset_calculator import _calc_flexo
+		sheet = _calc_flexo(form)
+		d["_reel_length"] = sheet.get("reel_length") or 0
+		d["_reel_width"] = form.get("reel_width_mm") or 0
+		d["no_of_ups"] = sheet.get("ups") or 0
+		repeat_basis = _flexo_repeat_basis(form, sheet, form.get("item_qty") or d.get("item_qty"))
 	no_ups = cint(d.get("no_of_ups"))
 	no_cuts = max(cint(d.get("no_of_cuts")) or 1, 1)
 	# BOM remark entered on the costing form (Cost Sheet -> cost Item). Only stamped when set,
@@ -93,7 +141,7 @@ def _bom_calc_field_values(fg_item):
 			vals["custom_bom_remark"] = remark
 	vals.update({
 		"custom_calculation_breakdown": cb,
-		"custom_pricing_type": d.get("pricing_type") or "Offset",
+		"custom_pricing_type": pricing_type,
 		"custom_no_of_colors": cint(d.get("no_of_colors")),
 		"custom_no_of_ups": no_ups,
 		"custom_no_of_cuts": no_cuts,
@@ -104,17 +152,25 @@ def _bom_calc_field_values(fg_item):
 		"custom_carton_size": d.get("carton_size") or "",
 		"custom_reel_width_mm": flt(d.get("_reel_width")),
 		"custom_reel_length_m": flt(d.get("_reel_length")),
+		"custom_product_width_mm": flt(form.get("product_width_mm")),
+		"custom_product_length_mm": flt(form.get("product_length_mm")),
 	})
+	if pricing_type == "Flexo":
+		vals.update(custom_flexo_repeat_count=repeat_basis["repeat_count"],
+			custom_required_reel_length_m=repeat_basis["required_reel_length_m"],
+			custom_length_per_repeat_m=repeat_basis["length_per_repeat_m"])
 	return vals
 
 
-def _apply_bom_calc_fields(bom_name, fg_item):
-	"""Stamp the calc/planning fields onto an FG BOM (best-effort; never blocks BOM creation)."""
+def _apply_bom_calc_fields(bom_name, fg_item, calculation_breakdown=None, overrides=None, mfg_qty=None):
+	"""Store the reviewed builder details on the FG BOM; legacy calls are best-effort."""
 	try:
-		vals = _bom_calc_field_values(fg_item)
+		vals = _bom_calc_field_values(fg_item, calculation_breakdown, overrides, mfg_qty)
 		if vals:
 			frappe.db.set_value("BOM", bom_name, vals, update_modified=False)
 	except Exception:
+		if calculation_breakdown or overrides:
+			raise  # A new builder run must not silently create an FG BOM without its details.
 		frappe.log_error(frappe.get_traceback(), "apply BOM calc fields failed")
 
 
@@ -437,11 +493,21 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item="", overrides=None):
 	full_sheet_qty = flt(sheet.get("full_sheet_qty") or 0)
 
 	if pricing_type == "Flexo":
-		# Total reel area (net + wastage), not reel_area_net.
-		base_input_qty  = flt(sheet.get("reel_area") or sheet.get("reel_area_net") or 0)
-		base_input_uom  = "M2"
-		after_print_qty = flt(sheet.get("stickers_per_reel") or mfg_qty)
-		after_print_uom = "Nos"
+		basis = _flexo_repeat_basis(form, sheet, mfg_qty)
+		material_unit = re.sub(r"[\s.]", "", base_mat_uom.lower())
+		# Keep quantities in the material's real stock UOM. Length-stocked film
+		# consumes reel length; area-stocked film consumes length x reel width.
+		if material_unit in ("meter", "metre", "m"):
+			base_input_qty, base_input_uom = basis["required_reel_length_m"], base_mat_uom
+		elif not base_mat or material_unit in ("m2", "m²", "sqm", "sqmt", "squaremeter", "squaremetre", "squaremeters", "squaremetres"):
+			base_input_qty, base_input_uom = basis["area_m2"], base_mat_uom if base_mat else "M2"
+		else:
+			base_input_qty, base_input_uom, converted = _to_stock_uom(base_mat, basis["area_m2"], "M2")
+			if not converted:
+				frappe.throw(f"Set the M2 to {base_input_uom} UOM conversion on film Item {base_mat} before building its Flexo BOM.")
+		after_print_qty, after_print_uom = basis["required_reel_length_m"], "Meter"
+		sheet.update(bom_repeat_count=basis["repeat_count"],
+			required_reel_length_m=basis["required_reel_length_m"], length_per_repeat_m=basis["length_per_repeat_m"])
 	else:
 		# Full sheets WITH wastage = ceil(req_cut_sheets / cuts-per-sheet)
 		base_input_qty  = full_sheet_qty or ((req_cut_sheets / no_cuts) if no_cuts else req_cut_sheets)
@@ -453,7 +519,8 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item="", overrides=None):
 	# ── Sanitize for SFG naming ───────────────────────────────
 	def _sfg_code(fg, spec):
 		s = re.sub(r"[^A-Za-z0-9]+", "-", spec).strip("-")[:20].upper()
-		return f"{fg}-{s}-SFG" if fg else s + "-SFG"
+		ending = "-MTR-SFG" if pricing_type == "Flexo" else "-SFG"
+		return f"{fg}-{s}{ending}" if fg else s + ending
 
 	def _sfg_name(fg, fg_iname, spec):
 		return f"{fg_iname or fg} — {spec}"
@@ -707,6 +774,7 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item="", overrides=None):
 		# calculation depends on, offset + flexo; the UI shows the set for this pricing type).
 		"drivers": {
 			# common
+			"carton_size":       form.get("carton_size") or "",
 			"no_of_colors":      cint(form.get("no_of_colors") or 0),
 			"material_rate":     flt(form.get("material_rate") or 0),
 			"base_material":     form.get("base_material") or "",
@@ -734,7 +802,7 @@ def get_bom_data(calculation_breakdown, mfg_qty, fg_item="", overrides=None):
 # ─────────────────────────────────────────────────────────────
 
 @frappe.whitelist()
-def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0, variant_suffix="", submit=1, sfg_item_group=""):
+def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0, variant_suffix="", submit=1, sfg_item_group="", calculation_breakdown=None, overrides=None):
 	"""
 	Create the full SFG chain + FG BOM:
 	1. Create ERPNext Items for each SFG (if not existing)
@@ -756,6 +824,12 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 	if not operations:
 		frappe.throw("No operations defined. Please add at least one operation.")
 	operations = _normalise_operation_chain(operations)
+	is_flexo = _builder_is_flexo(fg_item, calculation_breakdown)
+	if is_flexo:
+		_validate_flexo_flow(operations)
+		for op in operations:
+			if op.get("output_is_fg"):
+				op["output_qty"], op["output_uom"] = mfg_qty, "Nos"
 
 	# Variant → give every SFG code a unique suffix so its chain is fully independent.
 	variant_suffix = re.sub(r"[^A-Za-z0-9]+", "", (variant_suffix or "")).upper()[:8]
@@ -770,6 +844,7 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 	_validate_materials(operations)
 
 	created_boms = []
+	child_boms = {}
 
 	# ── Build active_ops: exclude flagged ops and re-link chain ──
 	# Collect excluded SFG codes so downstream inputs can be re-linked
@@ -833,7 +908,11 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 		if not sfg_code:
 			continue
 		if not frappe.db.exists("Item", sfg_code):
-			_create_sfg_item(sfg_code, sfg_name, fg_item=fg_item, item_group=sfg_item_group)
+			_sfg_uom = "Meter" if (op.get("output_uom") == "Meter") else "Nos"
+			_create_sfg_item(sfg_code, sfg_name, fg_item=fg_item, item_group=sfg_item_group, stock_uom=_sfg_uom)
+		_enable_builder_sfg(sfg_code)
+		if is_flexo:
+			_validate_flexo_sfg(sfg_code, op.get("output_uom") or "Meter")
 		# Set Quality Inspection Template on the SFG Item if required
 		if op.get("has_quality_inspection") and op.get("quality_inspection_template"):
 			try:
@@ -843,8 +922,8 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 				pass
 
 	# ── Step 2: create a BOM per operation ───────────────────
-	# Every BOM is built at qty 1 (per-unit actual consumption — NO wastage;
-	# wastage is handled later at production-planning level). Input + material
+	# Every BOM is built at qty 1. Calculated inputs already include the applicable
+	# setup/wastage allowances; do not add them again. Input + material
 	# quantities are normalised to "per 1 output" using each op's output_qty.
 	# The FG-producer op (fg_idx) builds a BOM whose item IS the FG.
 	prev_qi_template = None
@@ -861,20 +940,20 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 
 		# Reuse an existing qty-1 SFG BOM; recreate if it was built at another qty.
 		# (FG already guarded above, so only SFGs get this check.)
-		if not is_fg_op:
+		if not is_fg_op and not is_flexo:
 			existing_row = frappe.db.get_value(
 				"BOM", {"item": target_item, "docstatus": 1, "is_active": 1},
 				["name", "quantity"], as_dict=True
 			)
 			if existing_row:
 				if abs(flt(existing_row.quantity) - 1) < 0.001:
+					_reuse_builder_bom(existing_row.name, target_item, submit, child_boms)
 					created_boms.append({"bom_name": existing_row.name, "item": target_item, "reused": True})
 					prev_qi_template = op.get("quality_inspection_template") if op.get("has_quality_inspection") else None
 					continue
 				frappe.db.set_value("BOM", existing_row.name, "is_active", 0)
 				created_boms.append({"bom_name": existing_row.name, "item": target_item,
 				                     "reused": False, "deactivated": True})
-				frappe.db.commit()
 
 		bom = frappe.get_doc({
 			"doctype":         "BOM",
@@ -939,10 +1018,7 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 					"description":    f"{op.get('machine','')} — {op.get('spec_name','')}".strip(" —"),
 				})
 
-		bom.insert(ignore_permissions=True)
-		if cint(submit):
-			bom.submit()
-		frappe.db.commit()
+		_insert_builder_bom(bom, submit, child_boms)
 		created_boms.append({"bom_name": bom.name, "item": target_item, "reused": False, "is_fg": is_fg_op})
 		prev_qi_template = op.get("quality_inspection_template") if op.get("has_quality_inspection") else None
 
@@ -951,7 +1027,7 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 		fg_bom_name = next((b["bom_name"] for b in created_boms if b.get("is_fg")), None)
 		for _b in created_boms:
 			if _b.get("is_fg") and _b.get("bom_name"):
-				_apply_bom_calc_fields(_b["bom_name"], _b.get("item"))
+				_apply_bom_calc_fields(_b["bom_name"], _b.get("item"), calculation_breakdown, overrides, mfg_qty)
 		return {"created_boms": created_boms, "fg_bom": fg_bom_name}
 
 	last_op      = active_ops[-1]
@@ -972,7 +1048,7 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 		fg_item_row = {
 			"item_code": last_sfg,
 			"item_name": last_op.get("sfg_name") or last_sfg,
-			"qty":       1,
+			"qty":       (flt(last_op.get("output_qty")) / mfg_qty) if is_flexo else 1,
 			"uom":       last_sfg_uom,
 			"stock_uom": last_sfg_uom,
 		}
@@ -980,19 +1056,51 @@ def create_bom_chain(fg_item, mfg_qty, operations, extra_materials, is_default=0
 			fg_item_row["quality_inspection_template"] = prev_qi_template
 		fg_bom.append("items", fg_item_row)
 
-	fg_bom.insert(ignore_permissions=True)
-	if cint(submit):
-		fg_bom.submit()
-	frappe.db.commit()
+	_insert_builder_bom(fg_bom, submit, child_boms)
 	created_boms.append({"bom_name": fg_bom.name, "item": fg_item, "reused": False, "is_fg": True})
 
 	for _b in created_boms:
 		if _b.get("is_fg") and _b.get("bom_name"):
-			_apply_bom_calc_fields(_b["bom_name"], _b.get("item"))
+			_apply_bom_calc_fields(_b["bom_name"], _b.get("item"), calculation_breakdown, overrides, mfg_qty)
 	return {"created_boms": created_boms, "fg_bom": fg_bom.name}
 
 
-def _create_sfg_item(item_code, item_name, fg_item="", item_group=""):
+def _validate_flexo_sfg(item_code, output_uom):
+	if frappe.db.get_value("Item", item_code, "stock_uom") != output_uom:
+		frappe.throw(f"Flexo SFG {item_code} must use {output_uom}. Use a new SFG code instead of an existing Item with a different stock UOM.")
+
+
+def _enable_builder_sfg(item_code):
+	"""Enable only the builder's manufacturing SFGs through the existing workflow.
+
+	Having Item Manager does not run a transition automatically on insert. Do it
+	here, with normal workflow permissions/conditions and no workflow edits.
+	"""
+	from frappe.model.workflow import apply_workflow, get_transitions, get_workflow_name
+
+	item = frappe.get_doc("Item", item_code)
+	if not cint(item.disabled):
+		return
+	if (not cint(item.is_stock_item) or cint(item.is_sales_item) or cint(item.is_purchase_item)
+		or cint(item.get("custom_fg_approval_required"))):
+		frappe.throw(f"Item {item_code} is not a manufacturing-only SFG. Enable it through its normal approval process.")
+	if frappe.session.user != "Administrator" and "Item Manager" not in frappe.get_roles():
+		frappe.throw(f"Item Manager role is required to enable SFG {item_code} before creating its BOM.")
+	item.check_permission("write")
+	if get_workflow_name("Item"):
+		if not any(t.action == "Enable" for t in get_transitions(item)):
+			frappe.throw(f"No permitted Enable action for SFG {item_code} in Item Group {item.item_group}. Complete its existing Item approval process, or use the WIP group where applicable.")
+		# apply_workflow enforces the action's condition, role and self-approval.
+		apply_workflow(item, "Enable")
+	else:
+		item.disabled = 0
+		item.save()
+	item.reload()
+	if cint(item.disabled):
+		frappe.throw(f"SFG {item_code} is still disabled after Enable. Complete its existing Item approval process before building the BOM.")
+
+
+def _create_sfg_item(item_code, item_name, fg_item="", item_group="", stock_uom="Nos"):
 	"""
 	Create a Semi-Finished Good ERPNext Item.
 	Inherits Department and Item Group abbreviations from the FG item
@@ -1021,13 +1129,14 @@ def _create_sfg_item(item_code, item_name, fg_item="", item_group=""):
 	if dept:
 		dept_abbr = frappe.db.get_value("Department", dept, "custom_abbr") or ""
 
+	stock_uom = stock_uom if (stock_uom and frappe.db.exists("UOM", stock_uom)) else "Nos"
 	fields = {
 		"doctype":                "Item",
 		"item_code":              item_code,
 		"item_name":              item_name,
 		"description":            item_name,
 		"item_group":             item_group,
-		"stock_uom":              "Nos",
+		"stock_uom":              stock_uom,
 		"is_stock_item":          1,
 		"is_sales_item":          0,
 		"is_purchase_item":       0,
@@ -1040,7 +1149,6 @@ def _create_sfg_item(item_code, item_name, fg_item="", item_group=""):
 
 	doc = frappe.get_doc(fields)
 	doc.insert(ignore_permissions=True)
-	frappe.db.commit()
 
 
 def _get_or_create_operation(op_name):
@@ -1049,7 +1157,6 @@ def _get_or_create_operation(op_name):
 		return op_name
 	try:
 		frappe.get_doc({"doctype": "Operation", "name": op_name}).insert(ignore_permissions=True)
-		frappe.db.commit()
 	except Exception:
 		pass
 	return op_name
@@ -1091,7 +1198,6 @@ def _get_or_create_workstation(ws_name, hour_rate=0):
 			"hour_rate": flt(hour_rate),
 		})
 		doc.insert(ignore_permissions=True)
-		frappe.db.commit()
 		return doc.name
 	except Exception:
 		frappe.log_error(title="pricing_calculator: workstation create failed",
@@ -1223,17 +1329,44 @@ def _bb_code(s):
 	return re.sub(r"[^A-Za-z0-9]+", "-", (s or "")).strip("-").upper()[:20]
 
 
+def _insert_builder_bom(bom, submit, child_boms=None):
+	"""Build in leaf-first order, rolling submitted child costs into each parent.
+
+	No commit here: a failure must roll back the entire builder request.
+	"""
+	child_boms = child_boms if child_boms is not None else {}
+	bom.set_rate_of_sub_assembly_item_based_on_bom = 1
+	for row in bom.items:
+		child = child_boms.get(row.item_code)
+		if child or not row.get("bom_no"):
+			row.bom_no = child or _active_submitted_bom(row.item_code) or ""
+	bom.insert(ignore_permissions=True)
+	if cint(submit):
+		bom.update_cost(update_parent=False, from_child_bom=True, update_hour_rate=True)
+		bom.submit()
+		child_boms[bom.item] = bom.name
+
+
+def _reuse_builder_bom(name, item, submit, child_boms):
+	if cint(submit):
+		# Refresh costs before the new parent consumes an existing submitted SFG.
+		bom = frappe.get_doc("BOM", name)
+		bom.set_rate_of_sub_assembly_item_based_on_bom = 1
+		bom.update_cost(update_parent=False, from_child_bom=True, update_hour_rate=True)
+		child_boms[item] = name
+
+
 def _mk_qty1_bom(item_code, input_code, input_name, per_input_qty, materials, op,
-                 prev_qi=None, is_default=0, allow_reuse=True, submit=1):
+                 prev_qi=None, is_default=0, allow_reuse=True, submit=1, child_boms=None):
 	"""Create + submit one qty-1 BOM for item_code. Returns (bom_name, reused)."""
 	if allow_reuse:
 		ex = frappe.db.get_value("BOM", {"item": item_code, "docstatus": 1, "is_active": 1},
 		                         ["name", "quantity"], as_dict=True)
 		if ex:
 			if abs(flt(ex.quantity) - 1) < 0.001:
+				_reuse_builder_bom(ex.name, item_code, submit, child_boms if child_boms is not None else {})
 				return ex.name, True
 			frappe.db.set_value("BOM", ex.name, "is_active", 0)
-			frappe.db.commit()
 
 	uom = frappe.db.get_value("Item", item_code, "stock_uom") or "Nos"
 	bom = frappe.get_doc({
@@ -1270,10 +1403,7 @@ def _mk_qty1_bom(item_code, input_code, input_name, per_input_qty, materials, op
 			          "time_in_mins": _per_time,
 			          "hour_rate": _hr, "base_hour_rate": _hr,
 			          "description": f"{op.get('machine','')} — {op.get('spec_name','')}".strip(" —")})
-	bom.insert(ignore_permissions=True)
-	if cint(submit):
-		bom.submit()
-	frappe.db.commit()
+	_insert_builder_bom(bom, submit, child_boms)
 	return bom.name, False
 
 
@@ -1367,7 +1497,7 @@ def _per_unit_mats(op):
 
 
 @frappe.whitelist()
-def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, is_default=0, submit=1, sfg_item_group=""):
+def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, is_default=0, submit=1, sfg_item_group="", calculation_breakdown=None, overrides=None):
 	"""Build BOMs for several FGs of one family in one pass.
 
 	Operations up to the 🧩 Final-Common-SFG marker build ONE shared SFG chain
@@ -1383,14 +1513,22 @@ def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, 
 		frappe.throw("Select at least one FG item.")
 	if len(fg_items) == 1:
 		return create_bom_chain(fg_items[0], mfg_qty, json.dumps(operations),
-		                        json.dumps(extra_materials), is_default, submit=submit, sfg_item_group=sfg_item_group)
+		                        json.dumps(extra_materials), is_default, submit=submit, sfg_item_group=sfg_item_group,
+		                        calculation_breakdown=calculation_breakdown, overrides=overrides)
 	if not operations:
 		frappe.throw("No operations defined.")
 	operations = _normalise_operation_chain(operations)
+	is_flexo = _builder_is_flexo(fg_items[0], calculation_breakdown)
+	if is_flexo:
+		_validate_flexo_flow(operations)
 
 	_validate_materials(operations)
 
 	active, first_in, first_inn = _active_ops(operations)
+	if is_flexo:
+		for op in active:
+			if op.get("output_is_fg"):
+				op["output_qty"], op["output_uom"] = flt(mfg_qty), "Nos"
 	if not active:
 		frappe.throw("All operations are excluded from BOM.")
 
@@ -1401,6 +1539,7 @@ def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, 
 		cidx = (fg_idx - 1) if fg_idx is not None else (len(active) - 1)
 
 	created, fg_boms = [], []
+	child_boms = {}
 	subj = _bb_code(cost_item) or "COMMON"
 
 	# ── Common SFG chain (built once) ──
@@ -1408,16 +1547,21 @@ def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, 
 	last_code = last_name = None
 	for i in range(0, cidx + 1):
 		op = active[i]
-		code = f"{subj}-{_bb_code(op.get('spec_name'))}-SFG"
+		ending = ("-MTR-SFG" if op.get("output_uom") == "Meter" else "-PCS-SFG") if is_flexo else "-SFG"
+		code = f"{subj}-{_bb_code(op.get('spec_name'))}" + ending
 		name = op.get("sfg_name") or code
 		if not frappe.db.exists("Item", code):
-			_create_sfg_item(code, name, fg_item=fg_items[0], item_group=sfg_item_group)
+			_create_sfg_item(code, name, fg_item=fg_items[0], item_group=sfg_item_group, stock_uom=("Meter" if op.get("output_uom") == "Meter" else "Nos"))
+		_enable_builder_sfg(code)
+		if is_flexo:
+			_validate_flexo_sfg(code, op.get("output_uom") or "Meter")
 		out_qty = flt(op.get("output_qty")) or 1
 		in_code = first_in if i == 0 else last_code
 		in_name = first_inn if i == 0 else last_name
 		per_in  = (flt(op.get("input_qty") or 0) / out_qty) if out_qty else flt(op.get("input_qty") or 0)
 		mats    = _per_unit_mats(op) if i > 0 else (_per_unit_mats(op) or extra_materials)
-		bn, reused = _mk_qty1_bom(code, in_code, in_name, per_in, mats, op, prev_qi, submit=submit)
+		bn, reused = _mk_qty1_bom(code, in_code, in_name, per_in, mats, op, prev_qi,
+			allow_reuse=not is_flexo, submit=submit, child_boms=child_boms)
 		created.append({"bom_name": bn, "item": code, "reused": reused, "common": True})
 		last_code, last_name = code, name
 		prev_qi = op.get("quality_inspection_template") if op.get("has_quality_inspection") else None
@@ -1433,8 +1577,9 @@ def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, 
 
 		if not tail:
 			# FG consumes the last common SFG directly
-			bn, _ = _mk_qty1_bom(fg, last_code, last_name, 1.0, [], {"spec_name": "Assembly"},
-			                     prev_qi, is_default=is_default, allow_reuse=False, submit=submit)
+			fg_ratio = flt(active[cidx].get("output_qty")) / flt(mfg_qty) if is_flexo else 1.0
+			bn, _ = _mk_qty1_bom(fg, last_code, last_name, fg_ratio, [], {"spec_name": "Assembly"},
+			                     prev_qi, is_default=is_default, allow_reuse=False, submit=submit, child_boms=child_boms)
 			created.append({"bom_name": bn, "item": fg, "is_fg": True})
 			fg_boms.append(bn)
 			continue
@@ -1443,14 +1588,19 @@ def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, 
 		produced_fg = False
 		for j, op in enumerate(tail):
 			is_fg_op = bool(op.get("output_is_fg"))
-			target = fg if is_fg_op else f"{_bb_code(fg)}-{_bb_code(op.get('spec_name'))}-SFG"
+			ending = ("-MTR-SFG" if op.get("output_uom") == "Meter" else "-PCS-SFG") if is_flexo else "-SFG"
+			target = fg if is_fg_op else f"{_bb_code(fg)}-{_bb_code(op.get('spec_name'))}" + ending
 			if not is_fg_op and not frappe.db.exists("Item", target):
-				_create_sfg_item(target, op.get("sfg_name") or target, fg_item=fg, item_group=sfg_item_group)
+				_create_sfg_item(target, op.get("sfg_name") or target, fg_item=fg, item_group=sfg_item_group, stock_uom=("Meter" if op.get("output_uom") == "Meter" else "Nos"))
+			if not is_fg_op:
+				_enable_builder_sfg(target)
+				if is_flexo:
+					_validate_flexo_sfg(target, op.get("output_uom") or "Meter")
 			out_qty = flt(op.get("output_qty")) or 1
 			per_in  = (flt(op.get("input_qty") or 0) / out_qty) if out_qty else 1.0
 			bn, _ = _mk_qty1_bom(target, p_code, p_name, per_in, _per_unit_mats(op), op,
 			                     p_qi, is_default=(is_default if is_fg_op else 0),
-			                     allow_reuse=(not is_fg_op), submit=submit)
+			                     allow_reuse=(not is_fg_op and not is_flexo), submit=submit, child_boms=child_boms)
 			created.append({"bom_name": bn, "item": target, "is_fg": is_fg_op})
 			p_code, p_name = target, (op.get("sfg_name") or target)
 			p_qi = op.get("quality_inspection_template") if op.get("has_quality_inspection") else None
@@ -1459,15 +1609,15 @@ def create_multi_bom(fg_items, cost_item, mfg_qty, operations, extra_materials, 
 
 		if not produced_fg:
 			# No FG-producer op → final FG BOM consuming the last per-FG SFG
-			bn, _ = _mk_qty1_bom(fg, p_code, p_name, 1.0, [], {"spec_name": "Assembly"},
-			                     p_qi, is_default=is_default, allow_reuse=False)
+			fg_ratio = flt(tail[-1].get("output_qty")) / flt(mfg_qty) if is_flexo else 1.0
+			bn, _ = _mk_qty1_bom(fg, p_code, p_name, fg_ratio, [], {"spec_name": "Assembly"},
+			                     p_qi, is_default=is_default, allow_reuse=False, submit=submit, child_boms=child_boms)
 			created.append({"bom_name": bn, "item": fg, "is_fg": True})
 			fg_boms.append(bn)
 
-	frappe.db.commit()
 	for _b in created:
 		if _b.get("is_fg") and _b.get("bom_name"):
-			_apply_bom_calc_fields(_b["bom_name"], _b.get("item"))
+			_apply_bom_calc_fields(_b["bom_name"], _b.get("item"), calculation_breakdown, overrides, mfg_qty)
 	return {"created_boms": created, "fg_boms": fg_boms}
 
 
@@ -1482,7 +1632,7 @@ def _topo_order_boms(names, docs):
 	"""Order BOM names children(leaf)-first by dependency: a BOM depends on the BOMs in the set
 	whose `item` appears as one of its component item_codes (its sub-assemblies). Guarantees a
 	parent is submitted only after the sub-BOMs it consumes — independent of the input order.
-	Anything unresolved (cycles) is appended in the given order."""
+	Reject cycles before submitting any BOM."""
 	producer = {}
 	for n in names:
 		producer.setdefault(docs[n].item, n)
@@ -1506,9 +1656,8 @@ def _topo_order_boms(names, docs):
 				remaining[m].discard(n)
 				if not remaining[m] and m not in seen and m not in ready:
 					ready.append(m)
-	for n in names:
-		if n not in seen:
-			order.append(n)
+	if len(order) != len(names):
+		frappe.throw("Circular BOM dependencies found. Correct the chain before submitting BOMs.")
 	return order
 
 
@@ -1531,6 +1680,7 @@ def submit_boms(bom_names):
 
 	docs = {n: frappe.get_doc("BOM", n) for n in names}
 	order = _topo_order_boms(names, docs)
+	producer = {docs[n].item: n for n in names if docs[n].docstatus != 2}
 
 	item_to_bom = {}   # component item_code -> submitted BOM (children submitted first)
 	for n in names:    # seed with any already-submitted BOMs in the set
@@ -1546,15 +1696,19 @@ def submit_boms(bom_names):
 		if bom.docstatus == 2:
 			continue
 		try:
-			changed = False
+			changed = not bom.set_rate_of_sub_assembly_item_based_on_bom
+			bom.set_rate_of_sub_assembly_item_based_on_bom = 1
 			for it in bom.items:
-				if not it.bom_no:
-					child = item_to_bom.get(it.item_code) or _active_submitted_bom(it.item_code)
-					if child:
-						it.bom_no = child
-						changed = True
+				dependency = producer.get(it.item_code)
+				if dependency and dependency != name and it.item_code not in item_to_bom:
+					frappe.throw(f"Child BOM {dependency} has not submitted successfully; parent BOM {name} cannot be submitted.")
+				child = item_to_bom.get(it.item_code) or (None if it.bom_no else _active_submitted_bom(it.item_code))
+				if child and child != it.bom_no:
+					it.bom_no = child
+					changed = True
 			if changed:
 				bom.save(ignore_permissions=True)
+			bom.update_cost(update_parent=False, from_child_bom=True, update_hour_rate=True)
 			bom.submit()
 			item_to_bom[bom.item] = bom.name
 			submitted.append(bom.name)

@@ -4,6 +4,23 @@
 // list lives in one place (production_plan._pl_field_schema).
 window.nxtgen_pl = window.nxtgen_pl || {};
 
+// Match the quotation popup's item details in every costing FG dialog.
+nxtgen_pl.item_fields = function (line, prefix) {
+	line = line || {};
+	prefix = prefix || "";
+	return [
+		{ fieldtype: "Section Break", label: __("New Item Details") },
+		{ fieldtype: "Data", fieldname: prefix + "item_name", label: __("Item Name"), reqd: 1, default: line.item_name },
+		{ fieldtype: "Small Text", fieldname: prefix + "description", label: __("Description"), default: line.description || line.item_name },
+		{ fieldtype: "Data", fieldname: prefix + "customer_ref", label: __("Customer Ref"), default: line.customer_ref },
+		{ fieldtype: "Column Break" },
+		{ fieldtype: "Link", options: "Item Group", fieldname: prefix + "item_group", label: __("Item Group"), reqd: 1, default: line.item_group },
+		{ fieldtype: "Link", options: "Department", fieldname: prefix + "department", label: __("Department"), reqd: 1, default: line.department },
+		{ fieldtype: "Link", options: "UOM", fieldname: prefix + "stock_uom", label: __("UOM"), reqd: 1, default: line.stock_uom || "Nos" },
+		{ fieldtype: "Section Break", label: __("Product Library Details") },
+	];
+};
+
 // Build frappe.ui.Dialog field defs for the Product Library review fields.
 //   pl_fields — [{fieldname,label,fieldtype,options,only}] from the server
 //   is_flexo  — hide the fields scoped to the other pricing type
@@ -23,6 +40,7 @@ nxtgen_pl.fields = function (pl_fields, is_flexo, prefix, line) {
 				label: __(f.label),
 				options: f.options || undefined,
 				default: line["pl_" + f.fieldname],
+				reqd: f.fieldname === "artwork_no" ? 1 : (f.reqd || 0),
 			};
 		});
 	// Lay them out as a compact 3–4 column grid (Column Breaks) instead of one tall column.

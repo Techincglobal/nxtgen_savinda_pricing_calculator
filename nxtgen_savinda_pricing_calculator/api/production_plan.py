@@ -212,6 +212,19 @@ _PL_REVIEW = [
 ]
 _PL_KEYS = [fn for fn, _ in _PL_REVIEW]
 
+def _packing_pl_defaults(row=None, fallback=None, cost_item=None):
+	"""Use the selected line's packing details, then its linked costing item."""
+	if cost_item:
+		fallback = frappe.db.get_value(
+			"cost Item", cost_item, ["pcs_per_role", "winding_direction"], as_dict=True
+		) or {}
+	row, fallback = row or {}, fallback or {}
+	return {
+		"pl_pcs_per_roll": cint(row.get("pcs_per_role") or row.get("pcs_per_roll")
+			or fallback.get("pcs_per_role") or fallback.get("pcs_per_roll") or 0),
+		"pl_winding_direction": row.get("winding_direction") or fallback.get("winding_direction") or "",
+	}
+
 def _customer_from_name(customer_name):
 	"""Resolve a Customer link from its document name or display name."""
 	if not customer_name:
@@ -236,6 +249,7 @@ def _pl_field_schema():
 		out.append({
 			"fieldname": fn, "label": df.label or fn,
 			"fieldtype": df.fieldtype, "options": df.options or "", "only": only,
+			"reqd": 1 if fn == "artwork_no" else 0,
 		})
 	return out
 
@@ -244,6 +258,7 @@ def _fg_detail_defaults(row, npd, ig, dept):
 	"""Proposed Item + Product Library values for one requested line (pre-filled from the
 	NPD Request line / header). Shown in the FG-creation popup for review/edit."""
 	is_flexo = (npd.pricing_type or "Offset") == "Flexo"
+	cbd = jt_api._cb_fields(row.get("calculation_breakdown")) if is_flexo else {}
 	return {
 		"row_name": row.name,
 		"requested_name": row.item_name or "",
@@ -265,11 +280,11 @@ def _fg_detail_defaults(row, npd, ig, dept):
 		"pl_cut_sheet_size": row.cut_sheet_size or "",
 		"pl_product_size": row.size or npd.size or "",
 		"pl_width_mm": float(row.reel_width or 0),
-		"pl_length_mm": float(row.reel_length or 0),
+		"pl_length_mm": flt(cbd.get("_product_length_mm")),
 		"pl_artwork_no": npd.artwork_no or "",
 		"pl_artwork_version": npd.artwork_version or "",
 		"pl_core_size": npd.core_size or "",
-		"pl_pcs_per_roll": 0,
+		**_packing_pl_defaults(row, npd),
 		"pl_printing_machine": "",
 	}
 
@@ -325,7 +340,7 @@ def create_fg_items(npd_request, details=None):
 		name = (d.get("item_name") or row.item_name or doc.job_title or doc.name).strip()
 		pl_over = {k: d.get("pl_" + k) for k in _PL_KEYS if d.get("pl_" + k) not in (None, "")}
 		res = create_fg_item(
-			item_name=name, description=name,
+			item_name=name, description=d.get("description") or name,
 			item_group=(d.get("item_group") or ig), department=dept,
 			stock_uom=(d.get("stock_uom") or row.uom or "Nos"),
 			cost_item=(d.get("cost_item") or row.cost_item or None),
@@ -367,6 +382,7 @@ def _cost_sheet_fg_defaults(ci, cost_sheet, ig):
 	cs = frappe.db.get_value("Cost Sheet", cost_sheet, "customer_name") or ""
 	return {
 		"cost_item": ci,
+		**_packing_pl_defaults(row=None, cost_item=ci),
 		"item_name": ci_doc.get("cost_item_name") or ci,
 		"item_group": ig,
 		"department": _dept_for_pricing(pricing),
@@ -383,7 +399,7 @@ def _cost_sheet_fg_defaults(ci, cost_sheet, ig):
 		"pl_cut_sheet_size": jt_api._size_str(cbd.get("cut_sheet_l"), cbd.get("cut_sheetw")),
 		"pl_product_size": "",
 		"pl_width_mm": flt(cbd.get("_reel_width")),
-		"pl_length_mm": flt(cbd.get("_reel_length")),
+		"pl_length_mm": flt(cbd.get("_product_length_mm")),
 		"pl_artwork_no": frappe.db.get_value("Cost Sheet", cost_sheet, "artwork_no") or "",
 		"pl_artwork_version": frappe.db.get_value("Cost Sheet", cost_sheet, "artwork_version") or "",
 	}
@@ -407,6 +423,7 @@ def get_cost_sheet_fg_preview(cost_sheet):
 			existing.append(fg)
 			continue
 		d = _cost_sheet_fg_defaults(ci, cost_sheet, ig)
+		d.update(_packing_pl_defaults(row, cost_item=ci))
 		if d.get("pl_department") == "Flexo":
 			is_flexo = True
 		lines.append(d)
@@ -442,7 +459,7 @@ def create_fg_from_cost_sheet(cost_sheet, details=None):
 		name = (d.get("item_name") or ci).strip()
 		pl_over = {k: d.get("pl_" + k) for k in _PL_KEYS if d.get("pl_" + k) not in (None, "")}
 		res = create_fg_item(
-			item_name=name, description=name,
+			item_name=name, description=d.get("description") or name,
 			item_group=(d.get("item_group") or ig_default), department=dept,
 			stock_uom=(d.get("stock_uom") or "Nos"), cost_item=ci,
 			customer_ref=(d.get("customer_ref") or None), pl_overrides=pl_over,
@@ -500,6 +517,7 @@ def _pl_defaults_from_cost_item(ci):
 		or (frappe.db.get_value("Calculation Breakdown", cb, "carton_size") if cb else "") or ""
 	defaults = {
 		"item_name": ci_doc.get("cost_item_name") or ci,
+		**_packing_pl_defaults(cost_item=ci),
 		"pl_finishings": _finishing_defaults_from_cb(cb),
 		"pricing": pricing, "is_flexo": is_flexo,
 		"department": _dept_for_pricing(pricing),
@@ -511,7 +529,7 @@ def _pl_defaults_from_cost_item(ci):
 		"pl_full_sheet_size": jt_api._size_str(cbd.get("full_sheet_l"), cbd.get("full_sheet_w")),
 		"pl_cut_sheet_size": jt_api._size_str(cbd.get("cut_sheet_l"), cbd.get("cut_sheetw")),
 		"pl_width_mm": flt(cbd.get("_reel_width")),
-		"pl_length_mm": flt(cbd.get("_reel_length")),
+		"pl_length_mm": flt(cbd.get("_product_length_mm")),
 	}
 	if is_flexo:
 		defaults.update(_foil_defaults_from_cb(cb))
@@ -519,17 +537,26 @@ def _pl_defaults_from_cost_item(ci):
 
 
 @frappe.whitelist()
-def get_cost_item_fg_defaults(cost_item, quotation=None):
+def get_cost_item_fg_defaults(cost_item=None, quotation=None, quotation_item=None):
 	"""Proposed FG + Product Library review values for one cost Item (quotation FG popup).
 	`quotation` (optional) supplies artwork defaults from its Cost Sheet, when linked."""
-	if not cost_item or not frappe.db.exists("cost Item", cost_item):
-		return {"defaults": {}, "pl_fields": _pl_field_schema(), "is_flexo": False}
-	d = _pl_defaults_from_cost_item(cost_item)
+	d = _pl_defaults_from_cost_item(cost_item) if cost_item and frappe.db.exists("cost Item", cost_item) else {}
 	if quotation:
+		frappe.get_doc("Savinda Quotation", quotation).check_permission("read")
 		q = frappe.db.get_value("Savinda Quotation", quotation, ["cost_sheet", "customer", "customer_name"], as_dict=True) or {}
 		d["pl_customer"] = q.get("customer") or _customer_from_name(q.get("customer_name"))
+		if quotation_item:
+			row = frappe.db.get_value("Savinda Quotation Item", {
+				"name": quotation_item, "parent": quotation, "parenttype": "Savinda Quotation"
+			}, ["pcs_per_role", "winding_direction"], as_dict=True)
+			if row:
+				d.update(_packing_pl_defaults(row, cost_item=cost_item))
 		cs = q.get("cost_sheet")
 		if cs:
+			if not d.get("pricing"):
+				pricing = frappe.db.get_value("Cost Sheet", cs, "pricing_type") or "Offset"
+				d.update(pricing=pricing, is_flexo=pricing == "Flexo", pl_department=pricing,
+					department=_dept_for_pricing(pricing))
 			d["pl_artwork_no"] = frappe.db.get_value("Cost Sheet", cs, "artwork_no") or ""
 			d["pl_artwork_version"] = frappe.db.get_value("Cost Sheet", cs, "artwork_version") or ""
 	return {"defaults": d, "pl_fields": _pl_field_schema(), "is_flexo": d.get("is_flexo", False)}

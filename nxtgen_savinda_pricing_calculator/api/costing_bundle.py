@@ -223,7 +223,23 @@ def sync_component_fgs(cost_sheet):
 
 
 @frappe.whitelist()
-def create_bundle_fg(cost_sheet, item_group, department, customer=None):
+def get_bundle_fg_preview(cost_sheet):
+	from nxtgen_savinda_pricing_calculator.api.production_plan import (
+		_pl_field_schema, _fg_item_group_default, _dept_for_pricing, _customer_from_name,
+	)
+	cs = frappe.get_doc("Cost Sheet", cost_sheet)
+	cs.check_permission("read")
+	return {"pl_fields": _pl_field_schema(), "is_flexo": cs.pricing_type == "Flexo",
+		"defaults": {"item_name": cs.custom_bundle_name, "item_group": _fg_item_group_default(cs.name),
+			"department": _dept_for_pricing(cs.pricing_type), "stock_uom": cs.custom_bundle_uom or "Nos",
+			"pl_department": cs.pricing_type, "pl_customer": _customer_from_name(cs.customer_name),
+			"pl_artwork_no": cs.get("artwork_no") or "", "pl_artwork_version": cs.get("artwork_version") or "",
+			"pl_finishings": [{"process_name": name} for name in bundle_finishings(cs)]}}
+
+
+@frappe.whitelist()
+def create_bundle_fg(cost_sheet, item_group, department, customer=None, pl_overrides=None,
+		item_name=None, description=None, stock_uom=None, customer_ref=None):
 	from nxtgen_savinda_pricing_calculator.api.manufacturing import create_fg_item
 	cs = frappe.get_doc("Cost Sheet", cost_sheet)
 	cs.check_permission("write")
@@ -244,10 +260,16 @@ def create_bundle_fg(cost_sheet, item_group, department, customer=None):
 			customer = opp.party_name
 	if not customer and cs.customer_name:
 		customer = frappe.db.get_value("Customer", {"customer_name": cs.customer_name}, "name")
-	result = create_fg_item(cs.custom_bundle_name, cs.custom_bundle_name, item_group, department,
-		stock_uom=cs.custom_bundle_uom, costing_bundle=cs.name,
-		pl_overrides={"department": cs.pricing_type, "customer": customer,
-			"finishings": [{"process_name": name} for name in bundle_finishings(cs)]})
+	overrides = {"department": cs.pricing_type, "customer": customer,
+		"artwork_no": cs.get("artwork_no") or "", "artwork_version": cs.get("artwork_version") or "",
+		"finishings": [{"process_name": name} for name in bundle_finishings(cs)]}
+	if isinstance(pl_overrides, str):
+		pl_overrides = frappe.parse_json(pl_overrides)
+	if pl_overrides:
+		overrides.update(pl_overrides)
+	result = create_fg_item(item_name or cs.custom_bundle_name, description or cs.custom_bundle_name, item_group, department,
+		stock_uom=stock_uom or cs.custom_bundle_uom, costing_bundle=cs.name, pl_overrides=overrides,
+		customer_ref=customer_ref)
 	cs.custom_bundle_fg = result["item_code"]
 	cs.save()
 	for row in frappe.get_all("Savinda Quotation Item", filters={"custom_costing_bundle": cs.name}, fields=["name", "finish_good"]):
