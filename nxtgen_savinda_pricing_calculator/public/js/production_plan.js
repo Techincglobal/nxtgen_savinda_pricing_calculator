@@ -2,8 +2,55 @@
 // Production Plan workflow, Manufacturing Planning, and material-request actions.
 // Base-material quantities come from Manufacturing Planning sheet/reel calculations.
 
+function pp_specification_fgs(doc) {
+	var sources = [["custom_ticket_items", "fg_item"], ["po_items", "item_code"],
+		[doc.custom_pricing_type === "Flexo" ? "custom_flexo_planning" : "custom_offset_planning", "fg_item"]];
+	for (var source of sources) {
+		var items = Array.from(new Set((doc[source[0]] || []).map(row => row[source[1]]).filter(Boolean)));
+		if (items.length) return items;
+	}
+	return [];
+}
+
+function pp_fetch_library_specifications(frm) {
+	var items = pp_specification_fgs(frm.doc);
+	if (!items.length) { frappe.msgprint(__("Add a finished good to the plan first.")); return; }
+	var fetch = function (fg) {
+		var original_name = frm.doc.name;
+		var original_items = JSON.stringify(items);
+		frappe.call({
+			method: "nxtgen_savinda_pricing_calculator.api.production_plan.get_pp_library_specifications",
+			args: {fg_item: fg},
+			callback: function (r) {
+				if (frm.doc.name !== original_name || frm.doc.docstatus !== 0
+					|| JSON.stringify(pp_specification_fgs(frm.doc)) !== original_items) return;
+				var values = {};
+				Object.entries(r.message || {}).forEach(function ([field, value]) {
+					if (!["custom_workstation", "custom_art_no", "custom_art_version"].includes(field) && frm.doc.custom_pricing_type !== "Flexo") return;
+					if (!frm.doc[field] && value !== null && value !== "" && value !== 0) values[field] = value;
+				});
+				if (Object.keys(values).length) {
+					frm.set_value(values);
+					frappe.show_alert({message: __("Product Library defaults filled. Save the plan."), indicator: "green"});
+				} else {
+					frappe.msgprint(__("No blank fields have matching Product Library defaults. You can enter the details manually."));
+				}
+			}
+		});
+	};
+	if (items.length === 1) { fetch(items[0]); return; }
+	frappe.prompt([{fieldname: "fg_item", fieldtype: "Link", options: "Item", label: __("Finished Good"),
+		reqd: 1, get_query: function () { return {filters: {name: ["in", items]}}; }}],
+		values => fetch(values.fg_item), __("Select Product Library Source"), __("Fetch"));
+}
+
 frappe.ui.form.on("Production Plan", {
 	refresh: function (frm) {
+		if (frm.doc.docstatus === 0 && !frm.read_only && frm.fields_dict.custom_workstation) {
+			frm.add_custom_button(__("Fetch Product Library Details"), function () {
+				pp_fetch_library_specifications(frm);
+			}, __("Actions"));
+		}
 		// Custom actions follow the Production Plan workflow. This keeps a user from
 		// performing a later team's task while the plan is still with another team.
 		var is_ticket_plan = !frm.is_new() && !!frm.doc.custom_ticket_type;
@@ -162,10 +209,30 @@ frappe.ui.form.on("Production Plan", {
 
 
 	},
-	custom_req_date: function (frm, cdt, cdn) {
-		frm.doc.custom_ticket_items.forEach(function (r) {
-			r.exp_date = frm.doc.custom_req_date;
+	custom_winding_guide: function () {
+		var d = new frappe.ui.Dialog({
+			title: __("Winding Directions"), size: "extra-large",
+			fields: [{fieldtype: "HTML", fieldname: "guide", options:
+				'<div style="text-align:center;max-height:75vh;overflow:auto">'
+				+ '<img src="/files/Windings.png" alt="Winding directions" style="max-width:100%;height:auto">'
+				+ '</div><p><a href="/files/Windings.png" target="_blank" rel="noopener">'
+				+ __("Open full image") + '</a></p>'}]
 		});
+		d.fields_dict.guide.$wrapper.find("img").on("error", function () {
+			$(this).replaceWith($("<p>").addClass("text-muted").text(__("The winding guide image is unavailable on this site.")));
+		});
+		d.show();
+	},
+	custom_req_date: function (frm, cdt, cdn) {
+		var updates = [];
+		[["custom_ticket_items", "exp_date", "fg_item"], ["custom_offset_planning", "exp_date", "fg_item"],
+			["custom_flexo_planning", "exp_date", "fg_item"], ["po_items", "custom_exp_date", "item_code"]].forEach(function ([table, field, item]) {
+			(frm.doc[table] || []).forEach(function (row) {
+				if (!row[item]) return;
+				updates.push(frappe.model.set_value(row.doctype, row.name, field, frm.doc.custom_req_date || null));
+			});
+		});
+		return Promise.all(updates);
 	},
 	custom_ticket_type: function (frm, cdt, cdn) {
 		// alert("Ticket Type changed — clearing planning rows and resetting source document.");

@@ -116,13 +116,13 @@ def _require_role(role):
 		frappe.throw("Only users with the '" + role + "' role can perform this action.")
 
 
-def _first_fg_context_from_so(so):
+def _first_fg_context_from_so(so, items=None):
 	"""(ctx, cb, pl, pricing_type) for the first resolvable Sales Order item, else Nones."""
-	for it in so.items:
+	for it in (items if items is not None else so.items):
 		ctx = jt_api._fg_context(it.item_code)
 		cb = jt_api._cb_fields(ctx.get("calculation_breakdown"))
-		if cb:
-			pl = jt_api._pl(ctx.get("product_library"))
+		pl = jt_api._pl(ctx.get("product_library"))
+		if cb or pl:
 			pricing = (pl.get("department") if pl else "") or cb.get("pricing_type") or "Offset"
 			return ctx, cb, pl, ("Flexo" if pricing == "Flexo" else "Offset")
 	return None, {}, {}, "Offset"
@@ -642,11 +642,33 @@ def create_production_plan_from_source(source_type, source_name):
 	ALL fetched items go to custom_ticket_items; only the BOM-ready ones also go to po_items
 	(ERPNext requires a BOM there). Items without a BOM stay on the ticket and are flagged
 	for the BOM team — no hard block, so items can be fetched before BOMs exist."""
+	coverage = None
+	if source_type == "Sales Order":
+		from nxtgen_savinda_pricing_calculator.api.production_plan_coverage import existing_plans, order_coverage
+		# Serialize this app's concurrent creation requests for the same order.
+		frappe.db.sql("select name from `tabSales Order` where name=%s for update", source_name)
+		so = frappe.get_doc("Sales Order", source_name)
+		so.check_permission("read")
+		if so.docstatus == 2:
+			frappe.throw("A cancelled Sales Order cannot be planned.")
+		plans = existing_plans(source_name)
+		coverage = order_coverage(so, plans)
+		readable = [plan.name for plan in plans if plan.name in coverage["existing_plans"]
+			and frappe.has_permission("Production Plan", "read", doc=plan)]
+		coverage["existing_plans"] = readable
+		if not coverage["remaining"] and so.items:
+			if not readable:
+				frappe.throw("All Sales Order items are already planned. Contact a user with access to the existing Production Plans.")
+			return {"production_plan": readable[0], "already_planned": True,
+				"existing_production_plans": readable}
+	frappe.has_permission("Production Plan", "create", throw=True)
 	pp = frappe.new_doc("Production Plan")
 	pp.company = jt_api._default_company()
 	pp.posting_date = today()
 
-	ticket_type, pricing_type, header, lines = _gather_ticket(source_type, source_name)
+	ticket_type, pricing_type, header, lines = _gather_ticket(source_type, source_name,
+		sales_order_items=set(coverage["remaining"]) if coverage else None,
+		quantities=coverage["remaining"] if coverage else None)
 	if not lines:
 		frappe.throw("No items found on the selected " + str(source_type) + ".")
 
@@ -655,7 +677,7 @@ def create_production_plan_from_source(source_type, source_name):
 	# po_items: native ERPNext pull from the Sales Order so the standard Production Plan →
 	# Work Order flow runs; the bespoke builder is only used for the dormant NPD Request source.
 	if source_type == "Sales Order":
-		_populate_po_items_from_so(pp, source_name)
+		_populate_po_items_from_so(pp, source_name, quantities=coverage["remaining"])
 	else:
 		_build_po_items(pp)
 
@@ -687,7 +709,9 @@ def create_production_plan_from_source(source_type, source_name):
 			)
 		except Exception:
 			frappe.log_error(frappe.get_traceback(), "notify pending BOM failed")
-	return {"production_plan": pp.name, "pending_bom": pending, "needs_bom": bool(pending)}
+	return {"production_plan": pp.name, "pending_bom": pending, "needs_bom": bool(pending),
+		"existing_production_plans": coverage["existing_plans"] if coverage else [],
+		"already_planned": False}
 
 
 @frappe.whitelist()
@@ -753,7 +777,13 @@ def _fgs_from_cost_sheet(cs_name):
 	return out
 
 
-def _gather_ticket(source_type, source_name):
+def _sales_order_quotation_ref(so):
+	if so.get("custom_savinda_quotation"):
+		return so.custom_savinda_quotation
+	return ", ".join(dict.fromkeys(row.get("prevdoc_docname") for row in so.items if row.get("prevdoc_docname")))
+
+
+def _gather_ticket(source_type, source_name, sales_order_items=None, quantities=None):
 	"""Return (ticket_type, pricing_type, header_dict, ticket_lines) for a source."""
 	if source_type == "NPD Request":
 		src = frappe.get_doc("NPD Request", source_name)
@@ -767,14 +797,15 @@ def _gather_ticket(source_type, source_name):
 				"calculation_breakdown": fg["calculation_breakdown"]}
 			bom = _resolve_bom_no(fg["fg_item"]) if fg["fg_item"] else None
 			lines.append(_ticket_line(fg["fg_item"], sample_qty, geom, bom))
+		library = jt_api._pl(jt_api._pl_name_for_fg(lines[0]["fg_item"])) if lines else {}
 		header = {
 			"custom_npd_request": src.name, "custom_customer": src.customer,
 			"custom_customer_name": src.customer_name, "custom_colors": cint(src.colors),
 			"custom_job_title": src.job_title, "custom_material": src.material,
 			"custom_job_board": src.material, "custom_finishings": src.finishings,
 			"custom_color_ref": src.color_ref, "custom_quote_no": src.quote_no,
-			"custom_remarks": src.remarks, "custom_art_no": src.artwork_no,
-			"custom_art_version": src.artwork_version,
+			"custom_remarks": src.remarks, "custom_art_no": library.get("artwork_no") or src.artwork_no,
+			"custom_art_version": library.get("artwork_version") or src.artwork_version,
 			# Artwork must be approved in this PP workflow, independently of NPD status.
 			"custom_artwork_status": "Pending",
 		}
@@ -782,16 +813,20 @@ def _gather_ticket(source_type, source_name):
 
 	if source_type == "Sales Order":
 		so = frappe.get_doc("Sales Order", source_name)
-		ctx, cb, pl, pricing = _first_fg_context_from_so(so)
+		items = [row for row in so.items if sales_order_items is None or row.name in sales_order_items]
+		ctx, cb, pl, pricing = _first_fg_context_from_so(so, items=items)
 		lines = []
-		for it in so.items:
+		for it in items:
+			qty = (quantities or {}).get(it.name, it.qty)
 			fctx = jt_api._fg_context(it.item_code)
 			fcb = jt_api._cb_fields(fctx.get("calculation_breakdown"))
 			fpl = jt_api._pl(fctx.get("product_library"))
 			pr = (fpl.get("department") if fpl else "") or fcb.get("pricing_type") or pricing
-			geom = jt_api._item_line_from_cb(it.item_name or it.item_code, it.qty, fctx, fcb, fpl, pr)
+			geom = jt_api._item_line_from_cb(it.item_name or it.item_code, qty, fctx, fcb, fpl, pr)
 			bom = _resolve_bom_no(it.item_code)
-			lines.append(_ticket_line(it.item_code, it.qty, geom, bom))
+			line = _ticket_line(it.item_code, qty, geom, bom)
+			line.update(sales_order=so.name, sales_order_item=it.name)
+			lines.append(line)
 		if cb.get("base_material"):
 			board = frappe.db.get_value("Item", cb["base_material"], "item_name") or cb["base_material"]
 		else:
@@ -800,13 +835,13 @@ def _gather_ticket(source_type, source_name):
 			"custom_sales_order": so.name,
 			"custom_department": so.get("custom_department") or "",
 			"custom_customer": so.customer, "custom_customer_name": so.customer_name,
-			"custom_po_no": so.po_no, "custom_req_date": so.delivery_date,
+			"custom_po_no": so.po_no,
 			"custom_colors": cint(cb.get("no_of_colors")), "custom_job_board": board,
 			"custom_material": board,
 			"custom_job_title": (pl.get("product_name") if pl else "") or so.customer_name,
 			"custom_art_no": (pl.get("artwork_no") if pl else "") or "",
 			"custom_art_version": (pl.get("artwork_version") if pl else "") or "",
-			"custom_quote_no": (pl.get("quotation_no") if pl else "") or "",
+			"custom_quote_no": _sales_order_quotation_ref(so),
 			"custom_finishings": jt_api._finishings_text(pl) if pl else "",
 			# The CS Team approves artwork on the PP before it can be submitted.
 			"custom_artwork_status": "Pending",
@@ -825,22 +860,28 @@ def _build_po_items(pp, fg_wh=None):
 		if not (tl.get("has_bom") and tl.get("bom_no") and frappe.db.exists("BOM", tl.get("bom_no"))):
 			continue
 		stock_uom = frappe.db.get_value("Item", tl.fg_item, "stock_uom") or "Nos"
+		factor = (frappe.db.get_value("Sales Order Item", tl.sales_order_item, "conversion_factor")
+			if tl.get("sales_order_item") else 1) or 1
+		planned_qty = (flt(tl.qty) or 1) * flt(factor)
 		po = {
 			"item_code": tl.fg_item, "bom_no": tl.bom_no,
-			"planned_qty": flt(tl.qty) or 1, "pending_qty": flt(tl.qty) or 1,
+			"planned_qty": planned_qty, "pending_qty": planned_qty,
 			"stock_uom": stock_uom, "warehouse": fg_wh, "planned_start_date": now_datetime(),
+			"sales_order": tl.get("sales_order"), "sales_order_item": tl.get("sales_order_item"),
 		}
 		po.update(_po_row_from_geom({f: tl.get(f) for f in _TICKET_GEOM_FIELDS}))
 		pp.append("po_items", po)
 
 
-def _populate_po_items_from_so(pp, so_name):
+def _populate_po_items_from_so(pp, so_name, quantities=None):
 	"""Populate po_items natively from a Sales Order (ERPNext ProductionPlan.get_items), so
 	the standard Production Plan → Work Order pipeline runs. Sets get_items_from + the
 	sales_orders reference, then falls back to the manual builder if the native pull yields
 	nothing (e.g. FGs without a default BOM)."""
 	so = frappe.get_doc("Sales Order", so_name)
 	pp.get_items_from = "Sales Order"
+	if quantities is not None:
+		pp.combine_items = 0  # Preserve the Sales Order row links for partial planning.
 	if not any((r.get("sales_order") == so_name) for r in (pp.get("sales_orders") or [])):
 		pp.append("sales_orders", {
 			"sales_order": so.name,
@@ -854,6 +895,17 @@ def _populate_po_items_from_so(pp, so_name):
 		frappe.log_error(frappe.get_traceback(), "PP native get_items from SO failed")
 	if not (pp.get("po_items") or []):
 		_build_po_items(pp)
+	if quantities is not None:
+		factors = {row.name: flt(row.get("conversion_factor")) or 1 for row in so.items}
+		selected = []
+		for row in pp.get("po_items") or []:
+			if row.get("sales_order_item") not in quantities:
+				continue
+			row.planned_qty = quantities[row.sales_order_item] * factors[row.sales_order_item]
+			row.pending_qty = row.planned_qty
+			row.idx = len(selected) + 1
+			selected.append(row)
+		pp.set("po_items", selected)
 
 
 def _resolve_source(pp):
@@ -901,7 +953,14 @@ def _populate_pp_ticket_fields(pp, force=False):
 	source_type, source_name = _resolve_source(pp)
 	if not source_type:
 		return False
-	ticket_type, pricing_type, header, lines = _gather_ticket(source_type, source_name)
+	quantities = {}
+	if source_type == "Sales Order":
+		for row in pp.get("custom_ticket_items") or []:
+			if row.get("sales_order_item") and row.get("sales_order") in (None, "", source_name):
+				key = row.sales_order_item
+				quantities[key] = quantities.get(key, 0) + flt(row.qty)
+	ticket_type, pricing_type, header, lines = _gather_ticket(source_type, source_name,
+		sales_order_items=set(quantities) if quantities else None, quantities=quantities or None)
 
 	def setf(field, val):
 		if val in (None, ""):
@@ -929,11 +988,31 @@ def _populate_pp_ticket_fields(pp, force=False):
 	return True
 
 
+def _sync_pp_required_date(doc, require_date=False):
+	"""CS enters the PP date; expected dates follow it, independently of expiry."""
+	if not doc.get("custom_ticket_type"):
+		return
+	final_approval = doc.get("workflow_state") in ("Approved", "Submitted")
+	required_date = doc.get("custom_req_date")
+	if (require_date or final_approval) and not required_date:
+		frappe.throw("Set Required Date on the Production Plan before final approval or submission.",
+			title="Required Date Missing")
+	if not required_date:
+		return
+	for table, item_field, date_field in (("custom_ticket_items", "fg_item", "exp_date"),
+		("custom_offset_planning", "fg_item", "exp_date"), ("custom_flexo_planning", "fg_item", "exp_date"),
+		("po_items", "item_code", "custom_exp_date")):
+		for row in (doc.get(table) or []):
+			if row.get(item_field):
+				row.set(date_field, required_date)
+
+
 def validate_ticket_item_exp_dates(doc, method=None):
-	"""On submit, require an Exp Date on every Job Ticket item row. Scoped to our plans
+	"""On submit, require an Expected Date on every Job Ticket item row. Scoped to our plans
 	(custom_ticket_type set) so standard Production Plans are untouched."""
 	if not doc.get("custom_ticket_type"):
 		return
+	_sync_pp_required_date(doc, require_date=True)
 	missing = []
 	for r in (doc.get("custom_ticket_items") or []):
 		if not r.get("fg_item"):
@@ -943,9 +1022,9 @@ def validate_ticket_item_exp_dates(doc, method=None):
 			               or r.fg_item or ("Row %s" % r.idx))
 	if missing:
 		frappe.throw(
-			"Set the <b>Exp Date</b> on all Job Ticket items before submitting.<br>Missing on: "
+			"Set the <b>Expected Date</b> on all Job Ticket items before submitting.<br>Missing on: "
 			+ ", ".join("<b>%s</b>" % frappe.utils.escape_html(m) for m in missing),
-			title="Exp Date Required")
+			title="Expected Date Required")
 
 
 def _refresh_manual_planning_rows(doc):
@@ -1011,13 +1090,66 @@ def refresh_planning_calculations(production_plan):
 	return {"rows": len(pp.get("custom_flexo_planning" if (pp.get("custom_pricing_type") == "Flexo") else "custom_offset_planning") or [])}
 
 
+def _pp_specification_fgs(doc):
+	for table, key in (("custom_ticket_items", "fg_item"), ("po_items", "item_code"),
+		("custom_flexo_planning" if doc.get("custom_pricing_type") == "Flexo" else "custom_offset_planning", "fg_item")):
+		items = list(dict.fromkeys(row.get(key) for row in (doc.get(table) or []) if row.get(key)))
+		if items:
+			return items
+	return []
+
+
+def _pp_library_specifications(fg_item):
+	pl_name = jt_api._pl_name_for_fg(fg_item)
+	if not pl_name:
+		return {}
+	pl = frappe.db.get_value("Product Library", pl_name,
+		["printing_machine", "winding_direction", "pcs_per_roll", "core_size", "artwork_no", "artwork_version"], as_dict=True) or {}
+	values = {"custom_winding_direction": pl.get("winding_direction") or "",
+		"custom_pcs_per_roll": cint(pl.get("pcs_per_roll")), "custom_core_size": pl.get("core_size") or "",
+		"custom_art_no": pl.get("artwork_no") or "", "custom_art_version": pl.get("artwork_version") or ""}
+	machine = pl.get("printing_machine")
+	if machine:
+		workstation = frappe.db.exists("Workstation", machine)
+		if not workstation:
+			workstation = frappe.db.get_value("Offset Machine", machine, "workstation")
+		if workstation and frappe.db.exists("Workstation", workstation):
+			values["custom_workstation"] = workstation
+	return {field: value for field, value in values.items() if value not in (None, "", 0)}
+
+
+@frappe.whitelist()
+def get_pp_library_specifications(fg_item):
+	frappe.get_doc("Item", fg_item).check_permission("read")
+	pl_name = jt_api._pl_name_for_fg(fg_item)
+	if pl_name:
+		frappe.get_doc("Product Library", pl_name).check_permission("read")
+	return _pp_library_specifications(fg_item)
+
+
+def _fill_pp_library_specifications(doc):
+	if doc.docstatus != 0:
+		return
+	items = _pp_specification_fgs(doc)
+	if len(items) != 1:
+		return  # Mixed FGs require an explicit choice in the client fetch action.
+	for field, value in _pp_library_specifications(items[0]).items():
+		if field not in ("custom_workstation", "custom_art_no", "custom_art_version") and doc.get("custom_pricing_type") != "Flexo":
+			continue
+		if not doc.get(field) and value not in (None, "", 0):
+			doc.set(field, value)
+
+
 def on_production_plan_before_save(doc, method=None):
 	"""Auto-fetch Job Ticket header + item list as soon as a source (SO / NPD) is set."""
 	try:
 		_populate_pp_ticket_fields(doc, force=False)
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "production_plan auto-populate failed")
+	# Required-date validation must propagate to stop the workflow transition.
+	_sync_pp_required_date(doc)
 	try:
+		_fill_pp_library_specifications(doc)
 		_stamp_planning_line_fields(doc)
 		_refresh_manual_planning_rows(doc)
 	except Exception:
@@ -1703,26 +1835,15 @@ def on_production_plan_update(doc, method=None):
 
 
 def _fetch_artwork_quotation(doc):
-	"""For a Sales Order plan, pull its quotation reference. Artwork approval is intentionally
-	performed on the Production Plan by the CS Team. Best-effort; never blocks."""
+	"""Fill a missing quotation reference through the linked Sales Order only."""
 	try:
-		cost_item = None
-		for tl in (doc.get("custom_ticket_items") or []):
-			if tl.get("cost_item"):
-				cost_item = tl.cost_item
-				break
-		if not cost_item:
+		if doc.get("custom_quote_no"):
 			return
-		cs = frappe.db.get_value("Cost Sheet Items", {"item": cost_item}, "parent")
-		if not cs:
-			return
-		vals = {}
-		sq = frappe.db.get_value(
-			"Savinda Quotation", {"cost_sheet": cs}, "name", order_by="creation desc")
-		if sq and not doc.get("custom_quote_no"):
-			vals["custom_quote_no"] = sq
-		if vals:
-			_stamp(doc.name, vals)
+		source_type, source_name = _resolve_source(doc)
+		if source_type == "Sales Order":
+			quotation = _sales_order_quotation_ref(frappe.get_doc("Sales Order", source_name))
+			if quotation:
+				_stamp(doc.name, {"custom_quote_no": quotation})
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "fetch artwork/quotation failed")
 

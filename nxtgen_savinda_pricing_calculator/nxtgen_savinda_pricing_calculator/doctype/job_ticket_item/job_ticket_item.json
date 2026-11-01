@@ -11,6 +11,8 @@
   "fg_item",
   "cost_item",
   "calculation_breakdown",
+  "sales_order",
+  "sales_order_item",
   "bom_no",
   "has_bom",
   "col_break_refs",
@@ -47,6 +49,8 @@
   "finishings"
  ],
  "fields": [
+  {"fieldname": "sales_order", "fieldtype": "Link", "options": "Sales Order", "label": "Sales Order", "read_only": 1, "hidden": 1},
+  {"fieldname": "sales_order_item", "fieldtype": "Data", "label": "Sales Order Item", "read_only": 1, "hidden": 1},
   {
    "columns": 3,
    "fieldname": "description",

@@ -96,6 +96,7 @@
    "fieldtype": "Column Break"
   },
   {
+   "fetch_from": "inquiry.opportunity_owner",
    "fieldname": "sales_person",
    "fieldtype": "Link",
    "label": "Sales Person",
@@ -117,6 +118,7 @@
   },
   {
    "description": "Currency shown to the customer. Costing stays in company base (LKR); prices are converted using the rate below.",
+   "fetch_from": "customer.default_currency",
    "fieldname": "currency",
    "fieldtype": "Link",
    "label": "Quotation Currency",
@@ -283,7 +285,7 @@
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-10-25 05:19:49.824938",
+ "modified": "2026-11-01 19:45:58.193947",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Savinda Quotation",

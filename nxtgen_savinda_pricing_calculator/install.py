@@ -764,6 +764,7 @@ def _custom_field_definitions():
 			],
 			# Packing details carried from the Cost Sheet flow; editable on the SO per PO.
 			"Sales Order": [
+				{"fieldname": "custom_savinda_quotation", "label": "Savinda Quotation", "fieldtype": "Link", "options": "Savinda Quotation", "insert_after": "customer"},
 				{
 			"fieldname": "custom_order_type",
 			"label": "Order Type",
@@ -980,7 +981,7 @@ def _custom_field_definitions():
 				{"fieldname": "custom_customer_name", "label": "Customer Name", "fieldtype": "Data", "insert_after": "custom_customer"},
 				{"fieldname": "custom_job_title", "label": "Job Title", "fieldtype": "Data", "insert_after": "custom_customer_name"},
 				{"fieldname": "custom_po_no", "label": "PO No", "fieldtype": "Data", "insert_after": "custom_job_title"},
-				{"fieldname": "custom_req_date", "label": "Required Date", "fieldtype": "Date", "insert_after": "custom_po_no"},
+				{"fieldname": "custom_req_date", "label": "Required Date", "fieldtype": "Date", "insert_after": "custom_po_no", "description": "Required before final approval or submission. Sets Expected Date on the job-ticket and planning item lines."},
 				{"fieldname": "custom_quote_no", "label": "Quote No", "fieldtype": "Data", "insert_after": "custom_req_date"},
 				# Planning list attributes (user-set): New / Repeat job, and the callout flag.
 				{"fieldname": "custom_repeat_or_new", "label": "Repeat / New", "fieldtype": "Select", "options": "\nNew\nRepeat\nRepeat w/c", "insert_after": "custom_quote_no", "in_standard_filter": 1, "allow_on_submit": 1, "hidden": 0},
@@ -993,7 +994,12 @@ def _custom_field_definitions():
 				{"fieldname": "custom_art_version", "label": "Artwork Version", "fieldtype": "Data", "insert_after": "custom_art_no"},
 				{"fieldname": "custom_color_ref", "label": "Color Reference", "fieldtype": "Data", "insert_after": "custom_art_version"},
 				{"fieldname": "custom_ticket_col2", "fieldtype": "Column Break", "insert_after": "custom_color_ref"},
-				{"fieldname": "custom_printing_machine", "label": "Printing Machine", "fieldtype": "Data", "insert_after": "custom_ticket_col2"},
+				{"fieldname": "custom_workstation", "label": "Workstation / Machine", "fieldtype": "Link", "options": "Workstation", "insert_after": "custom_ticket_col2"},
+				{"fieldname": "custom_winding_direction", "label": "Win. Direction", "fieldtype": "Link", "options": "Winding Direction", "insert_after": "custom_workstation", "depends_on": "eval:doc.custom_pricing_type=='Flexo'"},
+				{"fieldname": "custom_winding_guide", "label": "View Winding Directions", "fieldtype": "Button", "insert_after": "custom_winding_direction", "depends_on": "eval:doc.custom_pricing_type=='Flexo'"},
+				{"fieldname": "custom_pcs_per_roll", "label": "Pcs per Roll", "fieldtype": "Int", "insert_after": "custom_winding_guide", "depends_on": "eval:doc.custom_pricing_type=='Flexo'"},
+				{"fieldname": "custom_core_size", "label": "Core Size", "fieldtype": "Data", "insert_after": "custom_pcs_per_roll", "depends_on": "eval:doc.custom_pricing_type=='Flexo'"},
+				{"fieldname": "custom_printing_machine", "label": "Printing Machine (Legacy)", "fieldtype": "Data", "insert_after": "custom_core_size", "hidden": 1},
 				{"fieldname": "custom_finishings", "label": "Finishings", "fieldtype": "Small Text", "insert_after": "custom_printing_machine"},
 				{"fieldname": "custom_remarks", "label": "Remarks", "fieldtype": "Small Text", "insert_after": "custom_finishings"},
 				# Full job-ticket line list (ALL fetched FGs, incl. those without a BOM yet).

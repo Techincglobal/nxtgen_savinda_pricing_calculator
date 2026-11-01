@@ -1232,6 +1232,7 @@ function _render_so_dialog(frm, fg_list, order_type) {
 					doc: {
 						doctype: "Sales Order",
 						customer: vals.customer,
+						custom_savinda_quotation: frm.doc.name,
 						custom_order_type: order_type,
 						transaction_date: frappe.datetime.get_today(),
 						delivery_date: vals.delivery_date,

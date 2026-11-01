@@ -8,9 +8,10 @@ from nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.utils i
 
 
 class TestTicketGrouping(unittest.TestCase):
-	def print_data(self, rows, tickets=None):
+	def print_data(self, rows, tickets=None, **header):
 		doc = frappe._dict(name="TEST-PP", creation="2026-10-05", posting_date="2026-10-05",
 			custom_pricing_type="Offset", custom_offset_planning=rows, custom_ticket_items=tickets or [], po_items=[], mr_items=[])
+		doc.update(header)
 		db = Mock()
 		db.get_value.return_value = None
 		db.exists.return_value = False
@@ -22,6 +23,15 @@ class TestTicketGrouping(unittest.TestCase):
 			for helper, result in (("_fg_bom_calc", {}), ("_fg_pl", {}), ("_job_costing_cfg", {}), ("_company_logo", ""), ("_ticket_base_materials", [])):
 				stack.enter_context(patch.object(jinja, helper, return_value=result))
 			return jinja.get_ticket_print_data(doc.name)
+
+	def test_pp_manual_flexo_specifications_are_used_in_print_header(self):
+		data = self.print_data([], custom_pricing_type="Flexo", custom_workstation="PRESS-WS",
+			custom_printing_machine="OLD MACHINE", custom_winding_direction="OUT",
+			custom_pcs_per_roll=2000, custom_core_size="76 mm")
+		self.assertEqual(data["header"]["printing_machine"], "PRESS-WS")
+		self.assertEqual(data["header"]["winding_direction"], "OUT")
+		self.assertEqual(data["header"]["pcs_per_roll"], 2000)
+		self.assertEqual(data["header"]["core_size"], "76 mm")
 
 	def test_expiry_date_is_separate_from_expected_date_on_planned_rows(self):
 		for grouped in (0, 1):

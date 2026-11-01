@@ -622,7 +622,7 @@ def get_ticket_print_data(production_plan_name):
 		"po_no": doc.get("custom_po_no") or "",
 		"req_date": req_date,
 		"quote_no": doc.get("custom_quote_no") or "",
-		"printing_machine": doc.get("custom_printing_machine") or pl.get("printing_machine") or "",
+		"printing_machine": doc.get("custom_workstation") or doc.get("custom_printing_machine") or pl.get("printing_machine") or "",
 		"finishings": doc.get("custom_finishings") or "",
 		"remarks": doc.get("custom_remarks") or "",
 		"repeat_or_new": doc.get("custom_repeat_or_new") or "",
@@ -637,10 +637,10 @@ def get_ticket_print_data(production_plan_name):
 		"quantity": quantity,
 		"ctn_size": cb.get("carton_size") or pl.get("product_size") or "",
 		"reel_or_sheet": pl.get("flexo_type") or ("Reel" if is_flexo else "Sheet"),
-		"pcs_per_roll": pl.get("pcs_per_roll") or 0,
+		"pcs_per_roll": doc.get("custom_pcs_per_roll") or pl.get("pcs_per_roll") or 0,
 		"ups": pl.get("no_of_ups") or cb.get("no_of_ups") or (lines[0]["ups"] if lines else 0),
-		"core_size": pl.get("core_size") or "",
-		"winding_direction": pl.get("winding_direction") or "",
+		"core_size": doc.get("custom_core_size") or pl.get("core_size") or "",
+		"winding_direction": doc.get("custom_winding_direction") or pl.get("winding_direction") or "",
 	}
 
 	# Header dependency values from the first FG's BOM + Product Library (independent of costing).

@@ -9,14 +9,28 @@ frappe.ui.form.on("Sales Order", {
 			}, __("Manufacturing"));
 
 			frm.add_custom_button(__("Create Production Plan"), function () {
+				if (frm.is_dirty()) { frappe.msgprint(__("Save the Sales Order before checking its Production Plans.")); return; }
 				frappe.call({
 					method: "nxtgen_savinda_pricing_calculator.api.production_plan.create_plan_from_sales_order",
 					args: { sales_order: frm.doc.name },
 					freeze: true,
 					freeze_message: __("Creating Production Plan…"),
 					callback: function (r) {
-						if (r.message && r.message.production_plan) {
-							frappe.set_route("Form", "Production Plan", r.message.production_plan);
+						var result = r.message || {};
+						if (result.already_planned) {
+							var links = (result.existing_production_plans || []).map(function (name) {
+								return '<a href="/app/production-plan/' + encodeURIComponent(name) + '">'
+									+ frappe.utils.escape_html(name) + '</a>';
+							}).join('<br>');
+							frappe.msgprint({title: __("Production Plans Already Exist"),
+								message: __("All Sales Order quantities are already planned.") + '<br>' + links, indicator: "blue"});
+							if ((result.existing_production_plans || []).length === 1) frappe.set_route("Form", "Production Plan", result.production_plan);
+							return;
+						}
+						if (result.production_plan) {
+							if ((result.existing_production_plans || []).length) frappe.show_alert({
+								message: __("Already planned quantities excluded. Opening the remaining items."), indicator: "blue"});
+							frappe.set_route("Form", "Production Plan", result.production_plan);
 						}
 					},
 				});
