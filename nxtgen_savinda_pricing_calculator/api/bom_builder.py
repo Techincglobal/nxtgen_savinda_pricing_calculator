@@ -142,6 +142,7 @@ def _bom_calc_field_values(fg_item, calculation_breakdown=None, overrides=None, 
 	vals.update({
 		"custom_calculation_breakdown": cb,
 		"custom_pricing_type": pricing_type,
+		"custom_base_material": form.get("base_material") or d.get("base_material") or "",
 		"custom_no_of_colors": cint(d.get("no_of_colors")),
 		"custom_no_of_ups": no_ups,
 		"custom_no_of_cuts": no_cuts,

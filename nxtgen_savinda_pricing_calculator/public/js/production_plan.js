@@ -44,8 +44,62 @@ function pp_fetch_library_specifications(frm) {
 		values => fetch(values.fg_item), __("Select Product Library Source"), __("Fetch"));
 }
 
+var pp_planning_requests = {};
+var pp_planning_applying = new Set();
+
+async function pp_refresh_planning_row(frm, cdt, cdn, reset_bom) {
+	if (frm.doc.docstatus !== 0 || pp_planning_applying.has(cdn)) return;
+	var row = (locals[cdt] || {})[cdn];
+	if (!row) return;
+	var token = pp_planning_requests[cdn] = (pp_planning_requests[cdn] || 0) + 1;
+	var original_fg = row.fg_item;
+	var apply = async function (values) {
+		pp_planning_applying.add(cdn);
+		try { await frappe.model.set_value(cdt, cdn, values); }
+		finally { pp_planning_applying.delete(cdn); }
+	};
+	if (!row.fg_item) {
+		var empty = {bom_no: "", item_name: "", cost_item: "", calculation_breakdown: "", base_material: "", ups: 0};
+		Object.assign(empty, cdt === "Flexo Production Planning Item"
+			? {size: "", reel_length: 0, reel_width: 0, reel_area: 0, slit_width: ""}
+			: {cuts: 0, full_sheet_size: "", cut_sheet_size: "", full_sheet_qty: 0, cut_sheet_qty: 0, wastage: 0});
+		await apply(empty);
+		return;
+	}
+	if (reset_bom) await apply({bom_no: ""});
+	if (pp_planning_requests[cdn] !== token || row.fg_item !== original_fg) return;
+	var bom = row.bom_no || "", qty = Number(row.qty || 0), plan_name = frm.doc.name;
+	var pricing = frm.doc.custom_pricing_type || "Offset";
+	return frappe.call({
+		method: "nxtgen_savinda_pricing_calculator.api.production_plan.get_planning_row_details",
+		args: {fg_item: row.fg_item, bom_no: bom, qty: qty, pricing_type: pricing, planning_type: row.planning_type || "Manufacture"},
+		callback: function (r) {
+			var current = (locals[cdt] || {})[cdn];
+			if (!r.message || current !== row || pp_planning_requests[cdn] !== token || frm.doc.docstatus !== 0
+				|| frm.doc.name !== plan_name || row.fg_item !== original_fg || (row.bom_no || "") !== bom
+				|| Number(row.qty || 0) !== qty || (frm.doc.custom_pricing_type || "Offset") !== pricing) return;
+			return apply(r.message);
+		}
+	});
+}
+
+["Production Planning Item", "Flexo Production Planning Item"].forEach(function (doctype) {
+	frappe.ui.form.on(doctype, {
+		fg_item: (frm, cdt, cdn) => pp_refresh_planning_row(frm, cdt, cdn, true),
+		bom_no: (frm, cdt, cdn) => pp_refresh_planning_row(frm, cdt, cdn, false),
+		qty: (frm, cdt, cdn) => pp_refresh_planning_row(frm, cdt, cdn, false)
+	});
+});
+
 frappe.ui.form.on("Production Plan", {
 	refresh: function (frm) {
+		["custom_offset_planning", "custom_flexo_planning"].forEach(function (table) {
+			if (!frm.fields_dict[table]) return;
+			frm.set_query("bom_no", table, function (doc, cdt, cdn) {
+				var row = (locals[cdt] || {})[cdn] || {};
+				return {filters: {item: row.fg_item || "", docstatus: 1, is_active: 1}};
+			});
+		});
 		if (frm.doc.docstatus === 0 && !frm.read_only && frm.fields_dict.custom_workstation) {
 			frm.add_custom_button(__("Fetch Product Library Details"), function () {
 				pp_fetch_library_specifications(frm);

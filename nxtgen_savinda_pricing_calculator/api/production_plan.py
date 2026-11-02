@@ -1032,51 +1032,42 @@ def _refresh_manual_planning_rows(doc):
 	This makes manual FG, qty and BOM edits use the current item/BOM calculation data."""
 	if doc.docstatus != 0:
 		return
+	from nxtgen_savinda_pricing_calculator.api.planning_bom_details import planning_row_details
 	pricing = doc.get("custom_pricing_type") or "Offset"
-	is_flexo = pricing == "Flexo"
-	field = "custom_flexo_planning" if is_flexo else "custom_offset_planning"
-	for row in (doc.get(field) or []):
+	field = "custom_flexo_planning" if pricing == "Flexo" else "custom_offset_planning"
+	selected = {}
+	for row in doc.get(field) or []:
 		fg = row.get("fg_item")
 		if not fg or not frappe.db.exists("Item", fg):
 			continue
-		ctx = jt_api._fg_context(fg)
-		row.item_name = frappe.db.get_value("Item", fg, "item_name") or fg
-		row.cost_item = ctx.get("cost_item") or ""
-		row.calculation_breakdown = ctx.get("calculation_breakdown") or row.get("calculation_breakdown") or ""
-		row.base_material = _base_material_for_calculation(row.calculation_breakdown)
 		bom = row.get("bom_no") or _active_bom_for_item(fg)
-		if bom and frappe.db.exists("BOM", bom):
-			row.bom_no = bom
-		else:
-			bom = ""
-			row.bom_no = ""
-		qty = flt(row.get("qty"))
-		data = _plan_print_data(row.get("calculation_breakdown"), qty, pricing)
-		row.ups, row.cuts = data["ups"], data["cuts"]
-		if is_flexo:
-			row.reel_area = data["reel_area"]
-			row.reel_length = data["reel_length"]
-			row.reel_width = data["reel_width"]
-			row.slit_width = data["slit_width"]
+		values = planning_row_details(fg, bom, row.get("qty"), pricing, row.get("planning_type") or "Manufacture")
+		for key, value in values.items():
+			row.set(key, value)
+		if bom:
+			selected.setdefault(fg, set()).add(bom)
+	# Keep manufacturing references aligned when the FG has one selected BOM.
+	# Several run-specific BOMs must not be collapsed into one arbitrary reference.
+	for fg, boms in selected.items():
+		if len(boms) != 1:
 			continue
-		row.full_sheet_qty = data["full_sheet_qty"]
-		row.cut_sheet_qty = data["cut_sheet_qty"]
-		row.wastage = data["wastage"]
-		if not bom:
-			continue
-		geom = frappe.db.get_value("BOM", bom, ["custom_no_of_ups", "custom_no_of_cuts", "custom_cut_sheet_ups", "custom_full_sheet_size", "custom_cut_sheet_size"], as_dict=True) or {}
-		no_ups, cuts = cint(geom.get("custom_no_of_ups")), max(cint(geom.get("custom_no_of_cuts")) or 1, 1)
-		cut_ups = cint(geom.get("custom_cut_sheet_ups")) or (max(no_ups // cuts, 1) if no_ups else 0)
-		if no_ups:
-			row.ups, row.cuts = no_ups, cuts
-			if cut_ups and qty:
-				cut_qty = math.ceil(qty / cut_ups)
-				cfg = _get_config()
-				waste = max(math.ceil(cut_qty * flt(cfg.get("offset_wastage_pct"))), cint(cfg.get("offset_wastage_min")))
-				row.cut_sheet_qty, row.wastage = cut_qty, waste
-				row.full_sheet_qty = math.ceil((cut_qty + waste) / cuts)
-		row.full_sheet_size = geom.get("custom_full_sheet_size") or ""
-		row.cut_sheet_size = geom.get("custom_cut_sheet_size") or ""
+		bom = next(iter(boms))
+		for row in doc.get("custom_ticket_items") or []:
+			if row.get("fg_item") == fg:
+				row.bom_no, row.has_bom = bom, 1
+		for row in doc.get("po_items") or []:
+			if row.get("item_code") == fg:
+				row.bom_no = bom
+
+
+@frappe.whitelist()
+def get_planning_row_details(fg_item, qty, bom_no=None, pricing_type="Offset", planning_type="Manufacture"):
+	from nxtgen_savinda_pricing_calculator.api.planning_bom_details import planning_row_details
+	frappe.get_doc("Item", fg_item).check_permission("read")
+	bom_no = bom_no or _active_bom_for_item(fg_item)
+	if bom_no:
+		frappe.get_doc("BOM", bom_no).check_permission("read")
+	return planning_row_details(fg_item, bom_no, qty, pricing_type, planning_type)
 
 
 @frappe.whitelist()
@@ -1151,9 +1142,9 @@ def on_production_plan_before_save(doc, method=None):
 	try:
 		_fill_pp_library_specifications(doc)
 		_stamp_planning_line_fields(doc)
-		_refresh_manual_planning_rows(doc)
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "production_plan stamp planning line fields failed")
+	_refresh_manual_planning_rows(doc)
 
 
 def _stamp_planning_line_fields(doc):
@@ -1410,8 +1401,8 @@ def add_planning_items(production_plan, selections, consolidate=0):
 
 def _active_bom_for_item(item_code):
 	return (
-		frappe.db.get_value("BOM", {"item": item_code, "is_active": 1, "is_default": 1}, "name")
-		or frappe.db.get_value("BOM", {"item": item_code, "is_active": 1}, "name", order_by="modified desc")
+		frappe.db.get_value("BOM", {"item": item_code, "is_active": 1, "docstatus": 1, "is_default": 1}, "name")
+		or frappe.db.get_value("BOM", {"item": item_code, "is_active": 1, "docstatus": 1}, "name", order_by="modified desc")
 		or ""
 	)
 
