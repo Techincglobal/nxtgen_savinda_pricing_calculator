@@ -70,6 +70,7 @@ def after_install():
 	setup_bundle_fields()
 	_sync_code_print_formats()
 	_upgrade_quotation_price_layouts()
+	_upgrade_quotation_product_size()
 	_upgrade_offset_ticket_variant_expiry()
 
 
@@ -105,6 +106,7 @@ def after_migrate():
 	setup_bundle_fields()
 	_sync_code_print_formats()
 	_upgrade_quotation_price_layouts()
+	_upgrade_quotation_product_size()
 	_upgrade_offset_ticket_variant_expiry()
 
 
@@ -211,6 +213,31 @@ def _upgrade_quotation_price_layouts():
 		pf = frappe.get_doc("Print Format", row.name)
 		pf.html = html
 		pf.save(ignore_permissions=True)
+
+
+def _quotation_product_size_html(html):
+	"""Replace only the legacy Offset cut-sheet fallback, preserving the layout."""
+	import re
+	old = [
+		"{% set cl = cb_form.get('cut_sheet_l') or frappe.db.get_value('Calculation Breakdown', ns_r.cb, 'cut_sheet_l') or 0 %}",
+		"{% set cw = cb_form.get('cut_sheet_w') or cb_form.get('cut_sheetw') or frappe.db.get_value('Calculation Breakdown', ns_r.cb, 'cut_sheetw') or 0 %}",
+		"{% if cl and cw %}{% set ns_r.sz = (cl | int | string) + ' x ' + (cw | int | string) + ' INCH' %}{% endif %}",
+	]
+	return re.sub(
+		r"\s+".join(re.escape(line) for line in old),
+		"{% set ns_r.sz = cb_form.get('carton_size') or frappe.db.get_value('Calculation Breakdown', ns_r.cb, 'carton_size') or '' %}",
+		html,
+	)
+
+
+def _upgrade_quotation_product_size():
+	"""Upgrade existing quotation formats without replacing site-owned HTML."""
+	for row in frappe.get_all("Print Format", filters={"doc_type": "Savinda Quotation"}, fields=["name", "html"]):
+		html = _quotation_product_size_html(row.html or "")
+		if html != (row.html or ""):
+			pf = frappe.get_doc("Print Format", row.name)
+			pf.html = html
+			pf.save(ignore_permissions=True)
 
 
 def _offset_ticket_variant_expiry_html(html):

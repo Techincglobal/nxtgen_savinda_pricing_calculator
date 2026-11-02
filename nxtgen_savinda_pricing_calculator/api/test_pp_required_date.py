@@ -32,8 +32,14 @@ class TestPPRequiredDate(unittest.TestCase):
 	def test_send_for_bom_allows_blank_date_but_final_approval_requires_it(self):
 		api._sync_pp_required_date(self.plan())
 		api._sync_pp_required_date(self.plan(workflow_state="BOM Validation"))
+		api._sync_pp_required_date(self.plan(workflow_state="Supply Chain Validation"))
+		api._sync_pp_required_date(self.plan(workflow_state="Approved", docstatus=0))
 		with patch.object(frappe, "throw", side_effect=frappe.ValidationError), self.assertRaises(frappe.ValidationError):
-			api._sync_pp_required_date(self.plan(workflow_state="Approved"))
+			api._sync_pp_required_date(self.plan(workflow_state="Submitted"))
+
+	def test_submission_requires_date_with_custom_workflow_state(self):
+		with patch.object(frappe, "throw", side_effect=frappe.ValidationError), self.assertRaises(frappe.ValidationError):
+			api._sync_pp_required_date(self.plan(workflow_state="Complete", docstatus=1))
 
 	def test_required_date_updates_all_expected_dates_but_never_expiry_dates(self):
 		for pricing in ("Offset", "Flexo"):
@@ -57,7 +63,7 @@ class TestPPRequiredDate(unittest.TestCase):
 		with patch.object(api, "_populate_pp_ticket_fields"), \
 			patch.object(api, "_refresh_manual_planning_rows") as refresh, \
 			patch.object(frappe, "throw", side_effect=frappe.ValidationError), self.assertRaises(frappe.ValidationError):
-			api.on_production_plan_before_save(self.plan(workflow_state="Approved"))
+			api.on_production_plan_before_save(self.plan(workflow_state="Submitted"))
 		refresh.assert_not_called()
 
 	def test_submit_requires_header_date_even_if_old_ticket_rows_have_dates(self):

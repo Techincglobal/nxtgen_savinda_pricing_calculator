@@ -992,10 +992,11 @@ def _sync_pp_required_date(doc, require_date=False):
 	"""CS enters the PP date; expected dates follow it, independently of expiry."""
 	if not doc.get("custom_ticket_type"):
 		return
-	final_approval = doc.get("workflow_state") in ("Approved", "Submitted")
+	# "Approved" is the draft state reached by Validate Stock, not submission.
+	final_approval = doc.get("workflow_state") == "Submitted" or doc.get("docstatus") == 1
 	required_date = doc.get("custom_req_date")
 	if (require_date or final_approval) and not required_date:
-		frappe.throw("Set Required Date on the Production Plan before final approval or submission.",
+		frappe.throw("Set Required Date on the Production Plan before submitting the plan.",
 			title="Required Date Missing")
 	if not required_date:
 		return
