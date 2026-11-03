@@ -164,9 +164,14 @@ frappe.ui.form.on("Savinda Quotation", {
 		// quotation (draft or submitted), like the Sales Order's BOM Builder, so BOMs can be
 		// built for an NPD sample before the quotation is Won.
 		if (!frm.is_new() && frm.doc.docstatus !== 2) {
-			frm.add_custom_button(__("Create / Link FG Items"), function () {
+			var fg_button = frm.add_custom_button(__("Create / Link FG Items"), function () {
+				if (_all_quotation_rows_have_fg(frm)) return;
 				_show_create_fg_dialog(frm);
 			}, __("Manufacturing"));
+			if (_all_quotation_rows_have_fg(frm)) {
+				fg_button.prop("disabled", true).addClass("disabled")
+					.attr("aria-disabled", "true").attr("title", __("All quotation items already have an FG linked."));
+			}
 
 			frm.add_custom_button(__("BOM Builder"), function () {
 				window.location.href = "/app/bom-builder?quotation=" + encodeURIComponent(frm.doc.name);
@@ -772,21 +777,25 @@ function _fg_product_key(row) {
 	return ((row.item_name || row.cost_item || "") + "").trim().toLowerCase();
 }
 
+function _all_quotation_rows_have_fg(frm) {
+	var rows = frm.doc.items || [];
+	return rows.length > 0 && rows.every(function (row) { return !!row.finish_good; });
+}
+
 function _show_create_fg_dialog(frm) {
+	if (_all_quotation_rows_have_fg(frm)) return;
 	var bundle_row = (frm.doc.items || []).find(function (row) {return row.custom_costing_bundle;});
 	if (bundle_row) {
 		if (!bundle_row.finish_good) {
 			frappe.msgprint(__("Create the assembled FG using Bundle → Create / Open Bundle FG on the Cost Sheet. Create component FGs there using the existing Create FG Items action."));
 			frappe.set_route("Form", "Cost Sheet", bundle_row.custom_costing_bundle);
-		} else if (window.nxtgen_pricing) {
-			nxtgen_pricing.showForFGs(frm, [{item_code: bundle_row.finish_good, item_name: bundle_row.item_name, cost_item: ""}], function () {});
 		}
 		return;
 	}
 	// Build a unique product list by quotation item name, not Cost Item. A Cost Item
 	// is deliberately duplicated for each quantity tier, but those tiers are one
 	// sellable product and must not produce one FG popup per tier.
-	var groups = {}, pending = [], existing_fgs = [];
+	var groups = {}, pending = [];
 	(frm.doc.items || []).forEach(function (row) {
 		var key = _fg_product_key(row);
 		if (!key) return;
@@ -799,26 +808,14 @@ function _show_create_fg_dialog(frm) {
 			// Repair older quotations where only one of the quantity-tier rows was
 			// linked to the FG. All tiers of this product must use that same FG.
 			if (frm.doc.docstatus === 0) _link_fg_to_rows(frm, key, group.finish_good);
-			existing_fgs.push({
-				item_code: group.finish_good,
-				item_name: group.row.item_name || group.finish_good,
-				cost_item: group.row.cost_item || "",
-			});
 		} else {
 			pending.push(group.row);
 		}
 	});
 
 	if (!pending.length) {
-		// Re-open the rule editor for existing FGs. This is how a user adds a short
-		// dated override later without rebuilding or changing the finished good.
-		if (existing_fgs.length && window.nxtgen_pricing) {
-			var open_pricing = function () { nxtgen_pricing.showForFGs(frm, existing_fgs, function () {}); };
-			if (frm.doc.docstatus === 0 && frm.is_dirty()) frm.save(null, open_pricing);
-			else open_pricing();
-			return;
-		}
-		frappe.msgprint({ title: "FG Items", message: "No finished goods are linked to this quotation yet.", indicator: "orange" });
+		// Persist repaired quantity-tier links without opening pricing rules.
+		if (frm.doc.docstatus === 0 && frm.is_dirty()) frm.save();
 		return;
 	}
 
