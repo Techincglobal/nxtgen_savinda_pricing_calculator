@@ -6,6 +6,38 @@ from nxtgen_savinda_pricing_calculator.api import pricing_rule as pricing
 
 
 class TestPricingRuleCurrency(unittest.TestCase):
+	def test_submit_blocks_zero_negative_and_invalid_fg_rates(self):
+		for field in ("custom_cost_item", "custom_costing_bundle"):
+			for rate in (0, -1, float("nan"), float("inf")):
+				with self.subTest(field=field, rate=rate), patch.object(frappe, "db", Mock()) as db, patch.object(
+					frappe, "throw", side_effect=frappe.ValidationError
+				) as throw:
+					db.get_value.side_effect = lambda dt, name, f: "LINK" if f == field else None
+					doc, row = self.order()
+					row.rate = rate
+					with self.assertRaises(frappe.ValidationError):
+						pricing.validate_sales_order_fg_rates(doc)
+					self.assertIn("Row #1: FG-1", throw.call_args.args[0])
+
+	def test_submit_accepts_positive_fg_and_ordinary_zero_rate_items(self):
+		for rate, link in ((0.0001, "CI"), (0, None)):
+			with patch.object(frappe, "db", Mock()) as db:
+				db.get_value.return_value = link
+				doc, row = self.order()
+				row.rate = rate
+				pricing.validate_sales_order_fg_rates(doc)
+
+	def test_missing_rule_allows_draft_but_blocks_submit(self):
+		doc, row = self.order()
+		self.enforce(doc, [])
+		self.assertEqual(row.rate, 0)
+		with patch.object(frappe, "db", Mock()) as db, patch.object(
+			frappe, "throw", side_effect=frappe.ValidationError
+		):
+			db.get_value.return_value = "CI"
+			with self.assertRaises(frappe.ValidationError):
+				pricing.validate_sales_order_fg_rates(doc)
+
 	def rule(self, name="LKR-RULE", currency="LKR", **values):
 		row = frappe._dict(name=name, currency=currency, rate=24.554, min_qty=1, max_qty=10000,
 			priority=10, customer="CUSTOMER", valid_from="2026-10-01", valid_upto="2026-10-31")

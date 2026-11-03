@@ -224,6 +224,29 @@ def _sales_order_base_currency(doc):
 	return _company_currency()
 
 
+def validate_sales_order_fg_rates(doc, method=None):
+	"""After validate resolves Pricing Rules, require positive FG rates on submit."""
+	invalid = []
+	for index, row in enumerate(doc.get("items") or [], 1):
+		if not row.item_code or not (
+			frappe.db.get_value("Item", row.item_code, "custom_cost_item")
+			or frappe.db.get_value("Item", row.item_code, "custom_costing_bundle")
+		):
+			continue
+		rate = flt(row.get("rate"))
+		if not math.isfinite(rate) or rate <= 0:
+			invalid.append("Row #{0}: {1}".format(row.get("idx") or index,
+				frappe.utils.escape_html(row.item_code)))
+	if invalid:
+		frappe.throw(
+			"Cannot submit Sales Order: the following costing FG items need a positive selling rate.<br>"
+			+ "<br>".join(invalid)
+			+ "<br>Set an active Pricing Rule matching the customer, quantity, currency and Sales Order date, "
+			"then save the order and submit again.",
+			title="FG Pricing Required",
+		)
+
+
 def enforce_sales_order_pricing(doc, method=None):
 	"""For costing-created FGs, accept only an active matching generated Pricing Rule.
 

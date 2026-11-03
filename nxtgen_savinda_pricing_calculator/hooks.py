@@ -79,6 +79,7 @@ doc_events = {
 		# Costing-created finished goods may only use an active qty Pricing Rule. A missing,
 		# expired, or out-of-range rule results in a zero rate instead of a fallback Item Price.
 		"validate": "nxtgen_savinda_pricing_calculator.api.pricing_rule.enforce_sales_order_pricing",
+		"before_submit": "nxtgen_savinda_pricing_calculator.api.pricing_rule.validate_sales_order_fg_rates",
 	},
 	"Production Plan": {
 		"before_save": "nxtgen_savinda_pricing_calculator.api.production_plan.on_production_plan_before_save",

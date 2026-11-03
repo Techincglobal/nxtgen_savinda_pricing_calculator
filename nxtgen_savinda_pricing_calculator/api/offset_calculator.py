@@ -2299,8 +2299,16 @@ def _base_item_name(nm):
     return re.sub(r"(\s*\(copy\))+\s*$", "", (nm or ""), flags=re.I).strip()
 
 
-def _switcher_price_row(cb, order_qty):
+def _switcher_price_row(cb, order_qty, sheet_row=None):
     """Qty-break display figures for one CB at its stored qty."""
+    if sheet_row is not None:
+        return {
+            "unit_cost": flt(sheet_row.get("unit_price")),
+            "total_cost": flt(sheet_row.get("ammount")),
+            "profit_margin": flt(sheet_row.get("profit_margin")),
+            "quoted_price": flt(sheet_row.get("selling_unit_price")),
+            "final_price": flt(sheet_row.get("selling_unit_price")),
+        }
     d = frappe.db.get_value(
         "Calculation Breakdown", cb, ["unit_cost", "selling_price", "profit_margin"], as_dict=True) or {}
     uc = flt(d.get("unit_cost"))
@@ -2313,6 +2321,21 @@ def _switcher_price_row(cb, order_qty):
         "quoted_price":  quoted_unit,
         "final_price":   quoted_unit,
     }
+
+
+def _switcher_quotation_price(quotation, cost_item, cb, qty):
+    """Match identity and quantity; never use a bundle's price for a component."""
+    result = {"quotation_price": None, "quotation": "", "quotation_currency": ""}
+    if not quotation:
+        return result
+    matches = [r for r in quotation.get("items") or []
+               if r.get("cost_item") == cost_item and flt(r.get("qty")) == flt(qty)]
+    exact = [r for r in matches if r.get("calculation_breakdown") == cb]
+    matches = exact or matches
+    if len(matches) == 1:
+        result.update(quotation_price=flt(matches[0].get("selling_price")),
+                      quotation=quotation.name, quotation_currency=quotation.get("currency") or "")
+    return result
 
 
 @frappe.whitelist()
@@ -2337,9 +2360,21 @@ def get_calc_switcher(cost_sheet=None, calculation_breakdown=None):
     cur_name = cur.get("cost_item_name") or ""
     cur_base = _base_item_name(cur_name)
 
+    sheet_rows = {}
+    quotation = None
     if cost_sheet and frappe.db.exists("Cost Sheet", cost_sheet):
-        names = [r.item for r in frappe.get_all(
-            "Cost Sheet Items", filters={"parent": cost_sheet}, fields=["item"], order_by="idx asc") if r.item]
+        frappe.get_doc("Cost Sheet", cost_sheet).check_permission("read")
+        sheet_rows = {r.item: r for r in frappe.get_all(
+            "Cost Sheet Items", filters={"parent": cost_sheet},
+            fields=["item", "qty", "unit_price", "ammount", "selling_unit_price", "profit_margin"],
+            order_by="idx asc") if r.item}
+        names = list(sheet_rows)
+        from nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.doctype.savinda_quotation.savinda_quotation import find_live_quotation
+        linked = find_live_quotation(cost_sheet)
+        if linked:
+            candidate = frappe.get_doc("Savinda Quotation", linked.name)
+            if candidate.has_permission("read"):
+                quotation = candidate
     else:
         names = frappe.get_all("cost Item", filters={"cost_item_name": ["like", "%" + cur_base + "%"]}, pluck="name")
 
@@ -2351,11 +2386,16 @@ def get_calc_switcher(cost_sheet=None, calculation_breakdown=None):
         d = frappe.db.get_value("cost Item", c, ["cost_item_name", "item_qty"], as_dict=True) or {}
         cb = frappe.db.get_value(
             "Cost Item Calculation", {"parent": c}, "calculation_breakdown", order_by="idx asc")
+        if c == ci:
+            cb = calculation_breakdown
         if not cb:
             continue
+        sheet_row = sheet_rows.get(c)
+        qty = flt(sheet_row.get("qty")) if sheet_row is not None else flt(d.get("item_qty"))
         row = {"cost_item": c, "cb": cb, "name": d.get("cost_item_name") or c,
-               "order_qty": flt(d.get("item_qty")), "is_current": (c == ci)}
-        row.update(_switcher_price_row(cb, d.get("item_qty")))
+               "order_qty": qty, "is_current": (cb == calculation_breakdown)}
+        row.update(_switcher_price_row(cb, qty, sheet_row))
+        row.update(_switcher_quotation_price(quotation, c, cb, qty))
         nm = d.get("cost_item_name") or ""
         if nm == cur_name:
             out["qty_breaks"].append(row)

@@ -1208,6 +1208,7 @@ function oc_mount_app(el) {
 				if (!cb || cb === this.savedDocName) { return; }
 				var url = '/app/offset-calculator?ref=' + encodeURIComponent(cb)
 					+ (this.costSheetRef ? '&cost_sheet=' + encodeURIComponent(this.costSheetRef) : '')
+					+ (this.viewOnly ? '&view_only=1' : '')
 					+ '&pricing_type=' + encodeURIComponent(this.form.pricing_type || 'Offset');
 				var nav = function () { window.location.href = url; };
 				// Warn if there is unsaved work (draft dirty vs last save).
@@ -2232,15 +2233,18 @@ function oc_mount_app(el) {
           </div>
           <div v-if="switcherTab==='qty'" class="oc-sw-scroll">
             <table class="oc-sw-tbl">
-              <thead><tr><th>Order Qty</th><th class="r">Unit Cost</th><th class="r">Margin%</th><th class="r">Quoted</th><th class="r">Final</th><th></th></tr></thead>
+              <thead><tr><th>Order Qty</th><th class="r">Unit Cost</th><th class="r">Margin%</th><th class="r">Selling Unit Price</th><th class="r">Quotation Unit Price</th><th></th></tr></thead>
               <tbody>
                 <tr v-if="!switcher.qty_breaks.length"><td colspan="6" class="oc-sw-empty">No qty breaks.</td></tr>
                 <tr v-for="row in switcher.qty_breaks" :key="row.cb" :class="{cur: row.is_current}">
                   <td>{{ fmtNum(row.order_qty) }}</td>
-                  <td class="r">{{ fmtCur(row.unit_cost) }}</td>
+                  <td class="r">{{ fmtRate(row.unit_cost) }}</td>
                   <td class="r">{{ row.profit_margin }}</td>
-                  <td class="r">{{ fmtCur(row.quoted_price) }}</td>
-                  <td class="r">{{ fmtCur(row.final_price) }}</td>
+                  <td class="r">{{ fmtRate(row.quoted_price) }}</td>
+                  <td class="r" :title="row.quotation || ''">
+                    <template v-if="row.quotation_price != null">{{ row.quotation_currency }} {{ fmtRate(row.quotation_price) }}<br><small>{{ row.quotation }}</small></template>
+                    <template v-else>—</template>
+                  </td>
                   <td class="r nowrap">
                     <button v-if="!row.is_current" class="oc-sw-view" @click="switcherGo(row.cb)">View</button>
                     <span v-else class="oc-sw-badge">current</span>
