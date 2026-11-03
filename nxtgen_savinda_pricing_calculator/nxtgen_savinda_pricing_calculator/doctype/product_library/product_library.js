@@ -25,9 +25,9 @@ frappe.ui.form.on("Product Library", {
 					frm.add_custom_button(__("Manage Pricing Rules"), () => {
 						const open = () => nxtgen_pricing.showForFGs({
 							doc: {
-								customer: frm.doc.customer, currency: frappe.defaults.get_default("currency") || "LKR", conversion_rate: 1
+								pricing_source: "quotation"
 							}
-						}, [{ item_code: frm.doc.fg_item, item_name: frm.doc.product_name, cost_item: frm.doc.cost_item }], () => { });
+						}, [{ item_code: frm.doc.fg_item, item_name: frm.doc.product_name }], () => { });
 						if (frm.is_dirty()) frm.save().then(open); else open();
 					});
 				}

@@ -33,6 +33,34 @@ def _tier_qtys_for_cost_item(cost_item):
 
 
 @frappe.whitelist()
+def get_quotation_price_tiers(fg_item):
+	"""Use saved prices from the latest accessible live quotation linked to this FG."""
+	frappe.get_doc("Item", fg_item).check_permission("read")
+	parents = frappe.get_all("Savinda Quotation Item", filters={"finish_good": fg_item,
+		"parenttype": "Savinda Quotation"}, pluck="parent")
+	quotes = frappe.get_list("Savinda Quotation", filters={"name": ["in", parents or [""]],
+		"docstatus": ["<", 2], "status": ["not in", ["Lost", "Cancelled"]]},
+		fields=["name"], order_by="modified desc, name desc", limit_page_length=1)
+	if not quotes:
+		frappe.throw("No active quotation item is linked to this FG. Link the FG to the quotation rows and save the quotation first.")
+	quote = frappe.get_doc("Savinda Quotation", quotes[0].name)
+	quote.check_permission("read")
+	by_qty = {}
+	for row in quote.get("items") or []:
+		if row.get("finish_good") == fg_item and flt(row.get("qty")) > 0:
+			# The last saved line wins when the same FG/quantity is repeated.
+			by_qty[flt(row.qty)] = {"qty": flt(row.qty), "rate": flt(row.get("selling_price")),
+				"unit_cost": flt(row.get("unit_cost")) / (flt(quote.get("conversion_rate")) or 1)}
+	tiers = [by_qty[q] for q in sorted(by_qty)]
+	for i, tier in enumerate(tiers):
+		tier.update(min_qty=tier["qty"],
+			max_qty=tiers[i + 1]["qty"] - 1 if i + 1 < len(tiers) else 0)
+	return {"tiers": tiers, "quotation": quote.name, "customer": quote.get("customer"),
+		"currency": quote.get("currency"), "conversion_rate": quote.get("conversion_rate"),
+		"valid_till": quote.get("valid_till")}
+
+
+@frappe.whitelist()
 def get_qty_price_tiers(fg_item):
 	"""Qty-price tiers for an FG, seeded from the costing. Resolves the FG's cost item + first
 	Calculation Breakdown, prices each qty tier via calculate_qty_break, and builds ranges

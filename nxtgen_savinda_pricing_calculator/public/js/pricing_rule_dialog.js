@@ -5,6 +5,8 @@ nxtgen_pricing.showForFGs = function (frm, fg_items, on_done) {
 	on_done = on_done || function () {};
 	if (!fg_items || !fg_items.length) { on_done(); return; }
 	var source = (frm && frm.doc) || {};
+	// Always use quotation rows, including callers with cached form scripts.
+	var from_quotation = true;
 	var base = (frappe.boot && frappe.boot.sysdefaults && frappe.boot.sysdefaults.currency) || "LKR";
 	var initial_currency = source.currency || base;
 	var initial_exchange = initial_currency === base ? 1 : (parseFloat(source.conversion_rate) || 0);
@@ -91,7 +93,7 @@ nxtgen_pricing.showForFGs = function (frm, fg_items, on_done) {
 			{fieldtype: "HTML", options: "<p>Select <b>Currency</b> directly in each pricing row. " +
 				"Enter the exchange rate as <b>" + frappe.utils.escape_html(base) + " per 1 selected currency</b>, or fetch missing rates. " +
 				"Rates are <b>per single item</b>, not per 1,000. Changing a row's currency requires a new exchange rate before its rate can be edited. " +
-				(customer_text()) + "</p>"},
+				(customer_text()) + (source.quotation ? " Prices loaded from " + frappe.utils.escape_html(source.quotation) + "." : "") + "</p>"},
 			{fieldtype: "Button", fieldname: "fetch_exchange_rates", label: "Fetch Missing Exchange Rates", click: fetch_missing_rates},
 			{fieldtype: "Section Break", label: "Rule Validity & Override"},
 			{fieldtype: "Date", fieldname: "valid_from", label: "Valid From", default: frappe.datetime.get_today()},
@@ -181,9 +183,15 @@ nxtgen_pricing.showForFGs = function (frm, fg_items, on_done) {
 	}
 	(function fetch(idx) {
 		if (idx >= fg_items.length) { build(); return; }
-		frappe.call({method: API + "get_qty_price_tiers", args: {fg_item: fg_items[idx].item_code},
+		frappe.call({method: API + (from_quotation ? "get_quotation_price_tiers" : "get_qty_price_tiers"), args: {fg_item: fg_items[idx].item_code},
 			callback: function (r) {
 				var info = r.message || {}, applied_rate = initial_exchange > 0 ? initial_exchange : 1;
+				if (from_quotation) {
+					source = Object.assign({}, source, info);
+					initial_currency = info.currency || base;
+					initial_exchange = initial_currency === base ? 1 : (parseFloat(info.conversion_rate) || 0);
+					applied_rate = 1; // Quotation rates are already per item in its currency.
+				}
 				loaded.push({fg_item: fg_items[idx].item_code,
 					item_name: fg_items[idx].item_name || info.item_name || fg_items[idx].item_code,
 					cost_item: info.cost_item || fg_items[idx].cost_item || "",
@@ -191,7 +199,8 @@ nxtgen_pricing.showForFGs = function (frm, fg_items, on_done) {
 						return {min_qty: tier.min_qty, max_qty: tier.max_qty, currency: initial_currency,
 							exchange_rate: initial_exchange, rate: rounded((parseFloat(tier.rate) || 0) / applied_rate),
 							unit_cost: rounded((parseFloat(tier.unit_cost) || 0) / applied_rate),
-							applied_currency: initial_exchange > 0 ? initial_currency : base, applied_exchange_rate: applied_rate};
+							applied_currency: initial_exchange > 0 ? initial_currency : base,
+							applied_exchange_rate: from_quotation ? initial_exchange : applied_rate};
 					})});
 				fetch(idx + 1);
 			}, error: function () { fetch(idx + 1); }});

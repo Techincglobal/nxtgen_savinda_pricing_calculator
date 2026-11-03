@@ -12,15 +12,11 @@ frappe.ui.form.on("Item", {
 		} else frm.add_custom_button(__("Manage Qty Pricing Rules"), function () {
 			nxtgen_pricing.showForFGs({
 			doc: {
-				currency: "LKR",
-				conversion_rate: 1,
-				customer: "",
-				valid_till: null,
+				pricing_source: "quotation",
 			},
 		}, [{
 			item_code: frm.doc.name,
 			item_name: frm.doc.item_name,
-			cost_item: frm.doc.custom_cost_item,
 		}], function () { frm.reload_doc(); });
 		});
 

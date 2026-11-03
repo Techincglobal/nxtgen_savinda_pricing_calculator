@@ -5,7 +5,7 @@ const path = require("path");
 const vm = require("vm");
 const source = fs.readFileSync(path.join(__dirname, "..", "pricing_rule_dialog.js"), "utf8");
 
-function open(sourceDoc = {}) {
+function open(sourceDoc = {}, quoteResponse = null) {
 	const calls = [], messages = [], requests = [];
 	let dialog;
 	class Dialog {
@@ -37,8 +37,10 @@ function open(sourceDoc = {}) {
 		msgprint: value => messages.push(value), show_alert() {},
 		call(options) {
 			calls.push(options);
-			if (options.method.endsWith("get_qty_price_tiers")) options.callback({message: {tiers: [
-				{min_qty: 1, max_qty: 0, rate: 24.554, unit_cost: 18.7808}
+			if (options.method.endsWith("get_quotation_price_tiers")) options.callback({message: quoteResponse || {
+				quotation: "SQ-TEST", customer: sourceDoc.customer || "", currency: sourceDoc.currency || "LKR",
+				conversion_rate: sourceDoc.conversion_rate || 1, tiers: [
+				{min_qty: 1, max_qty: 0, rate: 24.554 / (sourceDoc.conversion_rate || 1), unit_cost: 18.7808 / (sourceDoc.conversion_rate || 1)}
 			]}});
 			else if (options.method.endsWith("get_exchange_rate")) requests.push(options);
 			else if (options.method.endsWith("create_qty_pricing_rules")) options.callback({message: {count: 1}});
@@ -59,6 +61,16 @@ function open(sourceDoc = {}) {
 		fetch: () => dialog.options.fields.find(f => f.fieldname === "fetch_exchange_rates").click()};
 }
 
+{
+	const t = open({}, {quotation: "SQ-202611-00006", customer: "QUOTATION CUSTOMER", currency: "LKR", conversion_rate: 1,
+		tiers: [8000,9000,10000,11000,12000,15000].map((qty, i, all) => ({min_qty: qty, max_qty: all[i+1] ? all[i+1]-1 : 0,
+			rate: [28.95,26.95,25.45,24.15,23.1,20.8][i], unit_cost: 20}))});
+	assert.equal(t.dialog.get_value("tiers_0").length, 6);
+	t.submit();
+	const create = t.calls.find(c => c.method.endsWith("create_qty_pricing_rules"));
+	assert.equal(JSON.parse(create.args.tiers).length, 6);
+	assert.equal(create.args.customer, "QUOTATION CUSTOMER");
+}
 {
 	const t = open({customer: "CUSTOMER"});
 	assert.equal(t.row().rate, 24.554);
