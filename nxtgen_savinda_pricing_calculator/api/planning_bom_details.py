@@ -7,7 +7,7 @@ from frappe.utils import cint, flt
 
 from nxtgen_savinda_pricing_calculator.api import job_ticket
 from nxtgen_savinda_pricing_calculator.api.bom_builder import _library_bom_inputs, _library_sheet_size
-from nxtgen_savinda_pricing_calculator.api.offset_calculator import _get_config
+from nxtgen_savinda_pricing_calculator.api.offset_calculator import _get_config, _flexo_wastage_settings
 
 
 def _base_material(bom, preferred=None):
@@ -91,16 +91,12 @@ def planning_row_details(fg_item, bom_no, quantity, pricing_type="Offset", plann
 		original_qty = flt(cb.get("item_qty") or form.get("item_qty"))
 		length = manual * qty / original_qty if manual and original_qty else (
 			qty / ups * (flt(form.get("product_length_mm")) + flt(form.get("product_gap_mm", 3))) / 1000 if ups and flt(form.get("product_length_mm")) > 0 else 0)
-	table = _get_config().get("flexo_wastage") or [(99, 250, .12)]
-	setup, pct = table[-1][1:]
-	for max_colors, setup_m, waste_pct in table:
-		if colors <= max_colors:
-			setup, pct = setup_m, waste_pct
-			break
+	setup, pct, minimum = _flexo_wastage_settings(_get_config(), colors)
 	gross_length = flt(bom.get("custom_required_reel_length_m")) if bom else 0
-	if saved_length and gross_length >= saved_length + setup:
+	# A minimum allowance is fixed metres, not a percentage to scale with order qty.
+	if saved_length and gross_length >= saved_length + setup and gross_length - saved_length - setup > minimum:
 		pct = (gross_length - saved_length - setup) / saved_length
-	area = ((length * (1 + pct)) + setup) * width / 1000 if qty and length and width else 0
+	area = (length + max(length * pct, minimum) + setup) * width / 1000 if qty and length and width else 0
 	product_size = (bom.get("custom_carton_size") if bom else "") or form.get("carton_size") or cb.get("carton_size") or ""
 	out.update(ups=ups, size=product_size, reel_length=length, reel_width=width, reel_area=area)
 	slit = (bom.get("custom_slit_width") if bom else "") or form.get("slit_width")

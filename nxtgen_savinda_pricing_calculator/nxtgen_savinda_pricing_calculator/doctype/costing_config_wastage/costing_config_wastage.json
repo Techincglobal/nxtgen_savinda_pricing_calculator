@@ -2,11 +2,12 @@
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
- "field_order": ["max_colors", "setup_metrage", "wastage_percent"],
+ "field_order": ["max_colors", "setup_metrage", "wastage_percent", "minimum_wastage_length"],
  "fields": [
   {"columns": 3, "fieldname": "max_colors", "fieldtype": "Int", "in_list_view": 1, "label": "Max Colors", "reqd": 1, "description": "Inclusive upper bound for this row. Last row is fallback for higher values."},
-  {"columns": 4, "fieldname": "setup_metrage", "fieldtype": "Float", "in_list_view": 1, "label": "Setup Metrage (m)", "reqd": 1},
-  {"columns": 3, "fieldname": "wastage_percent", "fieldtype": "Float", "in_list_view": 1, "label": "Wastage %", "reqd": 1}
+  {"columns": 2, "fieldname": "setup_metrage", "fieldtype": "Float", "in_list_view": 1, "label": "Setup Metrage (m)", "reqd": 1},
+  {"columns": 2, "fieldname": "wastage_percent", "fieldtype": "Float", "in_list_view": 1, "label": "Wastage %", "reqd": 1},
+  {"columns": 3, "fieldname": "minimum_wastage_length", "fieldtype": "Float", "default": "0", "non_negative": 1, "in_list_view": 1, "label": "Minimum Wastage Length (m)", "description": "Minimum for percentage wastage. Setup metrage is added separately. Zero disables this minimum."}
  ],
  "index_web_pages_for_search": 0,
  "istable": 1,

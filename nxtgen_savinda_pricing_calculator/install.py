@@ -64,6 +64,8 @@ def after_install():
 	_ensure_npd_request_workflow()
 	_ensure_packing_workflow()
 	_seed_install_only_fixtures()
+	from frappe.modules.patch_handler import run_single
+	run_single("nxtgen_savinda_pricing_calculator.patches.v1_0.flexo_minimum_wastage")
 	from nxtgen_savinda_pricing_calculator.api.fg_approval import setup_fg_approval
 	setup_fg_approval()
 	from nxtgen_savinda_pricing_calculator.api.costing_bundle import setup_bundle_fields

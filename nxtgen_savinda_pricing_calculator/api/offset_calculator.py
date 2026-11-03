@@ -939,12 +939,14 @@ def _get_config():
             "offset_wastage_min":    cint(doc.offset_wastage_min) or 500,
             "req_qty_decimals":      (cint(doc.req_qty_decimals) if getattr(doc, "req_qty_decimals", None) not in (None, "") else 2),
             "flexo_wastage":         rows,
+            "flexo_minimum_wastage": {cint(r.max_colors): flt(r.get("minimum_wastage_length")) for r in (doc.flexo_wastage or [])},
         }
     except Exception:
         return {
             "sscl_rate": 0.025, "vat_rate": 0.18, "default_profit_margin": 15.0,
             "offset_wastage_pct": 0.05, "offset_wastage_min": 500,
             "req_qty_decimals": 2,
+            "flexo_minimum_wastage": {0: 0, 1: 100, 2: 100, 3: 250, 4: 250, 5: 250, 6: 250, 99: 250},
             "flexo_wastage": [
                 (0, 5, 0.04), (1, 100, 0.06), (2, 100, 0.07),
                 (3, 150, 0.08), (4, 150, 0.09), (5, 200, 0.10),
@@ -1245,6 +1247,12 @@ def _calc_sheet(form, breakdown_qtys=None):
     }
 
 
+def _flexo_wastage_settings(cfg, colors):
+    table = cfg.get("flexo_wastage") or [(99, 250, .12)]
+    band = next((row for row in table if colors <= row[0]), table[-1])
+    return band[1], band[2], max(0, flt((cfg.get("flexo_minimum_wastage") or {}).get(band[0])))
+
+
 def _calc_flexo(form, wastage_override_pct=None):
     reel_width   = flt(form.get("reel_width_mm", 0))
     prod_w       = flt(form.get("product_width_mm", 0))
@@ -1274,20 +1282,15 @@ def _calc_flexo(form, wastage_override_pct=None):
     reel_area_net = reel_length * reel_width_m
 
     _cfg = _get_config()
-    _wtable = _cfg["flexo_wastage"]
-    setup_m = _wtable[-1][1] if _wtable else 250
-    wastage_pct = _wtable[-1][2] if _wtable else 0.12
-    for colors, sm, wp in _wtable:
-        if no_of_colors <= colors:
-            setup_m = sm; wastage_pct = wp
-            break
+    setup_m, wastage_pct, minimum_wastage = _flexo_wastage_settings(_cfg, no_of_colors)
 
     # A ticked "Wastage Overwrite" spec replaces the table wastage % (highest
     # wins, resolved by the caller). Setup metrage (a fixed length) is kept.
     if wastage_override_pct is not None:
         wastage_pct = flt(wastage_override_pct) / 100.0
 
-    wastage_area = setup_m * reel_width_m + reel_area_net * wastage_pct
+    wastage_length = max(reel_length * wastage_pct, minimum_wastage)
+    wastage_area = (setup_m + wastage_length) * reel_width_m
     reel_area    = reel_area_net + wastage_area
 
     return {
@@ -1300,6 +1303,8 @@ def _calc_flexo(form, wastage_override_pct=None):
         "printable_margin":       printable_margin,
         "material_wastage_width": round(material_wastage_width, 2),
         "setup_metrage":          setup_m,
+        "minimum_wastage_length": minimum_wastage,
+        "wastage_length":         wastage_length,
         "wastage_pct":            wastage_pct,
     }
 

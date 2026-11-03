@@ -62,6 +62,16 @@ class TestPlanningBOMDetails(unittest.TestCase):
 		zero = api.planning_row_details("FG", "BOM-NEW", 0, "Flexo")
 		self.assertEqual(zero["reel_area"], 0)
 
+	def test_flexo_minimum_stays_fixed_when_planning_qty_changes(self):
+		self.bom.update(custom_pricing_type="Flexo", custom_reel_width_mm=250,
+			custom_reel_length_m=1000, custom_required_reel_length_m=1400,
+			custom_base_item_qty=10000, custom_no_of_ups=4, custom_no_of_colors=4)
+		with patch.object(api, "_get_config", return_value={"flexo_wastage": [(99, 150, .09)],
+			"flexo_minimum_wastage": {99: 250}}):
+			for qty, area in ((5000, 225), (10000, 350), (20000, 600), (100000, 2762.5)):
+				with self.subTest(qty=qty):
+					self.assertAlmostEqual(api.planning_row_details("FG", "BOM-NEW", qty, "Flexo")["reel_area"], area)
+
 	def test_wrong_item_inactive_and_draft_boms_are_rejected(self):
 		for field, value in (("item", "OTHER-FG"), ("is_active", 0), ("docstatus", 0)):
 			original = self.bom[field]

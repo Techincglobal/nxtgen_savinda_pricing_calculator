@@ -2305,6 +2305,8 @@ function oc_mount_app(el) {
           <div class="oc-kv"><span class="k">Reel Length (m)</span><span class="v">{{ fmtNum(calc.sheet.reel_length) }}</span></div>
           <div class="oc-kv"><span class="k">Net Reel Area (m²)</span><span class="v">{{ fmtNum(calc.sheet.reel_area_net) }}</span></div>
           <div class="oc-kv"><span class="k">Setup Metrage (m)</span><span class="v">{{ calc.sheet.setup_metrage }}</span></div>
+          <div v-if="calc.sheet.minimum_wastage_length != null" class="oc-kv"><span class="k">Minimum Wastage (m)</span><span class="v">{{ fmtQty(calc.sheet.minimum_wastage_length) }}</span></div>
+          <div v-if="calc.sheet.wastage_length != null && !isReqManual('wastage_area')" class="oc-kv"><span class="k">Wastage Before Setup (m)</span><span class="v">{{ fmtQty(calc.sheet.wastage_length) }}</span></div>
           <div class="oc-kv"><span class="k">Wastage %</span><span class="v">{{ (calc.sheet.wastage_pct * 100).toFixed(0) }}%</span></div>
           <div class="oc-kv"><span class="k">Wastage Area (m²) <span class="oc-calc-tag">{{ isReqManual('wastage_area') ? 'manual' : 'auto' }}</span></span><span class="v">
             <input type="number" min="0" step="0.0001" style="width:90px;text-align:right;padding:2px 6px;border:1px solid #d1d5db;border-radius:4px"

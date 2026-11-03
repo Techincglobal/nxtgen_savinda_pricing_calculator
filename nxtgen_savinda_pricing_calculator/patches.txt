@@ -3,6 +3,7 @@
 # Read docs to understand patches: https://frappeframework.com/docs/v14/user/en/database-migrations
 
 [post_model_sync]
+nxtgen_savinda_pricing_calculator.patches.v1_0.flexo_minimum_wastage
 # Patches added in this section will be executed after doctypes are migrated
 #nxtgen_savinda_pricing_calculator.patches.v1_0.hide_material_in_quotation_print
 #nxtgen_savinda_pricing_calculator.patches.v1_0.quotation_currency_print
