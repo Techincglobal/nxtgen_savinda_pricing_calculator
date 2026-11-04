@@ -50,6 +50,12 @@
   "flexo_type",
   "width_mm",
   "length_mm",
+  "cylinder_teeth",
+  "no_of_repeat",
+  "repeat_gap",
+  "across_ups",
+  "up_margin",
+  "slit",
   "core_size",
   "column_break_flx",
   "pcs_per_roll",
@@ -70,12 +76,50 @@
   "finishings_reviewed"
  ],
  "fields": [
-  {"fieldname": "approval_section", "fieldtype": "Section Break", "label": "FG Approval", "depends_on": "eval:doc.approval_required"},
-  {"fieldname": "approval_required", "fieldtype": "Check", "label": "FG Approval Required", "default": "0", "read_only": 1, "hidden": 1},
-  {"fieldname": "approval_status", "fieldtype": "Select", "label": "Approval Status", "options": "\nPending Validation\nReturned for Correction\nApproved", "read_only": 1, "in_list_view": 1, "no_copy": 1},
-  {"fieldname": "approval_remarks", "fieldtype": "Small Text", "label": "Approval / Correction Remarks", "read_only": 1},
-  {"fieldname": "approved_by", "fieldtype": "Link", "options": "User", "label": "Approved By", "read_only": 1, "no_copy": 1},
-  {"fieldname": "approved_on", "fieldtype": "Datetime", "label": "Approved On", "read_only": 1, "no_copy": 1},
+  {
+   "fieldname": "approval_section",
+   "fieldtype": "Section Break",
+   "label": "FG Approval",
+   "depends_on": "eval:doc.approval_required"
+  },
+  {
+   "fieldname": "approval_required",
+   "fieldtype": "Check",
+   "label": "FG Approval Required",
+   "default": "0",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "approval_status",
+   "fieldtype": "Select",
+   "label": "Approval Status",
+   "options": "\nPending Validation\nReturned for Correction\nApproved",
+   "read_only": 1,
+   "in_list_view": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "approval_remarks",
+   "fieldtype": "Small Text",
+   "label": "Approval / Correction Remarks",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "Approved By",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved On",
+   "read_only": 1,
+   "no_copy": 1
+  },
   {
    "fieldname": "section_general",
    "fieldtype": "Section Break",
@@ -382,6 +426,42 @@
    "hidden": 1,
    "label": "Finishings Reviewed",
    "read_only": 1
+  },
+  {
+   "fieldname": "cylinder_teeth",
+   "label": "Cylinder Teeth",
+   "fieldtype": "Int",
+   "depends_on": "eval:doc.department=='Flexo'"
+  },
+  {
+   "fieldname": "no_of_repeat",
+   "label": "No of Repeat",
+   "fieldtype": "Int",
+   "depends_on": "eval:doc.department=='Flexo'"
+  },
+  {
+   "fieldname": "repeat_gap",
+   "label": "Repeat Gap (mm)",
+   "fieldtype": "Float",
+   "depends_on": "eval:doc.department=='Flexo'"
+  },
+  {
+   "fieldname": "across_ups",
+   "label": "No of UP (Across)",
+   "fieldtype": "Int",
+   "depends_on": "eval:doc.department=='Flexo'"
+  },
+  {
+   "fieldname": "up_margin",
+   "label": "Up Margin (mm)",
+   "fieldtype": "Float",
+   "depends_on": "eval:doc.department=='Flexo'"
+  },
+  {
+   "fieldname": "slit",
+   "label": "Slit",
+   "fieldtype": "Data",
+   "depends_on": "eval:doc.department=='Flexo'"
   }
  ],
  "links": [],
@@ -392,10 +472,31 @@
  "naming_rule": "Expression",
  "owner": "Administrator",
  "permissions": [
-  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "report": 1},
-  {"role": "BOM Team", "read": 1, "write": 1, "report": 1},
-  {"role": "CS Team", "read": 1, "write": 1, "report": 1},
-  {"role": "Sales User", "if_owner": 1, "read": 1, "write": 1}
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1
+  },
+  {
+   "role": "BOM Team",
+   "read": 1,
+   "write": 1,
+   "report": 1
+  },
+  {
+   "role": "CS Team",
+   "read": 1,
+   "write": 1,
+   "report": 1
+  },
+  {
+   "role": "Sales User",
+   "if_owner": 1,
+   "read": 1,
+   "write": 1
+  }
  ],
  "track_changes": 1,
  "row_format": "Dynamic",
@@ -403,6 +504,5 @@
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],
- "title_field": "product_name",
- "track_changes": 1
+ "title_field": "product_name"
 }

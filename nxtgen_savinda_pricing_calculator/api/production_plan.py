@@ -206,6 +206,8 @@ _PL_REVIEW = [
 	("no_of_colors", ""), ("no_of_ups", ""),
 	("proof_standard", "Offset"), ("printing_machine", "Offset"),
 	("flexo_type", "Flexo"), ("width_mm", "Flexo"), ("length_mm", "Flexo"),
+	("cylinder_teeth", "Flexo"), ("no_of_repeat", "Flexo"), ("repeat_gap", "Flexo"),
+	("across_ups", "Flexo"), ("up_margin", "Flexo"), ("slit", "Flexo"),
 	("core_size", "Flexo"), ("pcs_per_roll", "Flexo"),
 	("winding_direction", "Flexo"), ("tolerance", "Flexo"), ("remark", ""),
 	("foil_details", "Flexo"), ("die_cut_code", ""), ("finishings", "")
@@ -254,6 +256,32 @@ def _pl_field_schema():
 	return out
 
 
+def _flexo_technical_defaults(cbd):
+	"""Use explicit technical values; production repeat totals are not cylinder repeats."""
+	try:
+		state = json.loads(cbd.get("ui_state") or "{}")
+	except (ValueError, TypeError):
+		state = {}
+	form = state.get("form") or {}
+	sheet = (state.get("calc_result") or {}).get("sheet") or {}
+	aliases = {
+		"cylinder_teeth": ("cylinder_teeth", "repeat_teeth"),
+		"no_of_repeat": ("no_of_repeat", "repeat_ups"),
+		"repeat_gap": ("repeat_gap", "repeat_gaps", "product_gap_mm"),
+		"across_ups": ("across_ups", "ups"),
+		"up_margin": ("up_margin", "across_gaps", "product_margin_mm"),
+		"slit": ("slit", "slit_width"),
+	}
+	out = {}
+	for target, keys in aliases.items():
+		for source in (form, sheet, cbd):
+			value = next((source[k] for k in keys if source.get(k) not in (None, "")), None)
+			if value is not None:
+				out["pl_" + target] = value
+				break
+	return out
+
+
 def _fg_detail_defaults(row, npd, ig, dept):
 	"""Proposed Item + Product Library values for one requested line (pre-filled from the
 	NPD Request line / header). Shown in the FG-creation popup for review/edit."""
@@ -261,6 +289,7 @@ def _fg_detail_defaults(row, npd, ig, dept):
 	cbd = jt_api._cb_fields(row.get("calculation_breakdown")) if is_flexo else {}
 	return {
 		"row_name": row.name,
+		**(_flexo_technical_defaults(cbd) if is_flexo else {}),
 		"requested_name": row.item_name or "",
 		# Item fields
 		"item_name": (row.item_name or npd.job_title or npd.name or "").strip(),
@@ -386,6 +415,7 @@ def _cost_sheet_fg_defaults(ci, cost_sheet, ig):
 		"item_name": ci_doc.get("cost_item_name") or ci,
 		"item_group": ig,
 		"department": _dept_for_pricing(pricing),
+		**(_flexo_technical_defaults(cbd) if is_flexo else {}),
 		"stock_uom": "Nos",
 		"customer_ref": "",
 		"pl_customer": _customer_from_name(cs),
@@ -532,6 +562,7 @@ def _pl_defaults_from_cost_item(ci):
 		"pl_length_mm": flt(cbd.get("_product_length_mm")),
 	}
 	if is_flexo:
+		defaults.update(_flexo_technical_defaults(cbd))
 		defaults.update(_foil_defaults_from_cb(cb))
 	return defaults
 

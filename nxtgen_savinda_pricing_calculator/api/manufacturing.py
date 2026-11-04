@@ -272,6 +272,10 @@ def _upsert_product_library(fg_item_code, cost_item=None, customer_ref=None, ove
 		# finishing row. Carry its category and exact foil/coverage to the FG's
 		# Product Library automatically.
 		pl_data.update(_foil_summary_from_cb(cb))
+		if pricing == "Flexo":
+			from nxtgen_savinda_pricing_calculator.api.production_plan import _flexo_technical_defaults
+			pl_data.update({key.removeprefix("pl_"): value
+				for key, value in _flexo_technical_defaults(cb).items()})
 		# Copy the cost-spec linked finishings (Finishing-group specs on the CB) so the
 		# Product Library lists the same finishings quoted for the item.
 		try:
