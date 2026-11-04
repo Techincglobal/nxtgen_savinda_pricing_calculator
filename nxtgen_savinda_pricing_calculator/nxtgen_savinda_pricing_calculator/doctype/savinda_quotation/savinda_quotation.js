@@ -108,7 +108,7 @@ frappe.ui.form.on("Savinda Quotation", {
 		}
 
 		// ── Won / Lost actions (available from any active status) ──────────
-		var active = ["Draft", "Sent", "Accepted"];
+		var active = ["Sent", "Accepted","Approved"];
 		if (!frm.is_new() && active.indexOf(frm.doc.status) > -1) {
 			frm.add_custom_button(__("Mark as Won"), function () {
 				frappe.confirm(
