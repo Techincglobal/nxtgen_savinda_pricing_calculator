@@ -2302,6 +2302,7 @@ function oc_mount_app(el) {
         <div v-show="flexoExpanded" class="oc-kv-grid" style="margin-top:8px">
           <div class="oc-kv"><span class="k">Ups</span><span class="v">{{ calc.sheet.ups }}</span></div>
           <div class="oc-kv"><span class="k">Stickers / Reel</span><span class="v">{{ fmtNum(calc.sheet.stickers_per_reel) }}</span></div>
+          <div v-if="calc.sheet.material_wastage_width != null" class="oc-kv" title="Reel width − [Ups × (Product Width + Product Margin) + Printable Margin]"><span class="k">Material Wastage Width (mm)</span><span class="v">{{ fmtQty(calc.sheet.material_wastage_width) }}</span></div>
           <div class="oc-kv"><span class="k">Reel Length (m)</span><span class="v">{{ fmtNum(calc.sheet.reel_length) }}</span></div>
           <div class="oc-kv"><span class="k">Net Reel Area (m²)</span><span class="v">{{ fmtNum(calc.sheet.reel_area_net) }}</span></div>
           <div class="oc-kv"><span class="k">Setup Metrage (m)</span><span class="v">{{ calc.sheet.setup_metrage }}</span></div>
