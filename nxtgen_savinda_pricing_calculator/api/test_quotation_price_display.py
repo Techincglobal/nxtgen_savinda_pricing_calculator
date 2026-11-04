@@ -27,6 +27,17 @@ class TestQuotationPriceDisplay(unittest.TestCase):
 			fetch.assert_not_called()
 			self.assertEqual(doc.conversion_rate, 1)
 
+	def test_system_lkr_default_does_not_hide_usd_customer(self):
+		doc = SimpleNamespace(currency="LKR", customer="CUSTOMER", conversion_rate=1,
+			date="2026-11-04", cost_sheet="CS", _fetch_from_cost_sheet=Mock(), _fetch_from_inquiry=Mock(),
+			get=lambda key: None)
+		doc._fetch_creation_exchange_rate = lambda: quotation.SavindaQuotation._fetch_creation_exchange_rate(doc)
+		with patch.object(quotation, "_customer_currency", return_value="USD"), patch.object(frappe, "db", Mock()) as db, patch(
+			"erpnext.setup.utils.get_exchange_rate", return_value=337.14):
+			db.get_value.return_value = False
+			quotation.SavindaQuotation.before_insert(doc)
+			self.assertEqual((doc.currency, doc.conversion_rate), ("USD", 337.14))
+
 	def test_creation_rejects_missing_or_invalid_exchange_rate(self):
 		for rate in (None, 0, -1, float("nan"), float("inf")):
 			with self.subTest(rate=rate), patch("erpnext.setup.utils.get_exchange_rate", return_value=rate), patch.object(

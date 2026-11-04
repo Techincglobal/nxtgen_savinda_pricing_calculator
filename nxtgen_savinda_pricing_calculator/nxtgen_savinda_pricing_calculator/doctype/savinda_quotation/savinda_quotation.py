@@ -100,7 +100,10 @@ class SavindaQuotation(Document):
 	def before_insert(self):
 		self._fetch_from_cost_sheet()
 		self._fetch_from_inquiry()
-		if not self.currency:
+		if not self.currency or (self.cost_sheet and not self.get("amended_from")
+			and self.currency == _company_currency()):
+			# Frappe pre-fills Link Currency with the system currency, even when
+			# Cost Sheet creation supplied no currency. Resolve the customer first.
 			# Default to the customer's selling currency (matches a standard Quotation) so the
 			# Sales Order created from this quote does not fail on a currency mismatch.
 			self.currency = _customer_currency(self.customer)
