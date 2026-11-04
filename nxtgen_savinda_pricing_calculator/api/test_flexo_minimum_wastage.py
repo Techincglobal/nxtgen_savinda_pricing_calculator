@@ -14,16 +14,27 @@ class TestFlexoMinimumWastage(unittest.TestCase):
                 product_width_mm=50, product_length_mm=100, no_of_colors=colors,
                 reel_length_m=length), override)
 
-    def test_minimum_is_added_to_setup_not_replacing_setup(self):
+    def test_four_colours_use_minimum_without_setup(self):
         result = self.calculate()
         self.assertEqual(result["wastage_length"], 250)
-        self.assertEqual(result["wastage_area"], 100)
-        self.assertEqual(result["reel_area"], 350)
+        self.assertEqual(result["setup_metrage"], 0)
+        self.assertEqual(result["wastage_area"], 62.5)
+        self.assertEqual(result["reel_area"], 312.5)
 
     def test_colour_boundaries(self):
-        for colors, minimum in [(0, 0), (1, 100), (2, 100), (3, 250), (8, 250)]:
+        for colors, minimum in [(0, 0), (1, 100), (2, 100), (3, 0), (8, 250)]:
             with self.subTest(colors=colors):
                 self.assertEqual(self.calculate(colors)["minimum_wastage_length"], minimum)
+
+    def test_zero_and_three_keep_setup_and_ignore_configured_minimum(self):
+        self.assertEqual(self.calculate(0)["wastage_area"], (5 + 40) * .25)
+        self.assertEqual(self.calculate(3)["wastage_area"], (150 + 90) * .25)
+        self.assertEqual(self.calculate(3, override=0)["wastage_area"], 150 * .25)
+
+    def test_one_and_two_use_configured_minimum_without_setup(self):
+        for colors in (1, 2):
+            self.assertEqual(self.calculate(colors)["wastage_area"], 25)
+            self.assertEqual(self.calculate(colors, length=10000)["wastage_area"], 175)
 
     def test_percentage_can_exceed_minimum(self):
         self.assertEqual(self.calculate(length=10000)["wastage_length"], 900)

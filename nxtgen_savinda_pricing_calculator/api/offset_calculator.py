@@ -1250,7 +1250,11 @@ def _calc_sheet(form, breakdown_qtys=None):
 def _flexo_wastage_settings(cfg, colors):
     table = cfg.get("flexo_wastage") or [(99, 250, .12)]
     band = next((row for row in table if colors <= row[0]), table[-1])
-    return band[1], band[2], max(0, flt((cfg.get("flexo_minimum_wastage") or {}).get(band[0])))
+    # Zero/exactly three colours use normal setup + percentage wastage.
+    # Other positive colour counts use the minimum instead of setup.
+    if colors in (0, 3):
+        return band[1], band[2], 0
+    return 0, band[2], max(0, flt((cfg.get("flexo_minimum_wastage") or {}).get(band[0])))
 
 
 def _calc_flexo(form, wastage_override_pct=None):

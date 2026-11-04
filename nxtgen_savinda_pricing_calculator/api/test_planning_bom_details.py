@@ -51,7 +51,7 @@ class TestPlanningBOMDetails(unittest.TestCase):
 	def test_flexo_selected_bom_controls_reel_geometry_and_fixed_setup(self):
 		self.bom.update(custom_pricing_type="Flexo", custom_reel_width_mm=330, custom_reel_length_m=200,
 			custom_required_reel_length_m=240, custom_base_item_qty=10000, custom_no_of_ups=4,
-			custom_no_of_colors=4, custom_carton_size="70 x 80")
+			custom_no_of_colors=3, custom_carton_size="70 x 80")
 		values = api.planning_row_details("FG", "BOM-NEW", 10000, "Flexo")
 		self.assertEqual((values["ups"], values["reel_width"], values["reel_length"]), (4, 330, 200))
 		self.assertAlmostEqual(values["reel_area"], 79.2)
@@ -64,11 +64,11 @@ class TestPlanningBOMDetails(unittest.TestCase):
 
 	def test_flexo_minimum_stays_fixed_when_planning_qty_changes(self):
 		self.bom.update(custom_pricing_type="Flexo", custom_reel_width_mm=250,
-			custom_reel_length_m=1000, custom_required_reel_length_m=1400,
+			custom_reel_length_m=1000, custom_required_reel_length_m=1250,
 			custom_base_item_qty=10000, custom_no_of_ups=4, custom_no_of_colors=4)
 		with patch.object(api, "_get_config", return_value={"flexo_wastage": [(99, 150, .09)],
 			"flexo_minimum_wastage": {99: 250}}):
-			for qty, area in ((5000, 225), (10000, 350), (20000, 600), (100000, 2762.5)):
+			for qty, area in ((5000, 187.5), (10000, 312.5), (20000, 562.5), (100000, 2725)):
 				with self.subTest(qty=qty):
 					self.assertAlmostEqual(api.planning_row_details("FG", "BOM-NEW", qty, "Flexo")["reel_area"], area)
 
