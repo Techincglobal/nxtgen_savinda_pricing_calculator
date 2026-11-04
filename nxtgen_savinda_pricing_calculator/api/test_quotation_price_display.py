@@ -9,6 +9,37 @@ from nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.doctype
 
 
 class TestQuotationPriceDisplay(unittest.TestCase):
+	def test_creation_fetches_customer_currency_rate_before_pricing(self):
+		doc = SimpleNamespace(currency=None, customer="CUSTOMER", conversion_rate=1,
+			date="2026-11-03", cost_sheet=None, _fetch_from_cost_sheet=Mock(), _fetch_from_inquiry=Mock())
+		doc._fetch_creation_exchange_rate = lambda: quotation.SavindaQuotation._fetch_creation_exchange_rate(doc)
+		with patch.object(quotation, "_customer_currency", return_value="USD"), patch(
+			"erpnext.setup.utils.get_exchange_rate", return_value=337.14
+		) as fetch:
+			quotation.SavindaQuotation.before_insert(doc)
+			fetch.assert_called_once_with("USD", "LKR", "2026-11-03", args="for_selling")
+			self.assertEqual(doc.conversion_rate, 337.14)
+
+	def test_creation_base_currency_needs_no_rate_lookup(self):
+		doc = SimpleNamespace(currency="LKR", conversion_rate=99)
+		with patch("erpnext.setup.utils.get_exchange_rate") as fetch:
+			quotation.SavindaQuotation._fetch_creation_exchange_rate(doc)
+			fetch.assert_not_called()
+			self.assertEqual(doc.conversion_rate, 1)
+
+	def test_creation_rejects_missing_or_invalid_exchange_rate(self):
+		for rate in (None, 0, -1, float("nan"), float("inf")):
+			with self.subTest(rate=rate), patch("erpnext.setup.utils.get_exchange_rate", return_value=rate), patch.object(
+				frappe, "throw", side_effect=frappe.ValidationError
+			), self.assertRaises(frappe.ValidationError):
+				quotation.SavindaQuotation._fetch_creation_exchange_rate(
+					SimpleNamespace(currency="USD", date="2026-11-03", conversion_rate=1))
+
+	def test_save_preserves_reviewed_exchange_rate(self):
+		doc = SimpleNamespace(currency="USD", conversion_rate=335)
+		quotation.SavindaQuotation._validate_currency(doc)
+		self.assertEqual(doc.conversion_rate, 335)
+
 	def setUp(self):
 		base = patch.object(quotation, "_company_currency", return_value="LKR")
 		base.start()

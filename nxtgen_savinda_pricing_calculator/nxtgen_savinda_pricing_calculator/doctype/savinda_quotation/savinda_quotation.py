@@ -1,4 +1,6 @@
 # Copyright (c) 2026, Techincglobal.com and contributors
+import math
+
 import frappe
 from frappe.model.document import Document
 from frappe.utils import flt, get_link_to_form, today
@@ -102,8 +104,9 @@ class SavindaQuotation(Document):
 			# Default to the customer's selling currency (matches a standard Quotation) so the
 			# Sales Order created from this quote does not fail on a currency mismatch.
 			self.currency = _customer_currency(self.customer)
-		if not self.conversion_rate:
-			self.conversion_rate = 1
+		if not self.date:
+			self.date = today()
+		self._fetch_creation_exchange_rate()
 		if self.cost_sheet and frappe.db.get_value("Cost Sheet", self.cost_sheet, "custom_quote_as_bundle"):
 			from nxtgen_savinda_pricing_calculator.api.costing_bundle import quote_rows, combined_quote_defaults
 			cs = frappe.get_doc("Cost Sheet", self.cost_sheet)
@@ -232,6 +235,22 @@ class SavindaQuotation(Document):
 			# stable when a submitted quotation is marked Won/Lost.
 			self.profit_margin = flt(min(margins), 9)
 
+	def _fetch_creation_exchange_rate(self):
+		"""Resolve currency before any normal or bundle quotation prices are populated."""
+		from erpnext.setup.utils import get_exchange_rate
+		base = _company_currency()
+		if self.currency == base:
+			self.conversion_rate = 1
+			return
+		rate = flt(get_exchange_rate(self.currency, base, self.date, args="for_selling"))
+		if not math.isfinite(rate) or rate <= 0:
+			frappe.throw(
+				f"No valid selling exchange rate from {self.currency} to {base} was found for {self.date}. "
+				"Set a Currency Exchange record for this date and create the quotation again.",
+				title="Exchange Rate Required",
+			)
+		self.conversion_rate = rate
+
 	def _validate_currency(self):
 		"""Costing is in company base (LKR); the quotation may be presented in another
 		currency. conversion_rate = LKR per 1 unit of the quotation currency (1 when base)."""
@@ -240,9 +259,9 @@ class SavindaQuotation(Document):
 			self.currency = base
 		if self.currency == base:
 			self.conversion_rate = 1
-		elif not self.conversion_rate or flt(self.conversion_rate) <= 0:
-			# Fall back to a stored/auto rate; leave at 1 only if nothing is available.
-			self.conversion_rate = flt(self.conversion_rate) or 1
+		elif not math.isfinite(flt(self.conversion_rate)) or flt(self.conversion_rate) <= 0:
+			frappe.throw("Enter a positive exchange rate before saving the foreign-currency quotation.",
+				title="Exchange Rate Required")
 
 	def _apply_common_material(self):
 		"""Fill blank materials from the calculation, preserving user-entered text.
