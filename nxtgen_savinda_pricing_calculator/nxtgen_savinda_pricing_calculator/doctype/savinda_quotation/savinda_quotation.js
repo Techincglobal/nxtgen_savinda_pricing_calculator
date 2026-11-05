@@ -782,7 +782,11 @@ function _all_quotation_rows_have_fg(frm) {
 	return rows.length > 0 && rows.every(function (row) { return !!row.finish_good; });
 }
 
-function _show_create_fg_dialog(frm) {
+async function _show_create_fg_dialog(frm) {
+	// Save unrelated edits normally before entering the restricted FG-link flow.
+	if (frm.is_dirty()) {
+		await frm.save(frm.doc.docstatus === 1 ? "Update" : "Save");
+	}
 	if (_all_quotation_rows_have_fg(frm)) return;
 	var bundle_row = (frm.doc.items || []).find(function (row) {return row.custom_costing_bundle;});
 	if (bundle_row) {
@@ -802,20 +806,20 @@ function _show_create_fg_dialog(frm) {
 		if (!groups[key]) groups[key] = { row: row, finish_good: "" };
 		if (row.finish_good) groups[key].finish_good = row.finish_good;
 	});
-	Object.keys(groups).forEach(function (key) {
+	for (var key of Object.keys(groups)) {
 		var group = groups[key];
 		if (group.finish_good) {
 			// Repair older quotations where only one of the quantity-tier rows was
 			// linked to the FG. All tiers of this product must use that same FG.
-			if (frm.doc.docstatus === 0) _link_fg_to_rows(frm, key, group.finish_good);
+			await _link_fg_to_rows(frm, key, group.finish_good);
 		} else {
 			pending.push(group.row);
 		}
-	});
+	}
+	await _save_quotation_fg_links(frm);
 
 	if (!pending.length) {
 		// Persist repaired quantity-tier links without opening pricing rules.
-		if (frm.doc.docstatus === 0 && frm.is_dirty()) frm.save();
 		return;
 	}
 
@@ -833,10 +837,9 @@ function _create_fg_for_item(frm, pending_rows, idx, ig_default, created) {
 	ig_default = ig_default || "Finished Goods";
 	created = created || [];
 	if (idx >= pending_rows.length) {
-		frm.save(null, function () {
-			frappe.show_alert({ message: "FG items created disabled and sent for Product Library validation.", indicator: "blue" });
-			frm.refresh();
-		});
+		if (created.length) {
+			frappe.show_alert({ message: __("FG links saved on the quotation. New FG items await Product Library validation."), indicator: "blue" });
+		}
 		return;
 	}
 
@@ -950,11 +953,12 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) 
 			d.hide();
 			_create_fg_for_item(frm, pending_rows, idx + 1, ig_default, created);
 		},
-		primary_action: function (vals) {
+		primary_action: async function (vals) {
 			if (vals.existing_item) {
 				d.hide();
 				// Link existing item
-				_link_fg_to_rows(frm, _fg_product_key(row), vals.existing_item);
+				await _link_fg_to_rows(frm, _fg_product_key(row), vals.existing_item);
+				await _save_quotation_fg_links(frm);
 				created.push({ item_code: vals.existing_item, item_name: row.item_name, cost_item: row.cost_item || "" });
 				_create_fg_for_item(frm, pending_rows, idx + 1, ig_default, created);
 				return;
@@ -995,7 +999,7 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) 
 					},
 					freeze: true,
 					freeze_message: "Creating template + variant items...",
-					callback: function (r) {
+					callback: async function (r) {
 						if (!r.message) return;
 						d.hide();
 						var items = r.message.items || [];
@@ -1006,7 +1010,8 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) 
 						});
 						// Link the first created FG to the quotation row(s) for this cost item
 						if (items.length) {
-							_link_fg_to_rows(frm, _fg_product_key(row), items[0].item_code);
+							await _link_fg_to_rows(frm, _fg_product_key(row), items[0].item_code);
+							await _save_quotation_fg_links(frm);
 						}
 						// Each variant is its own sellable FG → price every variant.
 						items.forEach(function (it) {
@@ -1034,11 +1039,12 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) 
 				},
 				freeze: true,
 				freeze_message: "Creating FG item...",
-				callback: function (r) {
+				callback: async function (r) {
 					if (!r.message) return;
 					d.hide();
 					frappe.show_alert({ message: "Created: " + r.message.item_code, indicator: "green" });
-					_link_fg_to_rows(frm, _fg_product_key(row), r.message.item_code);
+					await _link_fg_to_rows(frm, _fg_product_key(row), r.message.item_code);
+					await _save_quotation_fg_links(frm);
 					created.push({ item_code: r.message.item_code, item_name: vals.item_name_field, cost_item: row.cost_item || "" });
 					_create_fg_for_item(frm, pending_rows, idx + 1, ig_default, created);
 				},
@@ -1049,12 +1055,29 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) 
 	d.show();
 }
 
-function _link_fg_to_rows(frm, product_key, fg_item_code) {
-	(frm.doc.items || []).forEach(function (row) {
+async function _link_fg_to_rows(frm, product_key, fg_item_code) {
+	for (var row of (frm.doc.items || [])) {
 		if (_fg_product_key(row) === product_key && !row.finish_good) {
-			frappe.model.set_value(row.doctype, row.name, "finish_good", fg_item_code);
+			await frappe.model.set_value(row.doctype, row.name, "finish_good", fg_item_code);
 		}
+	}
+	frm.refresh_field("items");
+}
+
+async function _save_quotation_fg_links(frm) {
+	if (!frm.is_dirty()) return;
+	await frappe.call({
+		method: "nxtgen_savinda_pricing_calculator.api.manufacturing.link_quotation_fg_items",
+		args: {
+			quotation: frm.doc.name,
+			modified: frm.doc.modified,
+			links: JSON.stringify((frm.doc.items || []).filter(row => row.finish_good)
+				.map(row => ({ row: row.name, item_code: row.finish_good }))),
+		},
+		freeze: true,
+		freeze_message: __("Saving quotation FG links..."),
 	});
+	await frm.reload_doc();
 }
 
 

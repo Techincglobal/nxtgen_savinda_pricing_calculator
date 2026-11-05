@@ -430,9 +430,13 @@ function recalc_row(frm, cdt, cdn) {
 	var qty = flt_v(row.qty);
 	var sscl = unit * (_cc.sscl_rate / 100);
 	var sscl_total = row.sscl ? sscl : 0;
-	var vat = (unit + sscl_total) * (_cc.vat_rate / 100);
+	var margin = flt_v(row.profit_margin) / 100;
+	var quoted = frm.doc.pricing_type === 'Flexo' && margin < 1
+		? (unit + sscl_total) / (1 - margin)
+		: (unit + sscl_total) * (1 + margin);
+	var vat = quoted * (_cc.vat_rate / 100);
 	var vat_total = row.vat ? vat : 0;
-	var sell_unit = round2(unit + sscl_total + vat_total);
+	var sell_unit = Math.round((quoted + vat_total) * 10000) / 10000;
 
 	frappe.model.set_value(cdt, cdn, "selling_unit_price", sell_unit);
 	frappe.model.set_value(cdt, cdn, "ammount", round2(qty * unit));

@@ -13,6 +13,15 @@ class CalculationBreakdown(Document):
 	def validate(self):
 		self._resolve_price_list()
 		self._default_carton_size()
+		# Calculator results already include base material, extra production cost,
+		# configured taxes and the reviewed margin. The legacy document calculation
+		# adds material again and must not replace a matching saved calculator result.
+		pricing = self._saved_calculator_pricing()
+		if pricing is not None:
+			self.unit_cost = flt(pricing["unit_cost"])
+			self.selling_price = flt(pricing["sell_total"])
+			self._render_pricing_html()
+			return
 		self._calc_sheet_requirements()
 		self._calc_cost_fact_amounts()
 		self._calc_pricing_summary()
@@ -20,6 +29,33 @@ class CalculationBreakdown(Document):
 
 	def before_submit(self):
 		self.validate()
+
+	def _saved_calculator_pricing(self):
+		try:
+			state = json.loads(self.get("ui_state") or "{}")
+		except (ValueError, TypeError):
+			return None
+		form = state.get("form") or {}
+		pricing = (state.get("calc_result") or {}).get("pricing") or {}
+		if not all(key in pricing for key in ("unit_cost", "sell_total")):
+			return None
+		# Direct document edits invalidate the saved pricing; normal saves/submission
+		# of unchanged calculator documents retain their reviewed result.
+		for field in ("item_qty", "profit_margin", "tax_sscl", "tax_vat", "extra_prod_cost_pct", "material_rate"):
+			if flt(self.get(field)) != flt(form.get(field)):
+				return None
+		for field, source in (("full_sheet_l", "full_sheet_l"), ("full_sheet_w", "full_sheet_w"),
+			("cut_sheet_l", "cut_sheet_l"), ("cut_sheetw", "cut_sheet_w"),
+			("no_of_cuts", "no_of_cuts"), ("no_of_ups", "no_of_ups"), ("no_of_colors", "no_of_colors")):
+			if source in form and flt(self.get(field)) != flt(form[source]):
+				return None
+		cost_rows = (state.get("calc_result") or {}).get("cost_rows") or []
+		if len(cost_rows) != len(self.get("cost_facts") or []):
+			return None
+		for saved, row in zip(cost_rows, self.get("cost_facts") or []):
+			if any(abs(flt(row.get(key)) - flt(saved.get(key))) > 0.000001 for key in ("req_qty", "rate", "amount")):
+				return None
+		return pricing
 
 	# ── 1. Price list ───────────────────────────────────────────
 	def _resolve_price_list(self):

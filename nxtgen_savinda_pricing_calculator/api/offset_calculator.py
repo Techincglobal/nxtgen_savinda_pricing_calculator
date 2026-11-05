@@ -791,10 +791,14 @@ def save_costing(payload):
         doc.insert(ignore_permissions=True)
 
     final_uc = flt(pricing.get("unit_cost", 0))
-    if final_uc and abs(flt(doc.unit_cost) - final_uc) > 0.001:
-        frappe.db.set_value("Calculation Breakdown", doc.name, "unit_cost", final_uc)
-        frappe.db.set_value("Calculation Breakdown", doc.name, "selling_price",
-                            flt(pricing.get("sell_total", 0)))
+    if "unit_cost" in pricing and "sell_total" in pricing and (
+        abs(flt(doc.unit_cost) - final_uc) > 0.000001
+        or abs(flt(doc.selling_price) - flt(pricing["sell_total"])) > 0.000001
+    ):
+        doc.unit_cost = final_uc
+        doc.selling_price = flt(pricing["sell_total"])
+        frappe.db.set_value("Calculation Breakdown", doc.name,
+                            {"unit_cost": doc.unit_cost, "selling_price": doc.selling_price})
 
     frappe.db.commit()
     return {"doc_name": doc.name, "status": "saved"}
@@ -2013,19 +2017,21 @@ def sync_cost_item_unit_cost(calculation_breakdown):
                     as_dict=True,
                 ) or {}
                 cb_sell_total   = flt(cb_vals.get("selling_price", 0))
-                cb_item_qty     = flt(cb_vals.get("item_qty", 0)) or 1
+                cb_item_qty     = flt(cb_vals.get("item_qty", 0))
                 cb_profit_margin = flt(cb_vals.get("profit_margin", 0))
-                sell_unit_cb    = round(cb_sell_total / cb_item_qty, 4)
+                has_saved_price = cb_vals.get("selling_price") is not None and cb_item_qty > 0
+                sell_unit_cb    = round(cb_sell_total / cb_item_qty, 4) if has_saved_price else 0
             except Exception:
                 sell_unit_cb     = 0
                 cb_profit_margin = 0
+                has_saved_price = False
 
             for row in cs_rows:
                 unit      = frappe.utils.flt(uc)
                 qty       = frappe.utils.flt(row.get("qty", 0))
-                # If CB already has a valid sell_unit (with margin), use it;
-                # otherwise fall back to unit_cost + SSCL + VAT only
-                if sell_unit_cb and sell_unit_cb > unit:
+                # Preserve the actual saved price, including zero or below-cost prices.
+                # Only calculations without saved pricing use the legacy fallback.
+                if has_saved_price:
                     sell_unit = sell_unit_cb
                 else:
                     apply_sscl = cint(row.get("sscl", 0))

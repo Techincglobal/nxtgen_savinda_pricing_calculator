@@ -2179,9 +2179,9 @@ function oc_mount_app(el) {
     </div>
 	<div class="" style="padding:12px 16px;border-top:1px solid #e5e7eb; background:#f9fafb">
 	
-	<div v-if="isFlexo" class="oc-field">
+	<div class="oc-field">
     <label class="oc-lbl">Remark</label>
-    <textarea v-model="form.remarks" rows="3" class="oc-inp" style="height:auto;padding:7px 9px;resize:vertical" :disabled="viewOnly" placeholder="Enter remarks for this Flexo calculation"></textarea>
+    <textarea v-model="form.remarks" rows="3" class="oc-inp" style="height:auto;padding:7px 9px;resize:vertical" :disabled="viewOnly" placeholder="Enter remarks for this calculation"></textarea>
 	</div>
 	<div class="oc-divider-label">Profit & Extra Costs</div>
 	<div class="oc-2col">

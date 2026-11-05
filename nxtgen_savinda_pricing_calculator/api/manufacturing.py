@@ -641,3 +641,45 @@ def get_quotation_fg_items(quotation):
 			fgs[it.name] = fg
 
 	return list(fgs.values())
+
+
+@frappe.whitelist()
+def link_quotation_fg_items(quotation, links, modified):
+	"""Link FGs without granting permission to submit or amend the quotation."""
+	doc = frappe.get_doc("Savinda Quotation", quotation, for_update=True)
+	doc.check_permission("write")
+	if doc.docstatus == 2:
+		frappe.throw("Cannot link FGs to a cancelled quotation.")
+	if frappe.utils.get_datetime(doc.modified) != frappe.utils.get_datetime(modified):
+		frappe.throw("Quotation changed. Reload it before linking FG items.")
+	links = frappe.parse_json(links)
+	if not isinstance(links, list):
+		frappe.throw("FG links must be a list.")
+	rows = {row.name: row for row in doc.items}
+	changes = {}
+	for link in links:
+		row = rows.get(link.get("row"))
+		item_code = link.get("item_code")
+		if not row or not item_code:
+			frappe.throw("Invalid quotation row or FG item.")
+		if row.finish_good:
+			if row.finish_good != item_code:
+				frappe.throw("An FG is already linked to this row. Existing links cannot be replaced here.")
+			continue
+		item = frappe.get_doc("Item", item_code)
+		item.check_permission("read")
+		if item.has_variants:
+			frappe.throw("Select an FG variant, not an Item template.")
+		if row.name in changes and changes[row.name] != item_code:
+			frappe.throw("Conflicting FG links for the same quotation row.")
+		changes[row.name] = item_code
+
+	# Deliberately update only the allow-on-submit FG field. Normal document save
+	# requires Submit permission and can also change unrelated quotation values.
+	for name, item_code in changes.items():
+		frappe.db.set_value("Savinda Quotation Item", name, "finish_good", item_code,
+			update_modified=False)
+	if changes:
+		frappe.db.set_value("Savinda Quotation", doc.name, "modified", frappe.utils.now())
+		doc.add_comment("Comment", "Linked FG items to {0} quotation row(s).".format(len(changes)))
+	return {"updated": len(changes)}
