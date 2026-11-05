@@ -3,6 +3,7 @@
 
 frappe.ui.form.on("Product Library", {
 	refresh(frm) {
+		add_library_bom_actions(frm);
 		if (frm.is_new() || !frm.doc.approval_required) return;
 		const api = "nxtgen_savinda_pricing_calculator.api.fg_approval.";
 		const status = frm.doc.approval_status;
@@ -47,3 +48,28 @@ frappe.ui.form.on("Product Library", {
 		});
 	}
 });
+
+
+function add_library_bom_actions(frm) {
+	if (frm.is_new() || !frm.doc.fg_item) return;
+	const fg = frm.doc.fg_item;
+	frappe.db.get_value("Item", fg, ["disabled", "default_bom", "has_variants"]).then(r => {
+		const item = r.message;
+		if (frm.doc.fg_item !== fg || !item || item.disabled || item.has_variants) return;
+		const open_builder = () => {
+			const open = () => {
+				window.location.href = "/app/bom-builder?product_library=" + encodeURIComponent(frm.doc.name);
+			};
+			if (frm.is_dirty()) return frm.save().then(open);
+			open();
+		};
+		if (item.default_bom) {
+			frm.add_custom_button(__("Add Variant BOM"), open_builder, __("Manufacturing"));
+			frm.add_custom_button(__("Edit / View Default BOM"), () => {
+				frappe.set_route("Form", "BOM", item.default_bom);
+			}, __("Manufacturing"));
+		} else {
+			frm.add_custom_button(__("Create BOM"), open_builder, __("Manufacturing"));
+		}
+	});
+}

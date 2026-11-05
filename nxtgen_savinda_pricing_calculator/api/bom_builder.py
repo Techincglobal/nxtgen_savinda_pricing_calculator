@@ -189,7 +189,35 @@ def get_bom_context(source_type, source_name):
 	fg_items = []
 	customer = ""
 
-	if source_type == "Sales Order":
+	if source_type == "Product Library":
+		library = frappe.get_doc("Product Library", source_name)
+		library.check_permission("read")
+		if not library.get("fg_item"):
+			frappe.throw("Link a Finished Good to the Product Library first.")
+		item = frappe.get_doc("Item", library.fg_item)
+		item.check_permission("read")
+		if item.disabled or item.has_variants:
+			frappe.throw("BOM Builder requires an enabled FG item, not an Item template.")
+		customer = library.get("customer") or ""
+		if item.get("custom_costing_bundle"):
+			from nxtgen_savinda_pricing_calculator.api.costing_bundle import builder_components
+			cs = frappe.get_doc("Cost Sheet", item.custom_costing_bundle)
+			cs.check_permission("read")
+			fg_items = builder_components(cs)
+		else:
+			ci = library.get("cost_item") or item.get("custom_cost_item") or ""
+			cb = library.get("calculation_breakdown") or ""
+			if not cb and ci:
+				cb = frappe.db.get_value("Cost Item Calculation", {"parent": ci},
+					"calculation_breakdown", order_by="idx asc") or ""
+			cb = cb or _find_cb_for_fg(item.name)
+			qty = flt(frappe.db.get_value("Calculation Breakdown", cb, "item_qty")) if cb else 0
+			if not qty and ci:
+				qty = flt(frappe.db.get_value("cost Item", ci, "item_qty"))
+			fg_items.append({"item_code": item.name, "item_name": item.item_name or item.name,
+				"qty": qty, "calculation_breakdown": cb, "cost_item": ci})
+
+	elif source_type == "Sales Order":
 		so = frappe.get_doc("Sales Order", source_name)
 		customer = so.customer or ""
 		seen = set()

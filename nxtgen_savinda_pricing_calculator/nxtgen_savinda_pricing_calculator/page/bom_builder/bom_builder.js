@@ -131,11 +131,12 @@ function bb_mount_app(el) {
 
 			loadFromUrl() {
 				var p = new URLSearchParams(window.location.search);
-				var so = p.get('so'), q = p.get('quotation'), cs = p.get('cost_sheet') || p.get('cs');
+				var so = p.get('so'), q = p.get('quotation'), cs = p.get('cost_sheet') || p.get('cs'), pl = p.get('product_library');
 				if (so)      { this.sourceType = 'Sales Order';       this.sourceName = so; }
 				else if (q)  { this.sourceType = 'Savinda Quotation'; this.sourceName = q; }
 				else if (cs) { this.sourceType = 'Cost Sheet';        this.sourceName = cs; }
-				else         { this.error = 'No source document. Open from a Sales Order, NPD-related Cost Sheet or Savinda Quotation.'; return; }
+				else if (pl) { this.sourceType = 'Product Library'; this.sourceName = pl; }
+				else         { this.error = 'No source document. Open from Product Library, a Sales Order, Cost Sheet or Savinda Quotation.'; return; }
 				this.loadContext();
 			},
 
@@ -899,7 +900,7 @@ function bb_mount_app(el) {
       <span v-if="customer" style="color:#aac4e0"> — {{ customer }}</span>
     </div>
     <div style="margin-left:auto" v-if="sourceType">
-      <a :href="'/app/' + (sourceType==='Sales Order'?'sales-order':(sourceType==='Cost Sheet'?'cost-sheet':'savinda-quotation')) + '/' + sourceName" class="bb-back-btn">← Back</a>
+      <a :href="'/app/' + (sourceType==='Sales Order'?'sales-order':(sourceType==='Cost Sheet'?'cost-sheet':(sourceType==='Product Library'?'product-library':'savinda-quotation'))) + '/' + sourceName" class="bb-back-btn">← Back</a>
     </div>
   </div>
 
