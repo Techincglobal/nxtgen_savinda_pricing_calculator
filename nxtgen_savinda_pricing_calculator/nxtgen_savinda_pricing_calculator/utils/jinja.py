@@ -8,20 +8,25 @@ import frappe
 from frappe.utils import cint, flt, format_date, getdate
 
 
-def get_quotation_price_basis(currency):
-	"""Foreign-currency prices are presented per 1,000; stored rates stay per piece."""
+def get_quotation_price_basis(doc):
+	"""Quotation-controlled print grouping; stored rates always remain per piece."""
 	from nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.doctype.savinda_quotation.savinda_quotation import _company_currency
 	base = _company_currency()
-	currency = currency or base
-	foreign = currency != base
-	return {"currency": currency, "multiplier": 1000 if foreign else 1,
-		"precision": 4 if foreign else 2,
-		"label": f"Price per {'1,000 Units' if foreign else 'Piece'} ({currency})"}
+	# A currency-only legacy caller has no grouping selection: use per-piece display.
+	values = {} if isinstance(doc, str) else (doc or {})
+	currency = (doc if isinstance(doc, str) else values.get("currency")) or base
+	grouped = bool(cint(values.get("quote_by_pieces")))
+	quantity = cint(values.get("price_basis_qty")) or 1000
+	if grouped and quantity < 1:
+		frappe.throw("Pieces per Price must be a positive whole number.")
+	return {"currency": currency, "multiplier": quantity if grouped else 1,
+		"precision": 4 if currency != base else 2,
+		"label": f"Price per {format(quantity, ',') + ' Pieces' if grouped else 'Piece'} ({currency})"}
 
 
 def get_quotation_print_rate(doc, row):
 	"""Convert first, scale next, round for display last (avoids tiny FX rates becoming zero)."""
-	basis = get_quotation_price_basis(doc.get("currency"))
+	basis = get_quotation_price_basis(doc)
 	base_rate = flt(row.get("base_selling_price"))
 	rate = base_rate / (flt(doc.get("conversion_rate")) or 1) if base_rate else flt(row.get("selling_price"))
 	return f"{rate * basis['multiplier']:,.{basis['precision']}f}"

@@ -1796,3 +1796,34 @@ def has_draft_chain(fg_item):
 		if frappe.db.get_value("BOM", bn, "docstatus") == 0:
 			return True
 	return False
+
+
+@frappe.whitelist()
+def get_builder_cost_sheet(source_type, source_name, calculation_breakdown=None, cost_item=None):
+	"""Resolve the costing document for the builder's View Costing action."""
+	if source_type not in ("Cost Sheet", "Savinda Quotation", "Sales Order", "Product Library"):
+		frappe.throw("Unsupported BOM Builder source.")
+	source = frappe.get_doc(source_type, source_name)
+	source.check_permission("read")
+	name = source.name if source_type == "Cost Sheet" else source.get("cost_sheet")
+	if name:
+		frappe.get_doc("Cost Sheet", name).check_permission("read")
+		return name
+	items = []
+	if calculation_breakdown:
+		frappe.get_doc("Calculation Breakdown", calculation_breakdown).check_permission("read")
+		items = frappe.get_all("Cost Item Calculation",
+			filters={"calculation_breakdown": calculation_breakdown, "parenttype": "cost Item"}, pluck="parent")
+	if not items and cost_item:
+		frappe.get_doc("cost Item", cost_item).check_permission("read")
+		items = [cost_item]
+	if not items:
+		return None
+	parents = frappe.get_all("Cost Sheet Items",
+		filters={"item": ["in", items], "parenttype": "Cost Sheet"}, pluck="parent")
+	if not parents:
+		return None
+	# Permission-filtered lookup; prefer the latest live sheet over cancelled copies.
+	sheets = frappe.get_list("Cost Sheet", filters={"name": ["in", parents], "docstatus": ["<", 2]},
+		fields=["name"], order_by="modified desc", page_length=1)
+	return sheets[0].name if sheets else None

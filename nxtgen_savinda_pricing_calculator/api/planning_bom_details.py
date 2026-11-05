@@ -25,6 +25,20 @@ def _base_material(bom, preferred=None):
 	return ""
 
 
+def _flexo_library_details(fg_item):
+	"""Technical display fields only; these do not change planning calculations."""
+	name = job_ticket._pl_name_for_fg(fg_item)
+	values = frappe.db.get_value("Product Library", name,
+		["cylinder_teeth", "up_margin", "core_size", "slit"], as_dict=True) if name else None
+	values = values or {}
+	return {
+		"cylinder_teeth": str(values.get("cylinder_teeth") or ""),
+		"up_margin_mm": flt(values.get("up_margin")),
+		"core_size": values.get("core_size") or "",
+		"slit_width": (values.get("slit") or "").strip(),
+	}
+
+
 def planning_row_details(fg_item, bom_no, quantity, pricing_type="Offset", planning_type="Manufacture"):
 	ctx = job_ticket._fg_context(fg_item)
 	bom = frappe.get_doc("BOM", bom_no) if bom_no else None
@@ -75,6 +89,7 @@ def planning_row_details(fg_item, bom_no, quantity, pricing_type="Offset", plann
 			full_sheet_size=(bom.get("custom_full_sheet_size") if bom else "") or job_ticket._size_str(form.get("full_sheet_l"), form.get("full_sheet_w")),
 			cut_sheet_size=(bom.get("custom_cut_sheet_size") if bom else "") or job_ticket._size_str(form.get("cut_sheet_l"), form.get("cut_sheet_w")))
 		return out
+	out.update(_flexo_library_details(fg_item))
 	width = flt(form.get("reel_width_mm"))
 	ups = cint(bom.get("custom_no_of_ups")) if bom else 0
 	colors = cint(form.get("no_of_colors"))
@@ -99,7 +114,7 @@ def planning_row_details(fg_item, bom_no, quantity, pricing_type="Offset", plann
 	area = (length + max(setup + length * pct, minimum)) * width / 1000 if qty and length and width else 0
 	product_size = (bom.get("custom_carton_size") if bom else "") or form.get("carton_size") or cb.get("carton_size") or ""
 	out.update(ups=ups, size=product_size, reel_length=length, reel_width=width, reel_area=area)
-	slit = (bom.get("custom_slit_width") if bom else "") or form.get("slit_width")
+	slit = out.get("slit_width") or (bom.get("custom_slit_width") if bom else "") or form.get("slit_width")
 	if slit:
 		out["slit_width"] = slit
 	return out

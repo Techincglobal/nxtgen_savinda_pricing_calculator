@@ -207,14 +207,15 @@ def _upgrade_quotation_price_layouts():
 	rate = "{{ '{:.2f}'.format(((row.base_selling_price or 0) / (doc.conversion_rate or 1)) or (row.selling_price or 0)) }}"
 	for row in frappe.get_all("Print Format", filters={"doc_type": "Savinda Quotation"}, fields=["name", "html"]):
 		html = row.html or ""
-		# Never change a rate without its corresponding price-basis heading.
-		if heading not in html or rate not in html:
+		# Upgrade known expressions only, preserving all other custom formatting.
+		if heading in html and rate in html:
+			html = html.replace(heading, "{{ get_quotation_price_basis(doc).label | e }}").replace(
+				rate, "{{ get_quotation_print_rate(doc, row) }}")
+		html = html.replace("get_quotation_price_basis(doc.currency)", "get_quotation_price_basis(doc)")
+		if html == (row.html or ""):
 			continue
-		html = html.replace(heading, "{{ get_quotation_price_basis(doc.currency).label | e }}").replace(
-			rate, "{{ get_quotation_print_rate(doc, row) }}")
-		pf = frappe.get_doc("Print Format", row.name)
-		pf.html = html
-		pf.save(ignore_permissions=True)
+		# Standard formats are maintained by migrations, not Desk form editing.
+		frappe.db.set_value("Print Format", row.name, "html", html)
 
 
 def _quotation_product_size_html(html):

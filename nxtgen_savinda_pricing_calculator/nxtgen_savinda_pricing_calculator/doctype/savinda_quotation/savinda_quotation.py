@@ -123,6 +123,7 @@ class SavindaQuotation(Document):
 					self.set(field, value)
 
 	def validate(self):
+		self._validate_print_price_basis()
 		self._check_single_live_quotation()
 		if self.cost_sheet and frappe.db.get_value("Cost Sheet", self.cost_sheet, "custom_quote_as_bundle"):
 			self.custom_combined_quote = 1
@@ -147,6 +148,15 @@ class SavindaQuotation(Document):
 		self._apply_lowest_profit_margin()
 		self._sync_item_currency()
 		self._fill_item_finishing_and_remark()
+
+	def _validate_print_price_basis(self):
+		if self.get("quote_by_pieces"):
+			qty = flt(self.get("price_basis_qty"))
+			if not math.isfinite(qty) or qty < 1 or qty != int(qty):
+				frappe.throw("Pieces per Price must be a positive whole number.")
+
+	def before_update_after_submit(self):
+		self._validate_print_price_basis()
 
 	def _fill_item_finishing_and_remark(self):
 		"""Copy the cost item's BOM remark and finishing ('XX Colors + finishings') onto each

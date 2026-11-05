@@ -61,7 +61,7 @@ async function pp_refresh_planning_row(frm, cdt, cdn, reset_bom) {
 	if (!row.fg_item) {
 		var empty = {bom_no: "", item_name: "", cost_item: "", calculation_breakdown: "", base_material: "", ups: 0};
 		Object.assign(empty, cdt === "Flexo Production Planning Item"
-			? {size: "", reel_length: 0, reel_width: 0, reel_area: 0, slit_width: ""}
+			? {size: "", reel_length: 0, reel_width: 0, reel_area: 0, slit_width: "", cylinder_teeth: "", up_margin_mm: 0, core_size: ""}
 			: {cuts: 0, full_sheet_size: "", cut_sheet_size: "", full_sheet_qty: 0, cut_sheet_qty: 0, wastage: 0});
 		await apply(empty);
 		return;

@@ -243,8 +243,18 @@ function bb_mount_app(el) {
 			// ── Editable drivers → recompute consumption via the calculator ──
 			onDriverChange() { this.driversDirty = true; },
 			openCosting() {
-				if (!this.calcBreakdown) { frappe.msgprint('No Calculation Breakdown linked for this FG.'); return; }
-				window.open('/app/offset-calculator?ref=' + encodeURIComponent(this.calcBreakdown), '_blank');
+				frappe.call({
+					method: 'nxtgen_savinda_pricing_calculator.api.bom_builder.get_builder_cost_sheet',
+					args: {
+						source_type: this.sourceType, source_name: this.sourceName,
+						calculation_breakdown: this.calcBreakdown || '',
+						cost_item: (this.selectedFGData || {}).cost_item || '',
+					},
+					callback: function (r) {
+						if (r.message) frappe.set_route('Form', 'Cost Sheet', r.message);
+						else frappe.msgprint(__('No accessible Cost Sheet is linked to this FG.'));
+					},
+				});
 			},
 
 			changeBaseMaterial() {

@@ -10,21 +10,21 @@
   "planning_type",
   "qty",
   "cut_sheet_size",
-  "full_sheet_size",
-  "bom_no",
-  "base_material",
-  "ups",
   "cuts",
+  "full_sheet_size",
   "full_sheet_qty",
-  "cut_sheet_qty",
-  "wastage",
   "reel_area",
+  "bom_no",
   "col_refs",
   "cost_item",
   "calculation_breakdown",
   "is_first",
   "is_group",
-  "parent_item"
+  "parent_item",
+  "wastage",
+  "base_material",
+  "ups",
+  "cut_sheet_qty"
  ],
  "fields": [
   {
@@ -137,9 +137,9 @@
   {
    "fieldname": "bom_no",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "BOM",
-   "options": "BOM",
-   "in_list_view": 1
+   "options": "BOM"
   },
   {
    "fieldname": "full_sheet_size",
@@ -156,15 +156,15 @@
   {
    "fieldname": "base_material",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Base Material",
    "options": "Item",
-   "read_only": 1,
-   "in_list_view": 1
+   "read_only": 1
   }
  ],
  "istable": 1,
  "links": [],
- "modified": "2026-09-27 11:37:28.686991",
+ "modified": "2026-11-06 04:27:09.947434",
  "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Production Planning Item",

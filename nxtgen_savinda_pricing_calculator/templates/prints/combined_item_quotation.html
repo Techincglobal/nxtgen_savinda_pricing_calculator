@@ -29,7 +29,7 @@
 </style>
 <div class="combined-quote">
 {% if combined.rows %}
-  {% set price_basis = get_quotation_price_basis(doc.currency) %}
+  {% set price_basis = get_quotation_price_basis(doc) %}
   {% if letter_head and not no_letterhead %}{{ letter_head }}
   {% else %}<div class="company-header">
     Savinda Graphic Systems (Pvt) Ltd.<br>

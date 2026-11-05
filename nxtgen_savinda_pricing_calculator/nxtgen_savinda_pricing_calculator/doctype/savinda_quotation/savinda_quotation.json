@@ -20,6 +20,8 @@
   "valid_till",
   "currency",
   "conversion_rate",
+  "quote_by_pieces",
+  "price_basis_qty",
   "section_break_items",
   "items",
   "section_break_footer",
@@ -281,6 +283,23 @@
    "fieldtype": "Link",
    "label": "UOM",
    "options": "UOM"
+  },
+  {
+   "fieldname": "quote_by_pieces",
+   "fieldtype": "Check",
+   "label": "Quote per Number of Pieces",
+   "default": "0",
+   "allow_on_submit": 1,
+   "description": "Print the price for the specified number of pieces, in any currency. Stored item rates remain per piece."
+  },
+  {
+   "fieldname": "price_basis_qty",
+   "fieldtype": "Int",
+   "label": "Pieces per Price",
+   "default": "1000",
+   "allow_on_submit": 1,
+   "depends_on": "eval:doc.quote_by_pieces",
+   "mandatory_depends_on": "eval:doc.quote_by_pieces"
   }
  ],
  "is_submittable": 1,

@@ -62,10 +62,10 @@ class TestQuotationPriceDisplay(unittest.TestCase):
 	def test_foreign_currencies_show_per_thousand_with_four_decimals(self):
 		for currency in ("USD", "EUR", "GBP"):
 			with self.subTest(currency=currency):
-				doc = frappe._dict(currency=currency, conversion_rate=300)
+				doc = frappe._dict(currency=currency, conversion_rate=300, quote_by_pieces=1, price_basis_qty=1000)
 				row = frappe._dict(base_selling_price=24.554, selling_price=24.554 / 300)
 				self.assertEqual(get_quotation_print_rate(doc, row), "81.8467")
-				self.assertEqual(get_quotation_price_basis(currency)["label"], f"Price per 1,000 Units ({currency})")
+				self.assertEqual(get_quotation_price_basis(doc)["label"], f"Price per 1,000 Pieces ({currency})")
 
 	def test_local_currency_stays_per_piece_two_decimal_print(self):
 		self.assertEqual(get_quotation_print_rate(frappe._dict(currency="LKR", conversion_rate=1),
@@ -73,11 +73,11 @@ class TestQuotationPriceDisplay(unittest.TestCase):
 		self.assertEqual(get_quotation_price_basis("LKR")["multiplier"], 1)
 
 	def test_scale_before_rounding_tiny_rate(self):
-		self.assertEqual(get_quotation_print_rate(frappe._dict(currency="USD", conversion_rate=300),
+		self.assertEqual(get_quotation_print_rate(frappe._dict(currency="USD", conversion_rate=300, quote_by_pieces=1, price_basis_qty=1000),
 			frappe._dict(base_selling_price=0.01)), "0.0333")
 
 	def test_legacy_transaction_price_is_not_converted_twice(self):
-		self.assertEqual(get_quotation_print_rate(frappe._dict(currency="USD", conversion_rate=300),
+		self.assertEqual(get_quotation_print_rate(frappe._dict(currency="USD", conversion_rate=300, quote_by_pieces=1, price_basis_qty=1000),
 			frappe._dict(selling_price=0.123456)), "123.4560")
 
 	def test_quote_sync_preserves_per_piece_rate_and_base_anchor(self):
@@ -92,13 +92,34 @@ class TestQuotationPriceDisplay(unittest.TestCase):
 		heading = "Price Per Piece ({{ doc.currency or 'LKR' }})"
 		rate = "{{ '{:.2f}'.format(((row.base_selling_price or 0) / (doc.conversion_rate or 1)) or (row.selling_price or 0)) }}"
 		original = "<div>Custom company header</div>" + heading + rate + "<div>Custom terms</div>"
-		pf = Mock()
-		with patch.object(frappe, "get_all", return_value=[frappe._dict(name="Quotation-Savinda", html=original)]), patch.object(frappe, "get_doc", return_value=pf):
+		with patch.object(frappe, "get_all", return_value=[frappe._dict(name="Quotation-Savinda", html=original)]), patch.object(frappe, "db", Mock()) as db:
 			install._upgrade_quotation_price_layouts()
-		self.assertEqual(pf.html, original.replace(heading, "{{ get_quotation_price_basis(doc.currency).label | e }}").replace(rate, "{{ get_quotation_print_rate(doc, row) }}"))
-		pf.save.assert_called_once_with(ignore_permissions=True)
+			db.set_value.assert_called_once_with("Print Format", "Quotation-Savinda", "html", original.replace(heading, "{{ get_quotation_price_basis(doc).label | e }}").replace(rate, "{{ get_quotation_print_rate(doc, row) }}"))
 
 	def test_unrecognised_formats_are_not_rewritten(self):
 		with patch.object(frappe, "get_all", return_value=[frappe._dict(name="Custom", html="Custom pricing layout")]), patch.object(frappe, "get_doc") as get_doc:
 			install._upgrade_quotation_price_layouts()
 		get_doc.assert_not_called()
+
+	def test_checkbox_controls_all_currencies_and_custom_quantity(self):
+		for currency in ("LKR", "USD"):
+			doc = frappe._dict(currency=currency, conversion_rate=1, quote_by_pieces=0, price_basis_qty=500)
+			self.assertEqual(get_quotation_price_basis(doc)["multiplier"], 1)
+			doc.quote_by_pieces = 1
+			self.assertEqual(get_quotation_price_basis(doc)["multiplier"], 500)
+			self.assertEqual(get_quotation_price_basis(doc)["label"], f"Price per 500 Pieces ({currency})")
+			row = frappe._dict(selling_price=2)
+			self.assertEqual(get_quotation_print_rate(doc, row), "1,000.00" if currency == "LKR" else "1,000.0000")
+			self.assertEqual(row.selling_price, 2)
+
+	def test_invalid_group_quantity_rejected_on_update_after_submit(self):
+		for qty in (0, -1, 2.5):
+			doc = frappe._dict(quote_by_pieces=1, price_basis_qty=qty)
+			with patch.object(frappe, "throw", side_effect=frappe.ValidationError), self.assertRaises(frappe.ValidationError):
+				quotation.SavindaQuotation._validate_print_price_basis(doc)
+
+	def test_current_print_heading_migrates_without_layout_changes(self):
+		original = "Custom header {{ get_quotation_price_basis(doc.currency).label }} Custom footer"
+		with patch.object(frappe, "get_all", return_value=[frappe._dict(name="Custom", html=original)]), patch.object(frappe, "db", Mock()) as db:
+			install._upgrade_quotation_price_layouts()
+			db.set_value.assert_called_once_with("Print Format", "Custom", "html", original.replace("doc.currency", "doc"))

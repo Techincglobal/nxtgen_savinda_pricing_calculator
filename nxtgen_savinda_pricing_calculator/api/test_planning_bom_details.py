@@ -29,6 +29,7 @@ class TestPlanningBOMDetails(unittest.TestCase):
 		self.stack.enter_context(patch.object(api.job_ticket, "_fg_context", return_value={"cost_item": "CI", "calculation_breakdown": "OLD-CB"}))
 		self.cb = self.stack.enter_context(patch.object(api.job_ticket, "_cb_fields", return_value={
 			"base_material": "OLD-PAPER", "ui_state": json.dumps({"form": {"no_of_ups": 2, "no_of_cuts": 1}})}))
+		self.library_details = self.stack.enter_context(patch.object(api, "_flexo_library_details", return_value={"cylinder_teeth": "96", "up_margin_mm": 2.5, "core_size": "76 mm"}))
 		self.stack.enter_context(patch.object(api, "_library_bom_inputs", return_value={"no_of_ups": 4, "full_sheet_l": 40, "full_sheet_w": 50}))
 		self.stack.enter_context(patch.object(api, "_get_config", return_value={
 			"offset_wastage_pct": .05, "offset_wastage_min": 100, "flexo_wastage": [(99, 20, .1)]}))
@@ -43,6 +44,8 @@ class TestPlanningBOMDetails(unittest.TestCase):
 		self.assertEqual(values["base_material"], "NEW-PAPER")
 		self.assertNotIn("exp_date", values)
 		self.assertNotIn("batch_no", values)
+		self.assertNotIn("cylinder_teeth", values)
+		self.library_details.assert_not_called()
 
 	def test_quantity_change_recalculates_sheet_counts(self):
 		values = api.planning_row_details("FG", "BOM-NEW", 5000)
@@ -56,6 +59,7 @@ class TestPlanningBOMDetails(unittest.TestCase):
 		self.assertEqual((values["ups"], values["reel_width"], values["reel_length"]), (4, 330, 200))
 		self.assertAlmostEqual(values["reel_area"], 79.2)
 		self.assertEqual(values["size"], "70 x 80")
+		self.assertEqual((values["cylinder_teeth"], values["up_margin_mm"], values["core_size"]), ("96", 2.5, "76 mm"))
 		halved = api.planning_row_details("FG", "BOM-NEW", 5000, "Flexo")
 		self.assertEqual(halved["reel_length"], 100)
 		self.assertAlmostEqual(halved["reel_area"], 42.9)
@@ -106,3 +110,10 @@ class TestPlanningBOMDetails(unittest.TestCase):
 		self.assertEqual(ticket.bom_no, "BOM-NEW")
 		self.assertEqual((row.exp_date, row.batch_no, native.planned_qty, native.sales_order_item),
 			("2026-12-01", "BATCH", 10000, "SO-ROW"))
+
+	def test_flexo_library_slit_takes_priority_with_bom_fallback(self):
+		self.bom.update(custom_pricing_type="Flexo", custom_slit_width="BOM slit")
+		self.library_details.return_value = {"slit_width": "Library slit"}
+		self.assertEqual(api.planning_row_details("FG", "BOM-NEW", 1000, "Flexo")["slit_width"], "Library slit")
+		self.library_details.return_value = {"slit_width": ""}
+		self.assertEqual(api.planning_row_details("FG", "BOM-NEW", 1000, "Flexo")["slit_width"], "BOM slit")

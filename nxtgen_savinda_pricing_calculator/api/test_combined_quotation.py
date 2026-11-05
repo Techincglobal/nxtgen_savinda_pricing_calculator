@@ -53,7 +53,7 @@ class TestCombinedQuotation(unittest.TestCase):
 
 	def test_reference_style_print_hides_components_and_converts_no_prices_twice(self):
 		q=frappe.get_doc({"doctype":"Savinda Quotation","name":"SQ-TEST","customer_name":"Test Customer",
-			"currency":"USD","conversion_rate":300,"custom_combined_title":"Gift Box test","custom_combined_colours":"5",
+			"currency":"USD","conversion_rate":300,"quote_by_pieces":1,"price_basis_qty":1000,"custom_combined_title":"Gift Box test","custom_combined_colours":"5",
 			"custom_combined_material":"Customer Board","custom_combined_size":"150 x 40 x 60",
 			"custom_combined_finishing":"GOLD FOILING, DIE CUTTING","custom_combined_remarks":"CUSTOMER SPEC <script>bad()</script>",
 			"vat_note":"VAT excluded","validity_note":"7 Days","items":[{"item_name":"Gift Box test","custom_costing_bundle":"COST-TEST","qty":1000,
@@ -63,7 +63,7 @@ class TestCombinedQuotation(unittest.TestCase):
 		self.assertIn("Gift Box test",html)
 		self.assertIn("1,000",html)
 		self.assertIn("1,250.0000",html)
-		self.assertIn("PRICE PER 1,000 UNITS (USD)",html)
+		self.assertIn("PRICE PER 1,000 PIECES (USD)",html)
 		self.assertNotIn("CI-A",html)
 		self.assertNotIn("<script>bad()",html)
 		self.assertIn("&lt;script&gt;",html)
