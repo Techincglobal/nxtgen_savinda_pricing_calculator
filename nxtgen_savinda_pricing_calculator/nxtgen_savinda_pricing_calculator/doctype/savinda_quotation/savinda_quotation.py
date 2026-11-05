@@ -382,6 +382,11 @@ class SavindaQuotation(Document):
 				self.customer = cust
 		if not self.sales_person and cs.get("sales_person"):
 			self.sales_person = cs["sales_person"]
+		# Copy the Inquiry's general Remarks on creation; preserve quotation edits.
+		# Some installations do not have this optional Opportunity custom field.
+		if (self.inquiry and not self.get("remarks") and not self.get("amended_from")
+			and frappe.get_meta("Opportunity").has_field("custom_remarks")):
+			self.remarks = frappe.db.get_value("Opportunity", self.inquiry, "custom_remarks") or ""
 
 	# ── Auto-fill from Inquiry (Lead / Customer / Prospect) ────
 	def _fetch_from_inquiry(self):
