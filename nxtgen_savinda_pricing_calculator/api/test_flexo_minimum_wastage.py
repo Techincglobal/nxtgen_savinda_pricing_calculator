@@ -14,10 +14,10 @@ class TestFlexoMinimumWastage(unittest.TestCase):
                 product_width_mm=50, product_length_mm=100, no_of_colors=colors,
                 reel_length_m=length), override)
 
-    def test_four_colours_use_minimum_without_setup(self):
+    def test_four_colours_compare_setup_plus_percentage_to_minimum(self):
         result = self.calculate()
         self.assertEqual(result["wastage_length"], 250)
-        self.assertEqual(result["setup_metrage"], 0)
+        self.assertEqual(result["setup_metrage"], 150)
         self.assertEqual(result["wastage_area"], 62.5)
         self.assertEqual(result["reel_area"], 312.5)
 
@@ -31,22 +31,28 @@ class TestFlexoMinimumWastage(unittest.TestCase):
         self.assertEqual(self.calculate(3)["wastage_area"], (150 + 90) * .25)
         self.assertEqual(self.calculate(3, override=0)["wastage_area"], 150 * .25)
 
-    def test_one_and_two_use_configured_minimum_without_setup(self):
+    def test_one_and_two_include_setup_before_minimum(self):
         for colors in (1, 2):
-            self.assertEqual(self.calculate(colors)["wastage_area"], 25)
-            self.assertEqual(self.calculate(colors, length=10000)["wastage_area"], 175)
+            self.assertEqual(self.calculate(colors)["wastage_area"], 42.5)
+            self.assertEqual(self.calculate(colors, length=10000)["wastage_area"], 200)
 
     def test_percentage_can_exceed_minimum(self):
-        self.assertEqual(self.calculate(length=10000)["wastage_length"], 900)
+        self.assertEqual(self.calculate(length=10000)["wastage_length"], 1050)
 
     def test_spec_override_still_obeys_minimum(self):
         self.assertEqual(self.calculate(override=0)["wastage_length"], 250)
-        self.assertEqual(self.calculate(override=30)["wastage_length"], 300)
+        self.assertEqual(self.calculate(override=30)["wastage_length"], 450)
 
     def test_configured_zero_disables_minimum(self):
         with patch.dict(self.config, flexo_minimum_wastage={99: 0}):
-            self.assertEqual(self.calculate()["wastage_length"], 90)
+            self.assertEqual(self.calculate()["wastage_length"], 240)
 
     def test_missing_dimensions_do_not_charge_minimum(self):
         with patch.object(api, "_get_config", return_value=self.config):
             self.assertEqual(api._calc_flexo({})["reel_area"], 0)
+
+    def test_setup_plus_percentage_exceeds_minimum_without_adding_setup_twice(self):
+        result = self.calculate(length=2000)
+        self.assertEqual(result["wastage_length"], 330)
+        self.assertEqual(result["wastage_area"], 82.5)
+        self.assertEqual(result["reel_area"], 582.5)

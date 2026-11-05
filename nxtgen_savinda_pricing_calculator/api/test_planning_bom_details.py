@@ -68,7 +68,7 @@ class TestPlanningBOMDetails(unittest.TestCase):
 			custom_base_item_qty=10000, custom_no_of_ups=4, custom_no_of_colors=4)
 		with patch.object(api, "_get_config", return_value={"flexo_wastage": [(99, 150, .09)],
 			"flexo_minimum_wastage": {99: 250}}):
-			for qty, area in ((5000, 187.5), (10000, 312.5), (20000, 562.5), (100000, 2725)):
+			for qty, area in ((5000, 187.5), (10000, 312.5), (20000, 582.5), (100000, 2762.5)):
 				with self.subTest(qty=qty):
 					self.assertAlmostEqual(api.planning_row_details("FG", "BOM-NEW", qty, "Flexo")["reel_area"], area)
 

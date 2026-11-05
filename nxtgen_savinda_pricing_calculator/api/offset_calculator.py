@@ -1255,10 +1255,10 @@ def _flexo_wastage_settings(cfg, colors):
     table = cfg.get("flexo_wastage") or [(99, 250, .12)]
     band = next((row for row in table if colors <= row[0]), table[-1])
     # Zero/exactly three colours use normal setup + percentage wastage.
-    # Other positive colour counts use the minimum instead of setup.
+    # Other positive colour counts apply a minimum to setup + percentage wastage.
     if colors in (0, 3):
         return band[1], band[2], 0
-    return 0, band[2], max(0, flt((cfg.get("flexo_minimum_wastage") or {}).get(band[0])))
+    return band[1], band[2], max(0, flt((cfg.get("flexo_minimum_wastage") or {}).get(band[0])))
 
 
 def _calc_flexo(form, wastage_override_pct=None):
@@ -1297,8 +1297,8 @@ def _calc_flexo(form, wastage_override_pct=None):
     if wastage_override_pct is not None:
         wastage_pct = flt(wastage_override_pct) / 100.0
 
-    wastage_length = max(reel_length * wastage_pct, minimum_wastage)
-    wastage_area = (setup_m + wastage_length) * reel_width_m
+    wastage_length = max(setup_m + reel_length * wastage_pct, minimum_wastage)
+    wastage_area = wastage_length * reel_width_m
     reel_area    = reel_area_net + wastage_area
 
     return {

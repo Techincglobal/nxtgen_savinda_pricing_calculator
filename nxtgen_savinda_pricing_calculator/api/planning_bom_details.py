@@ -94,9 +94,9 @@ def planning_row_details(fg_item, bom_no, quantity, pricing_type="Offset", plann
 	setup, pct, minimum = _flexo_wastage_settings(_get_config(), colors)
 	gross_length = flt(bom.get("custom_required_reel_length_m")) if bom else 0
 	# A minimum allowance is fixed metres, not a percentage to scale with order qty.
-	if saved_length and gross_length >= saved_length + setup and gross_length - saved_length - setup > minimum:
+	if saved_length and gross_length >= saved_length + setup and gross_length - saved_length > minimum:
 		pct = (gross_length - saved_length - setup) / saved_length
-	area = (length + max(length * pct, minimum) + setup) * width / 1000 if qty and length and width else 0
+	area = (length + max(setup + length * pct, minimum)) * width / 1000 if qty and length and width else 0
 	product_size = (bom.get("custom_carton_size") if bom else "") or form.get("carton_size") or cb.get("carton_size") or ""
 	out.update(ups=ups, size=product_size, reel_length=length, reel_width=width, reel_area=area)
 	slit = (bom.get("custom_slit_width") if bom else "") or form.get("slit_width")
