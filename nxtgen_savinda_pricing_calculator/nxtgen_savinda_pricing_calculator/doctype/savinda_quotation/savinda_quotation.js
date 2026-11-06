@@ -967,6 +967,7 @@ function _build_fg_dialog(frm, pending_rows, idx, ig_default, row, pd, created) 
 			// Reviewed Product Library values (shared across variants).
 			var pl_overrides = nxtgen_pl.overrides(pl_fields, vals, "");
 			pl_overrides.quotation_no = frm.doc.name;
+			pl_overrides.pricing_quotation_item = row.name;
 
 			// ── Variant path: create a template + native ERPNext variants ──
 			if (vals.has_variant) {

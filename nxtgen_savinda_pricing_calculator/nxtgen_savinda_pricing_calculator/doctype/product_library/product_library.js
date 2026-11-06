@@ -2,6 +2,15 @@
 // For license information, please see license.txt
 
 frappe.ui.form.on("Product Library", {
+	setup(frm) {
+		frm.set_query("pricing_quotation_item", () => ({
+			query: "nxtgen_savinda_pricing_calculator.api.pricing_rule.search_pricing_quotation_items",
+			filters: {quotation: frm.doc.quotation_no || ""}
+		}));
+	},
+	quotation_no(frm) {
+		if (frm.doc.pricing_quotation_item) frm.set_value("pricing_quotation_item", "");
+	},
 	refresh(frm) {
 		add_library_bom_actions(frm);
 		if (frm.is_new() || !frm.doc.approval_required) return;

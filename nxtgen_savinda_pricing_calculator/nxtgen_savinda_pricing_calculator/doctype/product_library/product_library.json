@@ -31,6 +31,7 @@
   "section_refs",
   "sales_order",
   "quotation_no",
+  "pricing_quotation_item",
   "column_break_refs",
   "artwork_no",
   "artwork_version",
@@ -462,6 +463,13 @@
    "label": "Slit",
    "fieldtype": "Data",
    "depends_on": "eval:doc.department=='Flexo'"
+  },
+  {
+   "fieldname": "pricing_quotation_item",
+   "label": "Pricing Quotation Item",
+   "fieldtype": "Link",
+   "options": "Savinda Quotation Item",
+   "description": "Select one quotation row. All rows with the same item name supply quantity pricing for this FG, including variants with different names."
   }
  ],
  "links": [],

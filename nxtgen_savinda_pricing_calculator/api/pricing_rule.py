@@ -32,29 +32,82 @@ def _tier_qtys_for_cost_item(cost_item):
 	return sorted(set(qtys))
 
 
+def _pricing_item_name(value):
+	return " ".join((value or "").split()).casefold()
+
+
+def _quotation_pricing_rows(quote, item, library=None):
+	"""An explicit row identifies a product group, not just one quantity tier."""
+	library = library or {}
+	rows = quote.get("items") or []
+	selected = library.get("pricing_quotation_item")
+	if selected:
+		anchor = next((r for r in rows if r.name == selected), None)
+		if not anchor:
+			frappe.throw("Pricing Quotation Item does not belong to the linked quotation. Select it again in Product Library.")
+		key = _pricing_item_name(anchor.get("item_name"))
+		return [r for r in rows if _pricing_item_name(r.get("item_name")) == key] if key else [anchor]
+	linked = [r for r in rows if r.get("finish_good") == item.name]
+	keys = {_pricing_item_name(r.get("item_name")) for r in linked} if linked else {
+		_pricing_item_name(item.get("item_name")), _pricing_item_name(library.get("product_name"))}
+	keys.discard("")
+	matched = [r for r in rows if _pricing_item_name(r.get("item_name")) in keys]
+	if not linked and len({_pricing_item_name(r.get("item_name")) for r in matched}) > 1:
+		frappe.throw("More than one quotation product matches. Select Pricing Quotation Item in Product Library.")
+	return matched or linked
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def search_pricing_quotation_items(doctype, txt, searchfield, start, page_len, filters):
+	quotation = (filters or {}).get("quotation")
+	if not quotation:
+		return []
+	quote = frappe.get_doc("Savinda Quotation", quotation)
+	quote.check_permission("read")
+	text = (txt or "").casefold()
+	rows = [(r.name, r.item_name, _fmt_q(r.qty)) for r in quote.get("items") or []
+		if text in (r.name + " " + (r.item_name or "")).casefold()]
+	return rows[int(start):int(start) + int(page_len)]
+
+
 @frappe.whitelist()
 def get_quotation_price_tiers(fg_item):
-	"""Use saved prices from the latest accessible live quotation linked to this FG."""
-	frappe.get_doc("Item", fg_item).check_permission("read")
-	parents = frappe.get_all("Savinda Quotation Item", filters={"finish_good": fg_item,
-		"parenttype": "Savinda Quotation"}, pluck="parent")
-	quotes = frappe.get_list("Savinda Quotation", filters={"name": ["in", parents or [""]],
-		"docstatus": ["<", 2], "status": ["not in", ["Lost", "Cancelled"]]},
-		fields=["name"], order_by="modified desc, name desc", limit_page_length=1)
-	if not quotes:
-		frappe.throw("No active quotation item is linked to this FG. Link the FG to the quotation rows and save the quotation first.")
-	quote = frappe.get_doc("Savinda Quotation", quotes[0].name)
+	"""Use the library's quotation/product group; retain direct-FG lookup as fallback."""
+	item = frappe.get_doc("Item", fg_item)
+	item.check_permission("read")
+	pl_name = item.get("custom_product_library") or frappe.db.get_value("Product Library", {"fg_item": fg_item}, "name")
+	library = frappe.get_doc("Product Library", pl_name) if pl_name else None
+	if library:
+		library.check_permission("read")
+		if library.get("fg_item") != fg_item:
+			frappe.throw("The linked Product Library belongs to a different FG.")
+	quote_name = library.get("quotation_no") if library else None
+	if not quote_name:
+		parents = frappe.get_all("Savinda Quotation Item", filters={"finish_good": fg_item,
+			"parenttype": "Savinda Quotation"}, pluck="parent")
+		quotes = frappe.get_list("Savinda Quotation", filters={"name": ["in", parents or [""]],
+			"docstatus": ["<", 2], "status": ["not in", ["Lost", "Cancelled"]]},
+			fields=["name"], order_by="modified desc, name desc", limit_page_length=1)
+		quote_name = quotes[0].name if quotes else None
+	if not quote_name:
+		frappe.throw("Set Quotation No and Pricing Quotation Item in the FG's Product Library to load pricing.")
+	quote = frappe.get_doc("Savinda Quotation", quote_name)
 	quote.check_permission("read")
+	if quote.docstatus == 2 or quote.get("status") in ("Lost", "Cancelled"):
+		frappe.throw("Select an active quotation in Product Library; the selected quotation is cancelled or lost.")
+	rows = _quotation_pricing_rows(quote, item, library)
+	if not rows:
+		frappe.throw("No matching product name was found in the quotation. Select Pricing Quotation Item in Product Library to choose the pricing group.")
 	by_qty = {}
-	for row in quote.get("items") or []:
-		if row.get("finish_good") == fg_item and flt(row.get("qty")) > 0:
-			# The last saved line wins when the same FG/quantity is repeated.
+	for row in rows:
+		if flt(row.get("qty")) > 0:
+			# Last saved line wins when a product group repeats the same quantity.
 			by_qty[flt(row.qty)] = {"qty": flt(row.qty), "rate": flt(row.get("selling_price")),
 				"unit_cost": flt(row.get("unit_cost")) / (flt(quote.get("conversion_rate")) or 1)}
 	tiers = [by_qty[q] for q in sorted(by_qty)]
 	for i, tier in enumerate(tiers):
-		tier.update(min_qty=tier["qty"],
-			max_qty=tiers[i + 1]["qty"] - 1 if i + 1 < len(tiers) else 0)
+		tier.update(min_qty=tier["qty"], max_qty=tiers[i + 1]["qty"] - 1 if i + 1 < len(tiers) else 0)
 	return {"tiers": tiers, "quotation": quote.name, "customer": quote.get("customer"),
 		"currency": quote.get("currency"), "conversion_rate": quote.get("conversion_rate"),
 		"valid_till": quote.get("valid_till")}
