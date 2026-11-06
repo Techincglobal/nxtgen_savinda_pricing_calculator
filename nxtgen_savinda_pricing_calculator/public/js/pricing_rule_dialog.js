@@ -106,6 +106,7 @@ nxtgen_pricing.showForFGs = function (frm, fg_items, on_done) {
 		];
 		loaded.forEach(function (fg, idx) {
 			fields.push({fieldtype: "Section Break", label: fg.item_name + " (" + fg.fg_item + ")"});
+			if (fg.all_quotation_rows) fields.push({fieldtype: "HTML", options: "<p>No source quotation item is selected in Product Library. All quotation pricing rows are shown. Remove rows that do not apply to this FG before creating rules.</p>"});
 			fields.push({fieldtype: "Table", fieldname: "tiers_" + idx, data: fg.tiers,
 				cannot_add_rows: false, in_place_edit: true,
 				on_add_row: function () {
@@ -120,17 +121,18 @@ nxtgen_pricing.showForFGs = function (frm, fg_items, on_done) {
 					refresh();
 				},
 				fields: [
+					{fieldtype: "Data", fieldname: "quotation_item_name", label: "Quotation Item", read_only: 1, in_list_view: 1, columns: 2},
 					{fieldtype: "Float", fieldname: "min_qty", label: "Min Qty", in_list_view: 1, columns: 1, reqd: 1},
 					{fieldtype: "Float", fieldname: "max_qty", label: "Max Qty (0=∞)", in_list_view: 1, columns: 1},
 					{fieldtype: "Link", fieldname: "currency", label: "Currency", options: "Currency",
-						default: initial_currency, in_list_view: 1, columns: 2, reqd: 1, onchange: row_currency_changed},
+						default: initial_currency, in_list_view: 1, columns: 1, reqd: 1, onchange: row_currency_changed},
 					{fieldtype: "Float", fieldname: "exchange_rate", label: "Exchange Rate", precision: 9,
 						default: initial_exchange, in_list_view: 1, columns: 2, reqd: 1, onchange: row_exchange_changed,
 						description: base + " per 1 row currency. Use 1 for " + base + "."},
 					{fieldtype: "Currency", fieldname: "rate", label: "Rate per Item", options: "currency",
 						precision: 9, in_list_view: 1, columns: 2, reqd: 1, onchange: refresh},
 					{fieldtype: "Currency", fieldname: "unit_cost", label: "Unit Cost", options: "currency",
-						precision: 9, in_list_view: 1, columns: 2, read_only: 1},
+						precision: 9, in_list_view: 1, columns: 1, read_only: 1},
 					{fieldtype: "Data", fieldname: "applied_currency", hidden: 1},
 					{fieldtype: "Float", fieldname: "applied_exchange_rate", hidden: 1, precision: 9},
 				]});
@@ -192,11 +194,11 @@ nxtgen_pricing.showForFGs = function (frm, fg_items, on_done) {
 					initial_exchange = initial_currency === base ? 1 : (parseFloat(info.conversion_rate) || 0);
 					applied_rate = 1; // Quotation rates are already per item in its currency.
 				}
-				loaded.push({fg_item: fg_items[idx].item_code,
+				loaded.push({fg_item: fg_items[idx].item_code, all_quotation_rows: !!info.all_quotation_rows,
 					item_name: fg_items[idx].item_name || info.item_name || fg_items[idx].item_code,
 					cost_item: info.cost_item || fg_items[idx].cost_item || "",
 					tiers: (info.tiers || []).map(function (tier) {
-						return {min_qty: tier.min_qty, max_qty: tier.max_qty, currency: initial_currency,
+						return {quotation_item_name: tier.quotation_item_name || "", min_qty: tier.min_qty, max_qty: tier.max_qty, currency: initial_currency,
 							exchange_rate: initial_exchange, rate: rounded((parseFloat(tier.rate) || 0) / applied_rate),
 							unit_cost: rounded((parseFloat(tier.unit_cost) || 0) / applied_rate),
 							applied_currency: initial_exchange > 0 ? initial_currency : base,

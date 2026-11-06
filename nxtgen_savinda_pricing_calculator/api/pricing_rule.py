@@ -47,6 +47,8 @@ def _quotation_pricing_rows(quote, item, library=None):
 			frappe.throw("Pricing Quotation Item does not belong to the linked quotation. Select it again in Product Library.")
 		key = _pricing_item_name(anchor.get("item_name"))
 		return [r for r in rows if _pricing_item_name(r.get("item_name")) == key] if key else [anchor]
+	if library.get("quotation_no"):
+		return rows  # Older libraries without a source row show the complete quotation.
 	linked = [r for r in rows if r.get("finish_good") == item.name]
 	keys = {_pricing_item_name(r.get("item_name")) for r in linked} if linked else {
 		_pricing_item_name(item.get("item_name")), _pricing_item_name(library.get("product_name"))}
@@ -99,16 +101,22 @@ def get_quotation_price_tiers(fg_item):
 	rows = _quotation_pricing_rows(quote, item, library)
 	if not rows:
 		frappe.throw("No matching product name was found in the quotation. Select Pricing Quotation Item in Product Library to choose the pricing group.")
+	all_rows = bool(library and library.get("quotation_no") and not library.get("pricing_quotation_item"))
 	by_qty = {}
 	for row in rows:
 		if flt(row.get("qty")) > 0:
-			# Last saved line wins when a product group repeats the same quantity.
-			by_qty[flt(row.qty)] = {"qty": flt(row.qty), "rate": flt(row.get("selling_price")),
+			# Keep every quotation line for legacy libraries; never hide another product
+			# merely because it has the same quantity. Explicit groups retain last-rate wins.
+			key = row.name if all_rows else flt(row.qty)
+			by_qty[key] = {"qty": flt(row.qty), "rate": flt(row.get("selling_price")),
+				"quotation_item": row.name, "quotation_item_name": row.get("item_name") or "",
 				"unit_cost": flt(row.get("unit_cost")) / (flt(quote.get("conversion_rate")) or 1)}
-	tiers = [by_qty[q] for q in sorted(by_qty)]
-	for i, tier in enumerate(tiers):
-		tier.update(min_qty=tier["qty"], max_qty=tiers[i + 1]["qty"] - 1 if i + 1 < len(tiers) else 0)
-	return {"tiers": tiers, "quotation": quote.name, "customer": quote.get("customer"),
+	tiers = sorted(by_qty.values(), key=lambda t: (_pricing_item_name(t["quotation_item_name"]) if all_rows else "", t["qty"]))
+	for tier in tiers:
+		next_qtys = [t["qty"] for t in tiers if t["qty"] > tier["qty"] and
+			(not all_rows or _pricing_item_name(t["quotation_item_name"]) == _pricing_item_name(tier["quotation_item_name"]))]
+		tier.update(min_qty=tier["qty"], max_qty=min(next_qtys) - 1 if next_qtys else 0)
+	return {"tiers": tiers, "all_quotation_rows": all_rows, "quotation": quote.name, "customer": quote.get("customer"),
 		"currency": quote.get("currency"), "conversion_rate": quote.get("conversion_rate"),
 		"valid_till": quote.get("valid_till")}
 

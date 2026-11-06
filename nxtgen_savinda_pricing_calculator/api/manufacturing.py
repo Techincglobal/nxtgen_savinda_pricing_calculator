@@ -199,6 +199,17 @@ def _upsert_product_library(fg_item_code, cost_item=None, customer_ref=None, ove
 			# PL already exists — keep the reviewed fields, but refresh the finishings from the
 			# finishings saved in the cost item's calculation, and the BOM remark from the cost item.
 			_sync_pl_finishings_from_cost_item(_existing_pl, cost_item)
+			# Item hooks may have created the library before the quotation popup's
+			# reviewed values arrive. Retain its source row without replacing a chosen source.
+			if overrides and overrides.get("quotation_no") and overrides.get("pricing_quotation_item"):
+				stored = frappe.db.get_value("Product Library", _existing_pl,
+					["quotation_no", "pricing_quotation_item"], as_dict=True) or {}
+				if not stored.get("pricing_quotation_item") and stored.get("quotation_no") in (None, "", overrides["quotation_no"]):
+					parent = frappe.db.get_value("Savinda Quotation Item", overrides["pricing_quotation_item"], "parent")
+					if parent != overrides["quotation_no"]:
+						frappe.throw("Pricing Quotation Item must belong to the selected quotation.")
+					frappe.db.set_value("Product Library", _existing_pl, {
+						"quotation_no": parent, "pricing_quotation_item": overrides["pricing_quotation_item"]})
 			# Customer is selected/reviewed in the FG popup and may be corrected later.
 			if overrides and isinstance(overrides, dict) and overrides.get("customer"):
 				frappe.db.set_value("Product Library", _existing_pl, "customer", overrides["customer"])

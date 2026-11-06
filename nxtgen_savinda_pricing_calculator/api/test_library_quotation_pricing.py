@@ -34,15 +34,22 @@ class TestLibraryQuotationPricing(unittest.TestCase):
 
     def test_name_match_does_not_require_direct_fg_link(self):
         self.item.item_name = 'box'
-        self.assertEqual(len(self.tiers()['tiers']), 2)
+        self.assertEqual(len(self.tiers()['tiers']), 3)
 
     def test_direct_link_expands_same_name_quantity_tiers(self):
         self.quote['items'][0].finish_good = self.item.name
-        self.assertEqual(len(self.tiers()['tiers']), 2)
+        self.assertEqual(len(self.tiers()['tiers']), 3)
 
-    def test_mismatched_variant_requires_explicit_selection(self):
-        with self.assertRaises(ValueError):
-            self.tiers()
+    def test_legacy_variant_loads_all_quotation_rows(self):
+        result = self.tiers()
+        self.assertTrue(result['all_quotation_rows'])
+        self.assertEqual({t['quotation_item'] for t in result['tiers']}, {'row1', 'row2', 'row3'})
+
+    def test_same_quantity_different_products_are_not_discarded(self):
+        self.quote['items'][2].qty = 1000
+        result = self.tiers()
+        self.assertEqual(len(result['tiers']), 3)
+        self.assertEqual({t['rate'] for t in result['tiers'] if t['qty'] == 1000}, {.15, 9})
 
     def test_foreign_row_and_cancelled_quotes_rejected(self):
         self.library.pricing_quotation_item = 'wrong-row'
