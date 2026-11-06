@@ -595,3 +595,18 @@ function _show_base_material_request_review(frm, selections, materials) {
 	d.fields_dict.material_rows.$wrapper.html(html);
 	d.show();
 }
+
+
+// Reel area includes the required material allowance; width is stored in millimetres.
+function pp_flexo_length_from_area(frm, cdt, cdn) {
+	if (frm.doc.docstatus !== 0 || pp_planning_applying.has(cdn)) return;
+	var row = (locals[cdt] || {})[cdn];
+	if (!row) return;
+	var width = Number(row.reel_width || 0);
+	return frappe.model.set_value(cdt, cdn, "reel_length",
+		width > 0 ? Number(row.reel_area || 0) * 1000 / width : 0);
+}
+frappe.ui.form.on("Flexo Production Planning Item", {
+	reel_area: pp_flexo_length_from_area,
+	reel_width: pp_flexo_length_from_area
+});

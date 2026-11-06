@@ -56,12 +56,12 @@ class TestPlanningBOMDetails(unittest.TestCase):
 			custom_required_reel_length_m=240, custom_base_item_qty=10000, custom_no_of_ups=4,
 			custom_no_of_colors=3, custom_carton_size="70 x 80")
 		values = api.planning_row_details("FG", "BOM-NEW", 10000, "Flexo")
-		self.assertEqual((values["ups"], values["reel_width"], values["reel_length"]), (4, 330, 200))
+		self.assertEqual((values["ups"], values["reel_width"], values["reel_length"]), (4, 330, 240))
 		self.assertAlmostEqual(values["reel_area"], 79.2)
 		self.assertEqual(values["size"], "70 x 80")
 		self.assertEqual((values["cylinder_teeth"], values["up_margin_mm"], values["core_size"]), ("96", 2.5, "76 mm"))
 		halved = api.planning_row_details("FG", "BOM-NEW", 5000, "Flexo")
-		self.assertEqual(halved["reel_length"], 100)
+		self.assertEqual(halved["reel_length"], 130)
 		self.assertAlmostEqual(halved["reel_area"], 42.9)
 		zero = api.planning_row_details("FG", "BOM-NEW", 0, "Flexo")
 		self.assertEqual(zero["reel_area"], 0)
@@ -117,3 +117,25 @@ class TestPlanningBOMDetails(unittest.TestCase):
 		self.assertEqual(api.planning_row_details("FG", "BOM-NEW", 1000, "Flexo")["slit_width"], "Library slit")
 		self.library_details.return_value = {"slit_width": ""}
 		self.assertEqual(api.planning_row_details("FG", "BOM-NEW", 1000, "Flexo")["slit_width"], "BOM slit")
+
+	def test_flexo_save_keeps_reviewed_area_and_derives_length(self):
+		for area, width, expected in ((150, 250, 600), (75, 250, 300), (0, 250, 0), (150, 0, 0)):
+			old = frappe._dict(name="ROW", fg_item="FG", bom_no="BOM-NEW", qty=1000, reel_area=50, reel_width=250)
+			row = frappe._dict(old)
+			row.update(reel_area=area, reel_width=width)
+			row.set = lambda key, value: row.__setitem__(key, value)
+			doc = frappe._dict(docstatus=0, custom_pricing_type="Flexo", custom_flexo_planning=[row],
+				get_doc_before_save=lambda: frappe._dict(custom_flexo_planning=[old]))
+			with patch.object(api, "planning_row_details", return_value={"reel_area":99, "reel_width":330, "reel_length":300}):
+				production_plan._refresh_manual_planning_rows(doc)
+			self.assertEqual((row.reel_area, row.reel_width, row.reel_length), (area, width, expected))
+
+	def test_flexo_quantity_change_recomputes_area_and_length(self):
+		old = frappe._dict(name="ROW", fg_item="FG", bom_no="BOM-NEW", qty=1000)
+		row = frappe._dict(old, qty=2000, reel_area=10, reel_width=250)
+		row.set = lambda key, value: row.__setitem__(key, value)
+		doc = frappe._dict(docstatus=0, custom_pricing_type="Flexo", custom_flexo_planning=[row],
+			get_doc_before_save=lambda: frappe._dict(custom_flexo_planning=[old]))
+		with patch.object(api, "planning_row_details", return_value={"reel_area":150, "reel_width":250}):
+			production_plan._refresh_manual_planning_rows(doc)
+		self.assertEqual((row.reel_area, row.reel_length), (150, 600))

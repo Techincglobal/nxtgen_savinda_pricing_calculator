@@ -8,7 +8,7 @@ from nxtgen_savinda_pricing_calculator.nxtgen_savinda_pricing_calculator.utils i
 
 
 class TestTicketGrouping(unittest.TestCase):
-	def print_data(self, rows, tickets=None, **header):
+	def print_data(self, rows, tickets=None, bom_values=None, library_values=None, **header):
 		doc = frappe._dict(name="TEST-PP", creation="2026-10-05", posting_date="2026-10-05",
 			custom_pricing_type="Offset", custom_offset_planning=rows, custom_ticket_items=tickets or [], po_items=[], mr_items=[])
 		doc.update(header)
@@ -20,7 +20,7 @@ class TestTicketGrouping(unittest.TestCase):
 			stack.enter_context(patch.object(frappe, "db", new=db))
 			stack.enter_context(patch.object(jinja, "format_date", side_effect=lambda value: value))
 			stack.enter_context(patch("nxtgen_savinda_pricing_calculator.api.production_plan._ensure_planning", return_value=False))
-			for helper, result in (("_fg_bom_calc", {}), ("_fg_pl", {}), ("_job_costing_cfg", {}), ("_company_logo", ""), ("_ticket_base_materials", [])):
+			for helper, result in (("_fg_bom_calc", bom_values or {}), ("_fg_pl", library_values or {}), ("_job_costing_cfg", {}), ("_company_logo", ""), ("_ticket_base_materials", [])):
 				stack.enter_context(patch.object(jinja, helper, return_value=result))
 			return jinja.get_ticket_print_data(doc.name)
 
@@ -77,3 +77,23 @@ class TestTicketGrouping(unittest.TestCase):
 			frappe._dict(fg_item="ASSEMBLY", parent_item="FG", planning_type="Assembly"),
 		])
 		self.assertEqual([row["item_code"] for row in data["lines"][0]["line_item_bk"]], ["SFG"])
+
+	def test_planning_values_win_over_bom_and_library_for_both_job_types(self):
+		for pricing in ("Offset", "Flexo"):
+			rows = [frappe._dict(fg_item="FG", qty=100, item_name="Reviewed description",
+				product_code="PLAN", size="Plan size", reel_length=600, reel_width=250,
+				reel_area=150, full_sheet_qty=0, cut_sheet_qty=0, wastage=0, ups=4, cuts=2),
+				frappe._dict(fg_item="FG", qty=50, reel_length=300, reel_width=250, reel_area=75)]
+			kwargs = {"custom_pricing_type": pricing}
+			if pricing == "Flexo":
+				kwargs["custom_flexo_planning"] = rows
+			data = self.print_data(rows, bom_values={"custom_reel_length_m": 999,
+				"custom_reel_width_mm": 900, "custom_carton_size": "BOM size",
+				"custom_no_of_ups": 20, "custom_no_of_cuts": 2},
+				library_values={"customer_product_code": "LIBRARY", "product_size": "Library size"}, **kwargs)
+			first, second = data["lines"]
+			self.assertEqual((first["reel_length"], second["reel_length"]), (600, 300))
+			self.assertEqual((first["size"], first["product_code"]), ("Plan size", "PLAN"))
+			self.assertEqual((first["full_sheets"], first["cut_sheets"], first["wastage"]), (0, 0, 0))
+			self.assertEqual(second["product_code"], "LIBRARY")
+			self.assertNotIn("_planning_row", first)

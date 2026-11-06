@@ -113,7 +113,7 @@ def planning_row_details(fg_item, bom_no, quantity, pricing_type="Offset", plann
 		pct = (gross_length - saved_length - setup) / saved_length
 	area = (length + max(setup + length * pct, minimum)) * width / 1000 if qty and length and width else 0
 	product_size = (bom.get("custom_carton_size") if bom else "") or form.get("carton_size") or cb.get("carton_size") or ""
-	out.update(ups=ups, size=product_size, reel_length=length, reel_width=width, reel_area=area)
+	out.update(ups=ups, size=product_size, reel_length=(area * 1000 / width if width > 0 else 0), reel_width=width, reel_area=area)
 	slit = out.get("slit_width") or (bom.get("custom_slit_width") if bom else "") or form.get("slit_width")
 	if slit:
 		out["slit_width"] = slit

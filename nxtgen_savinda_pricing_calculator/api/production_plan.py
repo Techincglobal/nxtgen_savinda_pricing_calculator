@@ -1059,7 +1059,7 @@ def validate_ticket_item_exp_dates(doc, method=None):
 			title="Expected Date Required")
 
 
-def _refresh_manual_planning_rows(doc):
+def _refresh_manual_planning_rows(doc, force=False):
 	"""Recalculate Offset/Flexo Manufacturing Planning rows before a draft plan is saved.
 	This makes manual FG, qty and BOM edits use the current item/BOM calculation data."""
 	if doc.docstatus != 0:
@@ -1067,6 +1067,8 @@ def _refresh_manual_planning_rows(doc):
 	from nxtgen_savinda_pricing_calculator.api.planning_bom_details import planning_row_details
 	pricing = doc.get("custom_pricing_type") or "Offset"
 	field = "custom_flexo_planning" if pricing == "Flexo" else "custom_offset_planning"
+	previous = doc.get_doc_before_save() if callable(getattr(doc, "get_doc_before_save", None)) else None
+	old_rows = {r.name: r for r in (previous.get(field) or [])} if previous else {}
 	selected = {}
 	for row in doc.get(field) or []:
 		fg = row.get("fg_item")
@@ -1074,6 +1076,16 @@ def _refresh_manual_planning_rows(doc):
 			continue
 		bom = row.get("bom_no") or _active_bom_for_item(fg)
 		values = planning_row_details(fg, bom, row.get("qty"), pricing, row.get("planning_type") or "Manufacture")
+		if pricing == "Flexo":
+			old = old_rows.get(row.get("name"))
+			# Keep a reviewed area/width on normal saves. Driver changes still recompute.
+			if not force and ((old and all(row.get(k) == old.get(k) for k in ("fg_item", "bom_no", "qty")))
+				or (not old and flt(row.get("reel_area")) > 0 and flt(row.get("reel_width")) > 0)):
+				for k in ("reel_area", "reel_width"):
+					if row.get(k) is not None:
+						values[k] = flt(row.get(k))
+			width = flt(values.get("reel_width"))
+			values["reel_length"] = flt(values.get("reel_area")) * 1000 / width if width > 0 else 0
 		for key, value in values.items():
 			row.set(key, value)
 		if bom:
@@ -1108,7 +1120,7 @@ def refresh_planning_calculations(production_plan):
 	pp = frappe.get_doc("Production Plan", production_plan)
 	if pp.docstatus != 0:
 		frappe.throw("Planning calculations can only be refreshed while the Production Plan is a draft.")
-	_refresh_manual_planning_rows(pp)
+	_refresh_manual_planning_rows(pp, force=True)
 	pp.save(ignore_permissions=True)
 	return {"rows": len(pp.get("custom_flexo_planning" if (pp.get("custom_pricing_type") == "Flexo") else "custom_offset_planning") or [])}
 

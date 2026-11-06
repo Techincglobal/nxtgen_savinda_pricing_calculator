@@ -238,6 +238,28 @@ def _num(v):
 		return 0.0
 
 
+def _apply_planning_print_values(line):
+	"""Restore explicit planning values after master-data fallbacks, including zero."""
+	row = line.pop("_planning_row", None)
+	if row is None:
+		return
+	aliases = {"fg_item": "item_code", "full_sheet_qty": "full_sheets", "cut_sheet_qty": "cut_sheets"}
+	fields = ("fg_item", "item_name", "qty", "bom_no", "product_code", "size", "variant_value",
+		"pack_date", "exp_date", "expiry_date", "batch_no", "full_sheet_qty", "cut_sheet_qty",
+		"wastage", "cuts", "ups", "full_sheet_size", "cut_sheet_size", "reel_length", "reel_width",
+		"reel_area", "slit_width", "base_material", "cylinder_teeth", "up_margin_mm", "core_size",
+		"no_of_colors", "pass_count", "finishings", "bom_remark", "product_type")
+	for field in fields:
+		value = row.get(field)
+		if value is not None and (not isinstance(value, str) or value.strip()):
+			line[aliases.get(field, field)] = value
+	if row.get("item_name"):
+		line["description"] = row.get("item_name")
+	if row.get("qty") is not None:
+		line["order_qty"] = row.get("qty")
+	line["impressions"] = line.get("cut_sheets", 0)
+
+
 def _fg_bom_calc(fg_item, bom_no=None):
 	"""FG BOM calculation fields (ups/cuts/colors/sizes) — from bom_no or the FG's active BOM."""
 	if not fg_item:
@@ -359,6 +381,7 @@ def get_ticket_print_data(production_plan_name):
 					line_item_bk=[]
 					for ppl in filtered_p:
 						line_item_bk.append({
+							"_planning_row": ppl,
 							"item_code": ppl.get("fg_item") or "", "item_name": ppl.get("item_name") or ppl.get("fg_item") or "",
 							"bom_no": ppl.get("bom_no") or "",
 							"full_sheets": _num(ppl.get("full_sheet_qty")), "cut_sheets": _num(ppl.get("cut_sheet_qty")),
@@ -368,6 +391,7 @@ def get_ticket_print_data(production_plan_name):
 								"reel_area": _num(ppl.get("reel_area") or r.get("reel_area")), "slit_width": ppl.get("slit_width") or r.get("slit_width") or "",
 						})
 					lines.append({
+					"_planning_row": p,
 								"is_group": 1,
 								"item_code": p.get("fg_item") or "", "item_name": item_name,
 								"description": item_name, "qty": shown_qty,
@@ -389,6 +413,7 @@ def get_ticket_print_data(production_plan_name):
 					})
 			else:
 				lines.append({
+					"_planning_row": p,
 					"item_code": p.get("fg_item") or "", "item_name": item_name,
 					"description": item_name, "qty": shown_qty,
 					"order_qty": shown_qty, "tolerance_qty": 0,
@@ -512,9 +537,7 @@ def get_ticket_print_data(production_plan_name):
 					"wastage_qty": 0,
 				})
 
-	# ── Source ALL dependency values from the BOM + Product Library (self-contained; independent
-	# of the quotation/costing). Sheet counts are RECOMPUTED from the BOM ups/cuts for the plan
-	# qty; each field falls back to the value already set above when the BOM/PL has none.
+	# Populate master-data fallbacks; explicit planning values are restored below.
 	_cfg = _job_costing_cfg()
 	try:
 		from nxtgen_savinda_pricing_calculator.api import job_ticket as _jt
@@ -524,7 +547,10 @@ def get_ticket_print_data(production_plan_name):
 	for _r in (doc.get("po_items") or []):
 		if _r.get("item_code") and _r.item_code not in _bom_by_fg:
 			_bom_by_fg[_r.item_code] = _r.get("bom_no")
-	for l in lines:
+	print_details = lines + [child for line in lines for child in (line.get("line_item_bk") or [])]
+	for l in print_details:
+		if "qty" not in l and l.get("_planning_row") is not None:
+			l["qty"] = l["_planning_row"].get("qty") or 0
 		_fg = l.get("item_code")
 		l["bom_no"] = l.get("bom_no") or _bom_by_fg.get(_fg) or ""
 		bomc = _fg_bom_calc(_fg, l["bom_no"])
@@ -538,7 +564,7 @@ def get_ticket_print_data(production_plan_name):
 		if bomc.get("custom_cut_sheet_size") or plv.get("cut_sheet_size"):
 			l["cut_sheet_size"] = bomc.get("custom_cut_sheet_size") or plv.get("cut_sheet_size")
 		l["no_of_colors"] = cint(bomc.get("custom_no_of_colors") or plv.get("no_of_colors") or l.get("no_of_colors") or 0)
-		if not plan_rows and (bomc.get("custom_no_of_ups") or bomc.get("custom_cut_sheet_ups")):
+		if bomc.get("custom_no_of_ups") or bomc.get("custom_cut_sheet_ups"):
 			_sh = _sheet_counts_from_bom(bomc, l.get("qty"), _cfg)
 			l["ups"], l["cuts"] = _sh["ups"], _sh["cuts"]
 			l["cut_sheets"] = _num(_sh["cut_sheets"]); l["wastage"] = _num(_sh["wastage"]); l["full_sheets"] = _num(_sh["full_sheets"])
@@ -612,6 +638,10 @@ def get_ticket_print_data(production_plan_name):
 			l["expiry_date"] = l.get("expiry_date") or si.get("custom_expiry_date") or ""
 			l["batch_no"] = l["batch_no"] or si.get("custom_batch_no")
 			l["product_code"] = l["product_code"] or si.get("custom_product_code")
+	for line in lines:
+		_apply_planning_print_values(line)
+		for child in line.get("line_item_bk") or []:
+			_apply_planning_print_values(child)
 	quantity = sum(l["qty"] for l in lines)
 
 	header = {
