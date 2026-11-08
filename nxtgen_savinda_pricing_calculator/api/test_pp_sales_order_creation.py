@@ -117,3 +117,47 @@ class TestPPSalesOrderCreation(unittest.TestCase):
 		self.so.items[0].prevdoc_docname = "QTN-1"
 		self.so.items[1].prevdoc_docname = "QTN-1"
 		self.assertEqual(api._sales_order_quotation_ref(self.so), "QTN-1")
+
+
+class TestPPSelection(TestPPSalesOrderCreation):
+	def test_preview_only_remaining_rows_and_their_gang_ids(self):
+		self.so.items[0].custom_gang_id = "DONE"
+		self.so.items[1].custom_gang_id = "G2"
+		existing = frappe._dict(name="PP-OLD", docstatus=0, custom_sales_order="SO",
+			custom_ticket_items=[frappe._dict(sales_order_item="A", qty=10), frappe._dict(sales_order_item="B", qty=5)])
+		with patch.object(coverage, "existing_plans", return_value=[existing]):
+			result = api.get_sales_order_planning_items("SO")
+		self.assertEqual(result["gang_ids"], ["G2"])
+		self.assertEqual([(r["sales_order_item"], r["qty"]) for r in result["items"]], [("B", 15)])
+
+	def test_selection_rejects_stale_foreign_duplicate_and_invalid_quantities(self):
+		with patch.object(frappe, "throw", side_effect=ValueError):
+			for selection in ([], [{"sales_order_item":"OTHER", "qty":1}],
+				[{"sales_order_item":"B", "qty":21}], [{"sales_order_item":"B", "qty":float("nan")}],
+				[{"sales_order_item":"B", "qty":1}]*2, [{"sales_order_item":"A", "qty":1}]):
+				with self.assertRaises(ValueError):
+					api._selected_plan_quantities(self.so, {"B":20}, selection)
+
+	def test_combined_creation_passes_only_selected_rows(self):
+		with patch.object(coverage, "existing_plans", return_value=[]), \
+			patch.object(api, "create_production_plan_from_source", return_value={"production_plan":"PP-1"}) as create:
+			result = api.create_plan_from_sales_order("SO", [{"sales_order_item":"B","qty":20}], "combined")
+		self.assertEqual(result["production_plans"], ["PP-1"])
+		create.assert_called_once_with("Sales Order", "SO", selections=[{"sales_order_item":"B","qty":20}])
+
+	def test_individual_mode_creates_one_plan_per_selected_row(self):
+		selected = [{"sales_order_item":"A","qty":10}, {"sales_order_item":"B","qty":20}]
+		with patch.object(coverage, "existing_plans", return_value=[]), \
+			patch.object(api, "create_production_plan_from_source", side_effect=[{"production_plan":"PP-1"},{"production_plan":"PP-2"}]) as create:
+			result = api.create_plan_from_sales_order("SO", selected, "individual")
+		self.assertEqual(result["production_plans"], ["PP-1", "PP-2"])
+		self.assertEqual([call.kwargs["selections"] for call in create.call_args_list], [[selected[0]], [selected[1]]])
+
+	def test_selected_creation_filters_before_ticket_population(self):
+		line = {"fg_item":"FG-B", "qty":20, "has_bom":1, "sales_order_item":"B"}
+		with patch.object(coverage, "existing_plans", return_value=[]), \
+			patch.object(api, "_gather_ticket", return_value=("Job","Offset",{},[line])) as gather, \
+			patch.object(api, "_populate_po_items_from_so") as native:
+			api.create_production_plan_from_source("Sales Order","SO", selections=[{"sales_order_item":"B","qty":20}])
+		gather.assert_called_once_with("Sales Order","SO",sales_order_items={"B"},quantities={"B":20})
+		native.assert_called_once_with(self.pp,"SO",quantities={"B":20})

@@ -839,6 +839,7 @@ def _custom_field_definitions():
 			},
 			],
 			"Sales Order Item": [
+				{"fieldname": "custom_gang_id", "label": "Gang ID", "fieldtype": "Data", "insert_after": "item_name", "in_list_view": 1, "allow_on_submit": 1, "description": "Optional print-run grouping used to filter available items when creating Production Plans."},
 				{
 					"fieldname":    "custom_packing_type",
 					"label":        "Packing Type",

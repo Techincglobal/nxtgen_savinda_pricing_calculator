@@ -330,3 +330,8 @@ override_whitelisted_methods = {
 # ------------
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
+
+# Keep the standard PP Get Items button scoped to the custom planning rows.
+override_doctype_class = {
+	"Production Plan": "nxtgen_savinda_pricing_calculator.api.production_plan_controller.PricingProductionPlan",
+}

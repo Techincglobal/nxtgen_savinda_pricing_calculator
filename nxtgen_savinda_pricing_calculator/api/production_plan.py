@@ -668,7 +668,7 @@ def _resolve_bom_no(fg_item):
 
 
 @frappe.whitelist()
-def create_production_plan_from_source(source_type, source_name):
+def create_production_plan_from_source(source_type, source_name, selections=None):
 	"""Create a DRAFT Production Plan from a Sales Order (Job) or NPD Request (NPD).
 	ALL fetched items go to custom_ticket_items; only the BOM-ready ones also go to po_items
 	(ERPNext requires a BOM there). Items without a BOM stay on the ticket and are flagged
@@ -684,6 +684,8 @@ def create_production_plan_from_source(source_type, source_name):
 			frappe.throw("A cancelled Sales Order cannot be planned.")
 		plans = existing_plans(source_name)
 		coverage = order_coverage(so, plans)
+		if selections is not None:
+			coverage["remaining"] = _selected_plan_quantities(so, coverage["remaining"], selections)
 		readable = [plan.name for plan in plans if plan.name in coverage["existing_plans"]
 			and frappe.has_permission("Production Plan", "read", doc=plan)]
 		coverage["existing_plans"] = readable
@@ -750,9 +752,70 @@ def create_plan_from_npd(npd_request):
 	return create_production_plan_from_source("NPD Request", npd_request)
 
 
+def _selected_plan_quantities(so, remaining, selections):
+	"""Validate row identities and quantities against current coverage under the SO lock."""
+	if isinstance(selections, str):
+		selections = frappe.parse_json(selections)
+	if not isinstance(selections, list) or not selections:
+		frappe.throw("Select at least one available Sales Order item.")
+	selected = {}
+	valid = {row.name for row in so.items}
+	for row in selections:
+		if not isinstance(row, dict):
+			frappe.throw("Invalid Sales Order item selection.")
+		key = row.get("sales_order_item")
+		qty = flt(row.get("qty"))
+		if key not in valid or key in selected:
+			frappe.throw("Selected Sales Order rows must belong to this order and cannot repeat.")
+		if key not in remaining or not math.isfinite(qty) or qty <= 0 or qty > remaining[key] + 0.000001:
+			frappe.throw("Selected quantity exceeds the available quantity or is invalid. Reload the item list.")
+		selected[key] = min(qty, remaining[key])
+	return selected
+
+
 @frappe.whitelist()
-def create_plan_from_sales_order(sales_order):
-	return create_production_plan_from_source("Sales Order", sales_order)
+def get_sales_order_planning_items(sales_order):
+	from nxtgen_savinda_pricing_calculator.api.production_plan_coverage import existing_plans, order_coverage
+	so = frappe.get_doc("Sales Order", sales_order)
+	so.check_permission("read")
+	frappe.has_permission("Production Plan", "create", throw=True)
+	if so.docstatus == 2:
+		frappe.throw("A cancelled Sales Order cannot be planned.")
+	plans = existing_plans(so.name)
+	coverage = order_coverage(so, plans)
+	items = [{"sales_order_item": row.name, "item_code": row.item_code,
+		"item_name": row.get("item_name") or row.item_code,
+		"gang_id": (row.get("custom_gang_id") or "").strip(),
+		"order_qty": flt(row.qty), "planned_qty": coverage["planned"].get(row.name, 0),
+		"qty": coverage["remaining"][row.name], "uom": row.get("uom") or ""}
+		for row in so.items if row.name in coverage["remaining"]]
+	return {"items": items, "gang_ids": sorted({row["gang_id"] for row in items if row["gang_id"]}),
+		"existing_production_plans": [plan.name for plan in plans if plan.name in coverage["existing_plans"]
+			and frappe.has_permission("Production Plan", "read", doc=plan)]}
+
+
+@frappe.whitelist()
+def create_plan_from_sales_order(sales_order, selections=None, plan_mode="combined"):
+	# Preserve the existing API for callers that do not supply a selection.
+	if selections is None:
+		return create_production_plan_from_source("Sales Order", sales_order)
+	if plan_mode not in ("combined", "individual"):
+		frappe.throw("Choose one combined Production Plan or one per selected item.")
+	from nxtgen_savinda_pricing_calculator.api.production_plan_coverage import existing_plans, order_coverage
+	frappe.db.sql("select name from `tabSales Order` where name=%s for update", sales_order)
+	so = frappe.get_doc("Sales Order", sales_order)
+	so.check_permission("read")
+	if so.docstatus == 2:
+		frappe.throw("A cancelled Sales Order cannot be planned.")
+	frappe.has_permission("Production Plan", "create", throw=True)
+	coverage = order_coverage(so, existing_plans(sales_order))
+	quantities = _selected_plan_quantities(so, coverage["remaining"], selections)
+	selected = [{"sales_order_item": key, "qty": qty} for key, qty in quantities.items()]
+	groups = [selected] if plan_mode == "combined" else [[row] for row in selected]
+	results = [create_production_plan_from_source("Sales Order", sales_order, selections=group) for group in groups]
+	return {"production_plan": results[0]["production_plan"],
+		"production_plans": [result["production_plan"] for result in results],
+		"already_planned": False}
 
 
 # ── Ticket line list + BOM-ready po_items ─────────────────────────────────────
@@ -921,9 +984,12 @@ def _populate_po_items_from_so(pp, so_name, quantities=None):
 			"grand_total": flt(so.get("base_grand_total") or so.get("grand_total")),
 		})
 	try:
+		pp._pricing_source_initialization = True
 		pp.get_items()
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "PP native get_items from SO failed")
+	finally:
+		pp._pricing_source_initialization = False
 	if not (pp.get("po_items") or []):
 		_build_po_items(pp)
 	if quantities is not None:
