@@ -85,6 +85,7 @@ def _enrich_spec(spec):
         "has_machine":         cint(doc.has_machine),
         "adds_colors":         cint(getattr(doc, "adds_colors", 0)),
         "allow_foil_assignment": cint(getattr(doc, "allow_foil_assignment", 0)),
+        "flexo_foil_area_basis": getattr(doc, "flexo_foil_area_basis", None) or "Net Reel Area",
         "flexo_wastage_overwrite": cint(getattr(doc, "flexo_wastage_overwrite", 0)),
         "flexo_wastage_pct":     flt(getattr(doc, "flexo_wastage_pct", 0)),
         "parent_spec":         getattr(doc, "parent_spec", "") or "",
@@ -1317,11 +1318,20 @@ def _calc_flexo(form, wastage_override_pct=None):
     }
 
 
+def _flexo_foil_area(spec, sheet, fallback_area=0):
+    """One spec-level area basis shared by its foils and automatic varnish."""
+    basis = spec.get("flexo_foil_area_basis") or "Net Reel Area"
+    if basis not in ("Net Reel Area", "Total Reel Area"):
+        frappe.throw("Select Net Reel Area or Total Reel Area for the Flexo foil specification.")
+    key = "reel_area" if basis == "Total Reel Area" else "reel_area_net"
+    return flt(sheet[key]) if sheet.get(key) is not None else flt(fallback_area)
+
+
 def _calc_spec_foil_cost(spec_name, machine_assignment, printable_area, wastage_frac=0.25):
     """Calculate Flexo foil costs for all foils assigned to a Flexo spec.
-    Foil is costed on the NET PRINTABLE reel area (reel_area_net) — NOT the total
-    reel area — so the reel setup/wastage add-on is not double counted; only the
-    foil's own wastage_frac applies on top.
+    printable_area is selected by the specification: Net Reel Area (default)
+    or Total Reel Area (includes setup/reel wastage). Foil-specific wastage
+    still applies on top; automatic varnish uses the same selected area.
     Formula per foil:
       qty_sqm = printable_area × (pct/100) × (1 + wastage_frac)
       cost    = qty_sqm × cost_per_sqm
@@ -1353,7 +1363,7 @@ def _calc_spec_foil_cost(spec_name, machine_assignment, printable_area, wastage_
         min_qty_v    = flt(getattr(foil_doc, "min_qty",   0) or 0)
         min_val_v    = flt(getattr(foil_doc, "min_value", 0) or 0)
 
-        qty  = printable_area * foil_pct * (1 + flt(wastage_frac))   # net printable area × foil wastage (default 25%)
+        qty  = printable_area * foil_pct * (1 + flt(wastage_frac))   # selected area × foil wastage (default 25%)
         cost = round(qty * cost_per_sqm, 2)
         if min_qty_v and qty  < min_qty_v: qty  = min_qty_v; cost = round(qty * cost_per_sqm, 2)
         if min_val_v and cost < min_val_v: cost = flt(min_val_v)
@@ -1613,9 +1623,7 @@ def _process_spec(spec, form, sheet, item_qty, no_of_colors, material_rate,
     # own line/section under its parent.
     if (form.get("pricing_type") or "Offset").strip() == "Flexo" \
             and spec.get("allow_foil_assignment") and machine_assignment.get("foils"):
-        # Foil is costed on the NET printable reel area (before the setup/wastage
-        # add-on); fall back to total reel_area only if net is unavailable.
-        foil_printable_area = flt(sheet.get("reel_area_net", 0)) or reel_area
+        foil_printable_area = _flexo_foil_area(spec, sheet, reel_area)
         foil_rows, foil_cost = _calc_spec_foil_cost(
             spec.get("spec_name", ""), machine_assignment, foil_printable_area, foil_wastage_frac
         )

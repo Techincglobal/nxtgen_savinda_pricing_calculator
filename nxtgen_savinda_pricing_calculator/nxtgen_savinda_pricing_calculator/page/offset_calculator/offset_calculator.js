@@ -335,6 +335,7 @@ function oc_mount_app(el) {
 						group: spec.group || '',
 						has_machine: spec.has_machine || 0,
 						allow_foil_assignment: spec.allow_foil_assignment || 0,
+						flexo_foil_area_basis: spec.flexo_foil_area_basis || "Net Reel Area",
 						flexo_wastage_overwrite: spec.flexo_wastage_overwrite || 0,
 						flexo_wastage_pct: spec.flexo_wastage_pct || 0,
 						adds_colors: spec.adds_colors || 0,

@@ -16,6 +16,7 @@
   "pricing_type",
   "adds_colors",
   "allow_foil_assignment",
+  "flexo_foil_area_basis",
   "flexo_wastage_overwrite",
   "flexo_wastage_pct",
   "section_break_machine_cfg",
@@ -277,6 +278,15 @@
    "fieldtype": "Percent",
    "label": "Wastage Override %",
    "mandatory_depends_on": "eval:doc.flexo_wastage_overwrite"
+  },
+  {
+   "fieldname": "flexo_foil_area_basis",
+   "fieldtype": "Select",
+   "label": "Flexo Foil / Varnish Area Basis",
+   "options": "Net Reel Area\nTotal Reel Area",
+   "default": "Net Reel Area",
+   "depends_on": "eval:doc.allow_foil_assignment",
+   "description": "Area used for assigned Flexo foils and automatic Cold Foil Varnish. Total Reel Area includes reel setup/wastage. Foil coverage, foil-specific wastage and minimum charges still apply; varnish uses area \u00d7 consumption with its minimum quantity."
   }
  ],
  "links": [],
