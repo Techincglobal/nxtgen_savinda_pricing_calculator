@@ -182,3 +182,18 @@ class TestPlanningBOMDetails(unittest.TestCase):
 	def test_material_request_total_does_not_add_wastage_twice(self):
 		for row in (frappe._dict(cut_sheet_qty=250,wastage=100),frappe._dict(cut_sheet_qty=350,wastage=100,cut_sheet_qty_includes_wastage=1)):
 			self.assertEqual(production_plan._offset_total_cut_sheets(row),350)
+
+
+	def test_full_sheet_edit_reverses_cut_sheet_counts(self):
+		old=frappe._dict(fg_item="FG",bom_no="BOM-NEW",qty=1000,required_cut_sheet_qty=250,
+			cut_sheet_qty=350,wastage=100,cuts=2,full_sheet_qty=175)
+		row=frappe._dict(old,cut_sheet_qty_includes_wastage=1,full_sheet_qty=200)
+		values={}
+		production_plan._preserve_offset_sheet_edits(row,old,values)
+		self.assertEqual((values["full_sheet_qty"],values["cut_sheet_qty"],values["required_cut_sheet_qty"]),(200,400,300))
+		row.full_sheet_qty=40
+		with self.assertRaises(frappe.ValidationError):
+			production_plan._preserve_offset_sheet_edits(row,old,values)
+		row.full_sheet_qty=200.5
+		with self.assertRaises(frappe.ValidationError):
+			production_plan._preserve_offset_sheet_edits(row,old,values)

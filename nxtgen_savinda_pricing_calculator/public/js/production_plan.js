@@ -619,7 +619,14 @@ async function pp_offset_sheet_totals(frm, cdt, cdn, edited) {
 	const waste = Number(row.wastage || 0), cuts = Number(row.cuts || 0);
 	let required = row.cut_sheet_qty_includes_wastage ? Number(row.required_cut_sheet_qty || 0) : Number(row.cut_sheet_qty || 0);
 	if (edited === "cut_sheet_qty") required = Number(row.cut_sheet_qty || 0) - waste;
-	if (required < 0 || waste < 0 || cuts <= 0) {
+	if (edited === "full_sheet_qty") {
+		const full = Number(row.full_sheet_qty || 0);
+		if (!Number.isInteger(full) || full < 0) {
+			frappe.msgprint(__("Full Sheet Qty must be a non-negative whole number.")); return;
+		}
+		required = full * cuts - waste;
+	}
+	if (![required, waste, cuts].every(Number.isFinite) || required < 0 || waste < 0 || cuts <= 0) {
 		frappe.msgprint(__("Required Cut Sheets and Wastage must be non-negative, and Cuts must be greater than zero.")); return;
 	}
 	pp_planning_applying.add(cdn);
@@ -629,6 +636,7 @@ async function pp_offset_sheet_totals(frm, cdt, cdn, edited) {
 	} finally { pp_planning_applying.delete(cdn); }
 }
 frappe.ui.form.on("Production Planning Item", {
+	full_sheet_qty: (frm, cdt, cdn) => pp_offset_sheet_totals(frm, cdt, cdn, "full_sheet_qty"),
 	required_cut_sheet_qty: (frm, cdt, cdn) => pp_offset_sheet_totals(frm, cdt, cdn, "required_cut_sheet_qty"),
 	cut_sheet_qty: (frm, cdt, cdn) => pp_offset_sheet_totals(frm, cdt, cdn, "cut_sheet_qty"),
 	wastage: (frm, cdt, cdn) => pp_offset_sheet_totals(frm, cdt, cdn, "wastage"),

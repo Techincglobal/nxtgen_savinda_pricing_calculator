@@ -74,6 +74,18 @@ function setup(dt, name, pricing) {
 	assert.equal(flex.row.qty, 10000);
 	assert.equal(flex.row.exp_date, '2026-12-01');
 
+	const manual = setup(dt, 'MANUAL', 'Offset');
+	Object.assign(manual.row, {cuts: 4, wastage: 100, full_sheet_qty: 200,
+		required_cut_sheet_qty: 500, cut_sheet_qty: 600, cut_sheet_qty_includes_wastage: 1});
+	await handlers[dt].full_sheet_qty(manual.frm, dt, manual.row.name);
+	assert.equal(manual.row.cut_sheet_qty, 800);
+	assert.equal(manual.row.required_cut_sheet_qty, 700);
+	assert.equal(manual.row.full_sheet_qty, 200);
+	manual.row.wastage = 120;
+	await handlers[dt].wastage(manual.frm, dt, manual.row.name);
+	assert.equal(manual.row.cut_sheet_qty, 820);
+	assert.equal(manual.row.full_sheet_qty, 205);
+
 	row.fg_item = '';
 	await handlers[dt].fg_item(frm, dt, row.name);
 	assert.equal(row.bom_no, '');

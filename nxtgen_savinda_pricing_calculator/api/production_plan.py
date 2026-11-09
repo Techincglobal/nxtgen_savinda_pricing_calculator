@@ -44,6 +44,15 @@ def _preserve_offset_sheet_edits(row, old, values, force=False):
 	if old and row.get("cut_sheet_qty") != old.get("cut_sheet_qty") and row.get("required_cut_sheet_qty") == old.get("required_cut_sheet_qty"):
 		required = flt(row.get("cut_sheet_qty")) - waste
 	cuts = flt(row.get("cuts"))
+	# An isolated full-sheet edit drives both cut-sheet fields in reverse.
+	# Browser-calculated edits already carry their new required/total values.
+	if old and row.get("full_sheet_qty") != old.get("full_sheet_qty") and all(
+		row.get(k) == old.get(k) for k in ("required_cut_sheet_qty", "cut_sheet_qty")
+	):
+		full = flt(row.get("full_sheet_qty"))
+		if not math.isfinite(full) or full < 0 or full != math.floor(full):
+			frappe.throw("Full Sheet Qty must be a non-negative whole number.")
+		required = full * cuts - waste
 	if any(not math.isfinite(v) for v in (required, waste, cuts)) or required < 0 or waste < 0 or cuts <= 0:
 		frappe.throw("Required Cut Sheets and Wastage must be non-negative, and Cuts must be greater than zero.")
 	values.update(required_cut_sheet_qty=required, wastage=waste, cut_sheet_qty=required+waste,
