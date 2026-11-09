@@ -598,7 +598,7 @@ def get_quotation_fg_items(quotation):
 		fg = frappe.db.get_value("Cost Sheet", bundle_rows[0].custom_costing_bundle, "custom_bundle_fg")
 		if not fg:
 			return []
-		return [{"item_code": fg, "item_name": bundle_rows[0].item_name,
+		return [{"item_code": fg, "item_name": frappe.db.get_value("Item", fg, "item_name") or fg,
 			"qty": bundle_rows[0].qty, "rate": bundle_rows[0].base_selling_price,
 			"cost_item": "", "calculation_breakdown": ""}]
 
@@ -622,7 +622,7 @@ def get_quotation_fg_items(quotation):
 		if row.finish_good and row.finish_good not in fgs:
 			fg = {
 				"item_code":             row.finish_good,
-				"item_name":             row.item_name or row.finish_good,
+				"item_name":             frappe.db.get_value("Item", row.finish_good, "item_name") or row.finish_good,
 				"qty":                   flt(row.qty),
 				"rate":                  flt(row.base_selling_price) or flt(row.selling_price),
 				"cost_item":             row.cost_item or "",
