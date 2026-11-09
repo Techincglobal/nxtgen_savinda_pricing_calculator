@@ -38,7 +38,7 @@ class TestPlanningBOMDetails(unittest.TestCase):
 		values = api.planning_row_details("FG", "BOM-NEW", 10000)
 		self.cb.assert_called_once_with("CB-NEW")
 		self.assertEqual((values["ups"], values["cuts"]), (8, 2))
-		self.assertEqual((values["cut_sheet_qty"], values["wastage"], values["full_sheet_qty"]), (2500, 125, 1313))
+		self.assertEqual((values["cut_sheet_qty"], values["wastage"], values["full_sheet_qty"]), (2625, 125, 1313))
 		self.assertEqual(values["cut_sheet_size"], "15.5 x 21.5")
 		self.assertEqual(values["full_sheet_size"], "31 x 43")
 		self.assertEqual(values["base_material"], "NEW-PAPER")
@@ -49,7 +49,7 @@ class TestPlanningBOMDetails(unittest.TestCase):
 
 	def test_quantity_change_recalculates_sheet_counts(self):
 		values = api.planning_row_details("FG", "BOM-NEW", 5000)
-		self.assertEqual((values["cut_sheet_qty"], values["wastage"], values["full_sheet_qty"]), (1250, 100, 675))
+		self.assertEqual((values["cut_sheet_qty"], values["wastage"], values["full_sheet_qty"]), (1350, 100, 675))
 
 	def test_flexo_selected_bom_controls_reel_geometry_and_fixed_setup(self):
 		self.bom.update(custom_pricing_type="Flexo", custom_reel_width_mm=330, custom_reel_length_m=200,
@@ -139,3 +139,46 @@ class TestPlanningBOMDetails(unittest.TestCase):
 		with patch.object(api, "planning_row_details", return_value={"reel_area":150, "reel_width":250}):
 			production_plan._refresh_manual_planning_rows(doc)
 		self.assertEqual((row.reel_area, row.reel_length), (150, 600))
+
+
+	def test_consolidated_run_keeps_sheet_totals_on_first_row_after_save_and_refresh(self):
+		rows = []
+		for qty in (6000, 4000):
+			row = frappe._dict(fg_item="FG", bom_no="BOM-NEW", qty=qty, consolidated_run=1)
+			row.set = lambda key, value, row=row: row.__setitem__(key, value)
+			rows.append(row)
+		doc = frappe._dict(docstatus=0, custom_pricing_type="Offset", custom_offset_planning=rows)
+		for force in (False, True):
+			production_plan._refresh_manual_planning_rows(doc, force=force)
+			self.assertEqual([(r.full_sheet_qty,r.cut_sheet_qty,r.wastage) for r in rows], [(1313,2625,125),(0,0,0)])
+			self.assertEqual([(r.qty,r.ups,r.cuts) for r in rows], [(6000,8,2),(4000,8,2)])
+		rows[1].qty=2000
+		production_plan._refresh_manual_planning_rows(doc)
+		self.assertEqual((rows[0].cut_sheet_qty,rows[1].cut_sheet_qty),(2100,0))
+
+	def test_unchecked_rows_keep_individual_requirements(self):
+		rows=[]
+		for qty in (6000,4000):
+			row=frappe._dict(fg_item="FG",bom_no="BOM-NEW",qty=qty)
+			row.set=lambda key,value,row=row:row.__setitem__(key,value)
+			rows.append(row)
+		doc=frappe._dict(docstatus=0,custom_pricing_type="Offset",custom_offset_planning=rows)
+		production_plan._refresh_manual_planning_rows(doc)
+		self.assertEqual([r.cut_sheet_qty for r in rows],[1600,1100])
+		self.assertEqual([r.wastage for r in rows],[100,100])
+
+
+	def test_offset_manual_wastage_total_and_cuts(self):
+		old=frappe._dict(fg_item="FG",bom_no="BOM-NEW",qty=1000,required_cut_sheet_qty=250,cut_sheet_qty=350,wastage=100,cuts=2)
+		row=frappe._dict(old,cut_sheet_qty_includes_wastage=1)
+		row.wastage=150
+		values={}
+		production_plan._preserve_offset_sheet_edits(row,old,values)
+		self.assertEqual((values["required_cut_sheet_qty"],values["cut_sheet_qty"],values["full_sheet_qty"]),(250,400,200))
+		row.wastage=100;row.cut_sheet_qty=501;row.cuts=4
+		production_plan._preserve_offset_sheet_edits(row,old,values)
+		self.assertEqual((values["required_cut_sheet_qty"],values["full_sheet_qty"]),(401,126))
+
+	def test_material_request_total_does_not_add_wastage_twice(self):
+		for row in (frappe._dict(cut_sheet_qty=250,wastage=100),frappe._dict(cut_sheet_qty=350,wastage=100,cut_sheet_qty_includes_wastage=1)):
+			self.assertEqual(production_plan._offset_total_cut_sheets(row),350)

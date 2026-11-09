@@ -56,6 +56,7 @@ def after_install():
 	missing ones.
 	"""
 	_ensure_item_group_tree()
+	_migrate_offset_cut_sheet_totals()
 	_ensure_custom_fields()
 	_ensure_property_setters()
 	_ensure_roles()
@@ -92,6 +93,7 @@ def after_migrate():
 	Item Group tree healthy, ensure fields/roles/workflows exist, and update the
 	app-managed print layouts. Saved calculation data is never refreshed here.
 	"""
+	_migrate_offset_cut_sheet_totals()
 	_ensure_item_group_tree()
 	_ensure_custom_fields()
 	_ensure_property_setters()
@@ -1266,3 +1268,16 @@ def _create_if_missing(rec):
 			message=frappe.get_traceback(),
 		)
 		return "failed", doctype + ": " + str(rec.get("name", "")) + " — " + str(error)
+
+
+def _migrate_offset_cut_sheet_totals():
+	"""Convert old net cut sheets once; do not recalculate costing/BOM records."""
+	if not frappe.db.has_column("Production Planning Item", "cut_sheet_qty_includes_wastage"):
+		return
+	frappe.db.sql("""
+		update `tabProduction Planning Item`
+		set required_cut_sheet_qty = coalesce(cut_sheet_qty, 0),
+		    cut_sheet_qty = coalesce(cut_sheet_qty, 0) + coalesce(wastage, 0),
+		    cut_sheet_qty_includes_wastage = 1
+		where coalesce(cut_sheet_qty_includes_wastage, 0) = 0
+	""")

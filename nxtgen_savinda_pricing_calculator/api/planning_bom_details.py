@@ -84,7 +84,7 @@ def planning_row_details(fg_item, bom_no, quantity, pricing_type="Offset", plann
 		cfg = _get_config()
 		cut_qty = math.ceil(qty / cut_ups) if qty and cut_ups else 0
 		waste = max(math.ceil(cut_qty * flt(cfg.get("offset_wastage_pct"))), cint(cfg.get("offset_wastage_min"))) if cut_qty else 0
-		out.update(ups=ups, cuts=cuts, cut_sheet_qty=cut_qty, wastage=waste,
+		out.update(ups=ups, cuts=cuts, required_cut_sheet_qty=cut_qty, cut_sheet_qty=cut_qty + waste, cut_sheet_qty_includes_wastage=1, wastage=waste,
 			full_sheet_qty=math.ceil((cut_qty + waste) / cuts),
 			full_sheet_size=(bom.get("custom_full_sheet_size") if bom else "") or job_ticket._size_str(form.get("full_sheet_l"), form.get("full_sheet_w")),
 			cut_sheet_size=(bom.get("custom_cut_sheet_size") if bom else "") or job_ticket._size_str(form.get("cut_sheet_l"), form.get("cut_sheet_w")))

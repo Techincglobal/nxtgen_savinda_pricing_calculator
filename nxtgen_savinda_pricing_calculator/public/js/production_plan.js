@@ -610,3 +610,27 @@ frappe.ui.form.on("Flexo Production Planning Item", {
 	reel_area: pp_flexo_length_from_area,
 	reel_width: pp_flexo_length_from_area
 });
+
+
+async function pp_offset_sheet_totals(frm, cdt, cdn, edited) {
+	if (frm.doc.docstatus !== 0 || pp_planning_applying.has(cdn)) return;
+	const row = (locals[cdt] || {})[cdn];
+	if (!row) return;
+	const waste = Number(row.wastage || 0), cuts = Number(row.cuts || 0);
+	let required = row.cut_sheet_qty_includes_wastage ? Number(row.required_cut_sheet_qty || 0) : Number(row.cut_sheet_qty || 0);
+	if (edited === "cut_sheet_qty") required = Number(row.cut_sheet_qty || 0) - waste;
+	if (required < 0 || waste < 0 || cuts <= 0) {
+		frappe.msgprint(__("Required Cut Sheets and Wastage must be non-negative, and Cuts must be greater than zero.")); return;
+	}
+	pp_planning_applying.add(cdn);
+	try {
+		await frappe.model.set_value(cdt, cdn, {required_cut_sheet_qty: required, cut_sheet_qty: required + waste,
+			full_sheet_qty: Math.ceil((required + waste) / cuts), cut_sheet_qty_includes_wastage: 1});
+	} finally { pp_planning_applying.delete(cdn); }
+}
+frappe.ui.form.on("Production Planning Item", {
+	required_cut_sheet_qty: (frm, cdt, cdn) => pp_offset_sheet_totals(frm, cdt, cdn, "required_cut_sheet_qty"),
+	cut_sheet_qty: (frm, cdt, cdn) => pp_offset_sheet_totals(frm, cdt, cdn, "cut_sheet_qty"),
+	wastage: (frm, cdt, cdn) => pp_offset_sheet_totals(frm, cdt, cdn, "wastage"),
+	cuts: (frm, cdt, cdn) => pp_offset_sheet_totals(frm, cdt, cdn, "cuts")
+});

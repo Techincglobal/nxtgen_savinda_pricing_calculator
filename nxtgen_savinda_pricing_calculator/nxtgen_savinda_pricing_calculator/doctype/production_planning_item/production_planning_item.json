@@ -19,12 +19,15 @@
   "cost_item",
   "calculation_breakdown",
   "is_first",
+  "consolidated_run",
   "is_group",
   "parent_item",
   "wastage",
   "base_material",
   "ups",
-  "cut_sheet_qty"
+  "required_cut_sheet_qty",
+  "cut_sheet_qty",
+  "cut_sheet_qty_includes_wastage"
  ],
  "fields": [
   {
@@ -84,7 +87,8 @@
    "fieldname": "cut_sheet_qty",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Cut Sheets"
+   "label": "Total Cut Sheets",
+   "description": "Required Cut Sheets + Wastage. Full Sheets = rounded up Total Cut Sheets / Cuts."
   },
   {
    "columns": 1,
@@ -160,6 +164,29 @@
    "label": "Base Material",
    "options": "Item",
    "read_only": 1
+  },
+  {
+   "fieldname": "consolidated_run",
+   "fieldtype": "Check",
+   "label": "Consolidated Print Run",
+   "default": "0",
+   "read_only": 1,
+   "hidden": 1,
+   "description": "Set by Consolidate Sales Order Items; shared sheet requirements are held on the first selected run row."
+  },
+  {
+   "fieldname": "required_cut_sheet_qty",
+   "label": "Required Cut Sheets",
+   "fieldtype": "Float",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "cut_sheet_qty_includes_wastage",
+   "label": "Cut Sheets Include Wastage",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "read_only": 1,
+   "default": "0"
   }
  ],
  "istable": 1,

@@ -30,6 +30,26 @@ def _base_material_for_calculation(calculation_breakdown):
 	return frappe.db.get_value("Calculation Breakdown", calculation_breakdown, "base_material") or ""
 
 
+def _offset_total_cut_sheets(row):
+	return flt(row.get("cut_sheet_qty")) + (0 if cint(row.get("cut_sheet_qty_includes_wastage")) else flt(row.get("wastage")))
+
+
+def _preserve_offset_sheet_edits(row, old, values, force=False):
+	if force or not cint(row.get("cut_sheet_qty_includes_wastage")):
+		return
+	if old and any(row.get(k) != old.get(k) for k in ("fg_item", "bom_no", "qty")):
+		return
+	required, waste = flt(row.get("required_cut_sheet_qty")), flt(row.get("wastage"))
+	# Direct total edit is supported: keep wastage and derive the net requirement.
+	if old and row.get("cut_sheet_qty") != old.get("cut_sheet_qty") and row.get("required_cut_sheet_qty") == old.get("required_cut_sheet_qty"):
+		required = flt(row.get("cut_sheet_qty")) - waste
+	cuts = flt(row.get("cuts"))
+	if any(not math.isfinite(v) for v in (required, waste, cuts)) or required < 0 or waste < 0 or cuts <= 0:
+		frappe.throw("Required Cut Sheets and Wastage must be non-negative, and Cuts must be greater than zero.")
+	values.update(required_cut_sheet_qty=required, wastage=waste, cut_sheet_qty=required+waste,
+		cuts=cuts, full_sheet_qty=math.ceil((required+waste)/cuts), cut_sheet_qty_includes_wastage=1)
+
+
 def _planning_base_material_requirements(doc):
 	"""Required base-material quantities from the relevant Manufacturing Planning table.
 
@@ -52,7 +72,7 @@ def _planning_base_material_requirements(doc):
 			cuts = max(cint(row.get("cuts")) or 1, 1)
 			cut_sheets = flt(row.get("cut_sheet_qty"))
 			wastage = flt(row.get("wastage"))
-			qty = math.ceil((cut_sheets + wastage) / cuts) if (cut_sheets or wastage) else flt(row.get("full_sheet_qty"))
+			qty = math.ceil(_offset_total_cut_sheets(row) / cuts) if (cut_sheets or wastage) else flt(row.get("full_sheet_qty"))
 		if qty > 0:
 			required[base_material] = required.get(base_material, 0) + qty
 	return required
@@ -1142,6 +1162,8 @@ def _refresh_manual_planning_rows(doc, force=False):
 			continue
 		bom = row.get("bom_no") or _active_bom_for_item(fg)
 		values = planning_row_details(fg, bom, row.get("qty"), pricing, row.get("planning_type") or "Manufacture")
+		if pricing != "Flexo":
+			_preserve_offset_sheet_edits(row, old_rows.get(row.get("name")), values, force)
 		if pricing == "Flexo":
 			old = old_rows.get(row.get("name"))
 			# Keep a reviewed area/width on normal saves. Driver changes still recompute.
@@ -1156,6 +1178,20 @@ def _refresh_manual_planning_rows(doc, force=False):
 			row.set(key, value)
 		if bom:
 			selected.setdefault(fg, set()).add(bom)
+	# A popup-consolidated run keeps one set of sheet requirements after normal
+	# row refresh. Other row-specific fields (cuts, ups, sizes, BOM) stay intact.
+	if pricing != "Flexo" and doc.get("custom_ticket_type") != "NPD":
+		group = [row for row in doc.get(field) or [] if cint(row.get("consolidated_run"))]
+		if group:
+			first = group[0]
+			values = planning_row_details(first.get("fg_item"), first.get("bom_no") or _active_bom_for_item(first.get("fg_item")),
+				sum(flt(row.get("qty")) for row in group), pricing, first.get("planning_type") or "Manufacture")
+			_preserve_offset_sheet_edits(first, old_rows.get(first.get("name")), values, force or any(
+				row.get("qty") != (old_rows.get(row.get("name")) or {}).get("qty") for row in group))
+			for i, row in enumerate(group):
+				row.set("is_first", 1 if i == 0 else 0)
+				for key in ("full_sheet_qty", "required_cut_sheet_qty", "cut_sheet_qty", "wastage"):
+					row.set(key, flt(values.get(key)) if i == 0 else 0)
 	# Keep manufacturing references aligned when the FG has one selected BOM.
 	# Several run-specific BOMs must not be collapsed into one arbitrary reference.
 	for fg, boms in selected.items():
@@ -1493,6 +1529,7 @@ def add_planning_items(production_plan, selections, consolidate=0):
 		elif npd_mode:
 			pass  # NPD sample: ups & cuts only, no sheet qty.
 		elif consolidate:
+			row["consolidated_run"] = 1
 			# Sheet qty + wastage only on the first row (the combined run).
 			if i == 0:
 				row["full_sheet_qty"] = (combined or pd)["full_sheet_qty"]
@@ -1688,7 +1725,7 @@ def _base_material_request_preview(pp, selections):
 			qty = flt(row.get("reel_area")) * factor
 		else:
 			cuts = max(cint(row.get("cuts")) or 1, 1)
-			qty = math.ceil(((flt(row.get("cut_sheet_qty")) + flt(row.get("wastage"))) * factor) / cuts)
+			qty = math.ceil((_offset_total_cut_sheets(row) * factor) / cuts)
 			if not qty:
 				qty = math.ceil(flt(row.get("full_sheet_qty")) * factor)
 		# Older submitted plans can predate the planning refresh and therefore have
