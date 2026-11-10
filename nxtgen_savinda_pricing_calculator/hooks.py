@@ -82,8 +82,15 @@ doc_events = {
 		"before_submit": "nxtgen_savinda_pricing_calculator.api.pricing_rule.validate_sales_order_fg_rates",
 	},
 	"Production Plan": {
+		"validate": [
+			"nxtgen_savinda_pricing_calculator.api.production_plan.validate_confirm_bom",
+			"nxtgen_savinda_pricing_calculator.api.production_plan.validate_stock_materials",
+		],
 		"before_save": "nxtgen_savinda_pricing_calculator.api.production_plan.on_production_plan_before_save",
-		"before_submit": "nxtgen_savinda_pricing_calculator.api.production_plan.validate_ticket_item_exp_dates",
+		"before_submit": [
+			"nxtgen_savinda_pricing_calculator.api.production_plan.validate_ticket_item_exp_dates",
+			"nxtgen_savinda_pricing_calculator.api.production_plan.validate_packing_details",
+		],
 		"on_update": "nxtgen_savinda_pricing_calculator.api.production_plan.on_production_plan_update",
 	},
 	"NPD Request": {

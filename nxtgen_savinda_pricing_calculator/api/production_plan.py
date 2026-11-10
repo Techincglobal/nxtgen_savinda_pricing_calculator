@@ -1114,6 +1114,73 @@ def _populate_pp_ticket_fields(pp, force=False):
 	return True
 
 
+def validate_confirm_bom(doc, method=None):
+	"""Require planning, assembly and subassembly items when confirming the BOM."""
+	previous = doc.get_doc_before_save()
+	if not previous or previous.get("workflow_state") != "BOM Validation" or doc.get("workflow_state") != "Supply Chain Validation":
+		return
+
+	missing = []
+	planning = {
+		"Offset": ("custom_offset_planning", "Offset Manufacturing Planning"),
+		"Flexo": ("custom_flexo_planning", "Flexo Manufacturing Planning"),
+	}.get(doc.get("custom_pricing_type"))
+	checks = [("po_items", "item_code", "Assembly Items"),
+		("sub_assembly_items", "production_item", "Sub Assembly Items")]
+	if planning:
+		checks.insert(0, (planning[0], "fg_item", planning[1]))
+	else:
+		missing.append("Select the pricing type: Offset or Flexo")
+	for table, item_field, label in checks:
+		if not any(str(row.get(item_field) or "").strip() for row in (doc.get(table) or [])):
+			missing.append(f"Add at least one item to {label}")
+	if missing:
+		frappe.throw("Cannot confirm BOM:<br>" + "<br>".join(missing),
+			title="Manufacturing Items Required")
+
+
+def validate_stock_materials(doc, method=None):
+	"""Require transfer-only raw materials when the user selects Validate Stock."""
+	previous = doc.get_doc_before_save()
+	if not previous or previous.get("workflow_state") != "Supply Chain Validation" or doc.get("workflow_state") != "Approved":
+		return
+
+	rows = doc.get("mr_items") or []
+	missing = []
+	if not any(str(row.get("item_code") or "").strip() for row in rows):
+		missing.append("Add at least one material to Raw Materials")
+	for index, row in enumerate(rows, 1):
+		if row.get("material_request_type") != "Material Transfer":
+			missing.append(f"Raw Materials row {index}: set Material Request Type to Material Transfer")
+	if missing:
+		frappe.throw("Cannot validate stock:<br>" + "<br>".join(missing),
+			title="Raw Materials Validation")
+
+
+def validate_packing_details(doc, method=None):
+	"""Require only the packing fields visible for this job type, on submission."""
+	pricing_type = doc.get("custom_pricing_type")
+	if pricing_type not in ("Offset", "Flexo"):
+		return
+	missing = []
+	fields = [("custom_color_ref", "Color Reference")]
+	if pricing_type == "Flexo":
+		packing_type = doc.get("custom_packing_type")
+		if packing_type not in ("Sheet", "Reel"):
+			missing.append("Select Packing Type: Sheet or Reel")
+		fields.append(("custom_core_size", "Core Size"))
+		if packing_type == "Reel":
+			fields.append(("custom_winding_direction", "Win. Direction"))
+			if flt(doc.get("custom_pcs_per_roll")) <= 0:
+				missing.append("Pcs per Roll must be greater than zero")
+	for fieldname, label in fields:
+		if not str(doc.get(fieldname) or "").strip():
+			missing.append(label)
+	if missing:
+		frappe.throw("Complete these details before submitting the Production Plan:<br>" + "<br>".join(missing),
+			title="Production Details Required")
+
+
 def _sync_pp_required_date(doc, require_date=False):
 	"""CS enters the PP date; expected dates follow it, independently of expiry."""
 	if not doc.get("custom_ticket_type"):
