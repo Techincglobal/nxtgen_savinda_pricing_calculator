@@ -953,8 +953,25 @@ function oc_mount_app(el) {
 			},
 			addBreakdown() {
 				var self = this, q = parseFloat(this.newBreakdownQty);
-				if (!q || q <= 0) return;
-				this.ensureManualBreakdown(function () { self.additionalBreakdowns.push(q); self.newBreakdownQty = ''; self.scheduleCalc(); });
+				if (!Number.isFinite(q) || q <= 0) return;
+				function canAdd() {
+					var required = parseFloat(self.form.item_qty) || 0;
+					var total = self.additionalBreakdowns.reduce(function (sum, qty) { return sum + (parseFloat(qty) || 0); }, 0);
+					if (!Number.isFinite(required) || total + q > required + 0.0001) {
+						frappe.msgprint({ title: 'Split quantity exceeds Order Quantity',
+							message: 'The total split quantity cannot exceed the Order Quantity. Remaining quantity: ' + Math.max(0, required - total) + '.',
+							indicator: 'red' });
+						return false;
+					}
+					return true;
+				}
+				if (!canAdd()) return;
+				this.ensureManualBreakdown(function () {
+					// Recheck after asynchronous item selection in case another split was added.
+					if (!canAdd()) return;
+					self.additionalBreakdowns.push(q);
+					self.scheduleCalc();
+				});
 			},
 			removeBreakdown(idx) {
 				this.additionalBreakdowns.splice(idx, 1);

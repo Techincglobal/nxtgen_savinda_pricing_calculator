@@ -2160,7 +2160,7 @@ def copy_calculation(source_cb, target_cost_item, new_qty=None, description=None
     Duplicate an existing Calculation Breakdown at a (optionally) different qty
     WITHOUT re-entering any specs. Loads the source's saved ui_state, overrides
     item_qty, recalculates, saves a NEW Calculation Breakdown, and links it to
-    the target Cost Item. Single-item copy → no sheet split.
+    the target Cost Item. Preserve sheet splits unless the total quantity changes.
     """
     if not source_cb or not target_cost_item:
         return {"error": "source_cb and target_cost_item are required"}
@@ -2184,9 +2184,14 @@ def copy_calculation(source_cb, target_cost_item, new_qty=None, description=None
 
     form = state.get("form", {})
     if new_qty is not None and flt(new_qty) > 0:
+        if flt(new_qty) != flt(form.get("item_qty")):
+            # Existing splits belong to the original quantity. Let the user enter
+            # new splits when creating a different quantity variant.
+            form["breakdown_qtys"] = []
+            form["board_count_mode"] = "Required"
         form["item_qty"] = flt(new_qty)
-    # Single-item copy → no breakdown split (recompute as one quantity)
-    form["breakdown_qtys"] = []
+    if not form.get("board_count_mode"):
+        form["board_count_mode"] = "Breakdown" if form.get("breakdown_qtys") else "Required"
     state["form"] = form
 
     payload = {
