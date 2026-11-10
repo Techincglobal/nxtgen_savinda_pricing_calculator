@@ -749,6 +749,7 @@ function show_add_calc_popup(frm, cdt, cdn, item_name) {
 			// Common fields
 			var default_carton_size = (cs_row_for_item && cs_row_for_item.dimensions) || ci.dimensions || "";
 			var fields = [
+				{fieldtype: "HTML", fieldname: "inquiry_material_guidance", options: ""},
 				{
 					fieldtype: "HTML",
 					options: "<div style='padding:7px 10px;background:#f0f4ff;border-radius:4px;"
@@ -863,6 +864,17 @@ function show_add_calc_popup(frm, cdt, cdn, item_name) {
 				},
 			});
 
+			frappe.call({
+				method: "nxtgen_savinda_pricing_calculator.api.offset_calculator.get_inquiry_material_guidance",
+				args: {cost_sheet: frm.doc.name},
+				callback: function (r) {
+					var info = r.message || {}, escape = frappe.utils.escape_html;
+					d.fields_dict.inquiry_material_guidance.$wrapper.html(
+						"<div class='alert alert-info'><b>Inquiry material reference</b><br>TIEP status: " + escape(info.tiep || "Not specified")
+						+ "<br>Board / Paper: " + escape((info.materials || []).join(" / ") || "Not specified")
+						+ "<br><small>Reference only — select the appropriate Base Material below.</small></div>");
+				}
+			});
 			d.show();
 		},
 	});

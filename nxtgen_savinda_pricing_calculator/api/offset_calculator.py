@@ -2535,3 +2535,32 @@ def delete_calc_variant(cost_item, cost_sheet=None):
                 frappe.db.rollback()
     frappe.db.commit()
     return {"deleted": cost_item}
+
+
+@frappe.whitelist()
+def get_inquiry_material_guidance(cost_sheet=None, calculation_breakdown=None):
+    """Read-only source guidance; never selects or replaces costing material."""
+    if not cost_sheet and calculation_breakdown:
+        calculation = frappe.get_doc("Calculation Breakdown", calculation_breakdown)
+        calculation.check_permission("read")
+        cost_items = frappe.get_all("Cost Item Calculation", filters={"calculation_breakdown": calculation_breakdown}, pluck="parent")
+        parents = frappe.get_all("Cost Sheet Items", filters={"item": ["in", cost_items]}, pluck="parent") if cost_items else []
+        sheets = frappe.get_list("Cost Sheet", filters={"name": ["in", parents], "docstatus": ["<", 2]},
+            fields=["name"], order_by="modified desc", limit_page_length=1) if parents else []
+        cost_sheet = sheets[0].name if sheets else None
+    if not cost_sheet:
+        return {"tiep": "", "materials": [], "inquiry": ""}
+    sheet = frappe.get_doc("Cost Sheet", cost_sheet)
+    sheet.check_permission("read")
+    result = {"tiep": sheet.get("tiep") or "", "materials": [], "inquiry": sheet.get("inquiry") or ""}
+    if not result["inquiry"]:
+        return result
+    inquiry = frappe.get_doc("Opportunity", result["inquiry"])
+    inquiry.check_permission("read")
+    result["tiep"] = inquiry.get("custom_tiep") or result["tiep"]
+    for field in ("custom_board", "custom_paper"):
+        value = inquiry.get(field)
+        if value:
+            result["materials"].append(str(value))
+    result["materials"] = list(dict.fromkeys(result["materials"]))
+    return result

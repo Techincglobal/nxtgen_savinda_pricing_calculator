@@ -87,6 +87,7 @@ function oc_mount_app(el) {
 				calcError: '',
 				savedDocName: '',
 				_draftReady: false,  // gates autosave until the initial load settles
+				inquiryGuidance: {tiep: '', materials: [], inquiry: ''},
 				costSheetRef: '',  // Cost Sheet to return to when clicking Back
 				// Calculation switcher panel — sibling qty breaks + finishing variants of this item
 				switcher: { qty_breaks: [], finishing_variants: [], item_name: '', cost_item: '' },
@@ -380,7 +381,8 @@ function oc_mount_app(el) {
 				}
 				var formData = Object.assign({}, this.form);
 				// breakdown_qtys = individual split quantities (sheet calc only); item_qty = total (all formulas)
-				formData.breakdown_qtys = this.additionalBreakdowns.length > 0
+				formData.board_count_mode = this.boardCountMode;
+				formData.breakdown_qtys = this.boardCountMode === 'Breakdown' && this.additionalBreakdowns.length > 0
 					? this.additionalBreakdowns.map(function (q) { return parseFloat(q) || 0; })
 					: [];
 				// Manual ad-hoc cost lines (only valid rows: have a name and a non-zero amount)
@@ -447,6 +449,7 @@ function oc_mount_app(el) {
 				// Also store cost_sheet ref for back button
 				var cs = urlParams.get('cost_sheet') || opts.cost_sheet || '';
 				if (cs) this.costSheetRef = cs;
+				this.loadMaterialGuidance(name);
 
 				var self = this;
 				// An unsaved draft (from an accidental reload before Save) wins — restore
@@ -1123,7 +1126,7 @@ function oc_mount_app(el) {
 					args: {
 						payload: JSON.stringify({
 							// merge manual cost lines into the saved form so they persist + restore
-							form: Object.assign({}, self.form, { manual_costs: self.calcPayload.form.manual_costs, board_count_mode: self.boardCountMode }),
+							form: Object.assign({}, self.calcPayload.form),
 							selected_specs: self.calcPayload.selected_specs,
 							machine_spec: self.calcPayload.machine_spec,
 							finishing: self.selectedFinishings.slice(),
@@ -1319,9 +1322,19 @@ function oc_mount_app(el) {
 				});
 			},
 
+			loadMaterialGuidance(name) {
+				const token = this._materialGuidanceToken = (this._materialGuidanceToken || 0) + 1;
+				this.inquiryGuidance = {tiep: '', materials: [], inquiry: ''};
+				if (!this.costSheetRef && !name) return;
+				frappe.call({method: 'nxtgen_savinda_pricing_calculator.api.offset_calculator.get_inquiry_material_guidance',
+					args: {cost_sheet: this.costSheetRef || '', calculation_breakdown: name || ''},
+					callback: r => { if (token === this._materialGuidanceToken) this.inquiryGuidance = r.message || {tiep: '', materials: []}; }});
+			},
+
 			// ── Load existing ──
 			loadExisting(name) {
 				var self = this;
+				self.loadMaterialGuidance(name);
 				frappe.call({
 					method: API.load,
 					args: { name: name },
@@ -1469,8 +1482,7 @@ function oc_mount_app(el) {
 						self.additionalBreakdowns = (d.form && d.form.breakdown_qtys && d.form.breakdown_qtys.length > 0)
 							? d.form.breakdown_qtys.map(function (q) { return parseFloat(q) || 0; }).filter(function (q) { return q > 0; })
 							: [];
-						{  // dummy block to match old else
-						}
+						self.boardCountMode = (d.form && d.form.board_count_mode) || (self.additionalBreakdowns.length ? 'Breakdown' : 'Required');
 						// Restore the finishing multi-select (display-only labels for the quotation).
 						self.selectedFinishings = (d.finishing || []).slice();
 						// Restore manual requirement overrides (wastage).
@@ -1576,6 +1588,7 @@ function oc_mount_app(el) {
 						flexoPrintMachine: this.flexoPrintMachine || '',
 						manualCosts: JSON.parse(JSON.stringify(this.manualCosts)),
 						additionalBreakdowns: JSON.parse(JSON.stringify(this.additionalBreakdowns)),
+						boardCountMode: this.boardCountMode,
 						matSearch: this.matSearch || '',
 						calc: JSON.parse(JSON.stringify(this.calc || {})),
 					};
@@ -1607,6 +1620,7 @@ function oc_mount_app(el) {
 				self.flexoPrintMachine = d.flexoPrintMachine || '';
 				self.manualCosts = Array.isArray(d.manualCosts) ? d.manualCosts : [];
 				self.additionalBreakdowns = Array.isArray(d.additionalBreakdowns) ? d.additionalBreakdowns : [];
+				self.boardCountMode = d.boardCountMode || d.form.board_count_mode || (self.additionalBreakdowns.length ? 'Breakdown' : 'Required');
 				self.matSearch = d.matSearch || '';
 				if (d.calc && d.calc.cost_rows) self.calc = d.calc;
 
@@ -1649,6 +1663,7 @@ function oc_mount_app(el) {
 			selectedFinishings: { deep: true, handler: function () { this.autoSaveDraft(); } },
 			sheetOverrides: { deep: true, handler: function () { this.autoSaveDraft(); } },
 			manualCosts: { deep: true, handler: function () { this.autoSaveDraft(); } },
+			boardCountMode: function () { this.autoSaveDraft(); },
 			additionalBreakdowns: { deep: true, handler: function () { this.autoSaveDraft(); } },
 			calc: { deep: true, handler: function () { this.autoSaveDraft(); } },
 			selectedMachine: function () { this.autoSaveDraft(); },
@@ -1832,6 +1847,10 @@ function oc_mount_app(el) {
           {{ isFlexo ? 'Reel Material' : 'Base Material' }}
           <span v-if="materialReady" class="oc-auto-ok">✓ auto-included</span>
         </div>
+      <div class="oc-hint" style="margin:8px 0;padding:8px;background:#f0f4ff">
+        <strong>TIEP status:</strong> {{ inquiryGuidance.tiep || 'Not specified' }}
+        <div v-if="inquiryGuidance.materials.length"><strong>Inquiry board / paper:</strong> {{ inquiryGuidance.materials.join(' / ') }}</div>
+      </div>
         <!-- Material type toggle -->
         <div class="oc-field">
           <label class="oc-lbl">Material Type</label>
