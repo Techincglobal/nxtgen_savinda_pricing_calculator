@@ -4,6 +4,7 @@
 var API_CALC_QTY = "nxtgen_savinda_pricing_calculator.api.offset_calculator.calculate_qty_break";
 
 frappe.ui.form.on("Savinda Quotation", {
+	validate: function (frm) { return _recalculate_quotation_margin(frm); },
 
 	// ── On load ───────────────────────────────────────────────
 	refresh: function (frm) {
@@ -274,6 +275,10 @@ frappe.ui.form.on("Savinda Quotation", {
 
 // ── Child table events ────────────────────────────────────────
 frappe.ui.form.on("Savinda Quotation Item", {
+	items_add: function (frm) { return _recalculate_quotation_margin(frm); },
+	items_remove: function (frm) { return _recalculate_quotation_margin(frm); },
+	unit_cost: function (frm) { return _recalculate_quotation_margin(frm); },
+	base_selling_price: function (frm) { return _recalculate_quotation_margin(frm); },
 	selling_price: function (frm, cdt, cdn) {
 		var row = frappe.get_doc(cdt, cdn);
 		var crate = flt_v(frm.doc.conversion_rate) || 1;
@@ -281,6 +286,7 @@ frappe.ui.form.on("Savinda Quotation Item", {
 		// User typed a rate in the quotation currency → back-fill the company-base anchor.
 		frappe.model.set_value(cdt, cdn, "base_selling_price", flt_v(row.selling_price) * crate);
 		frappe.model.set_value(cdt, cdn, "price_per_1000", Math.round(flt_v(row.selling_price) * 1000 * 10000) / 10000);
+		return _recalculate_quotation_margin(frm);
 	},
 });
 
@@ -373,6 +379,7 @@ function _reprice_items(frm) {
 		row.price_per_1000 = Math.round(row.selling_price * 1000 * 10000) / 10000;
 	});
 	_update_quotation_price_display(frm);
+	_recalculate_quotation_margin(frm);
 	frm.refresh_field("items");
 }
 
@@ -1353,4 +1360,17 @@ function _amend_cost_sheet_and_reload(frm, withConfirm) {
 	} else {
 		run();
 	}
+}
+
+
+function _recalculate_quotation_margin(frm) {
+	const rate = flt_v(frm.doc.conversion_rate) || 1;
+	const margins = (frm.doc.items || []).filter(row =>
+		["item_name", "cost_item", "finish_good", "custom_costing_bundle", "unit_cost", "selling_price"].some(key => row[key])
+	).map(row => {
+		const cost = flt_v(row.unit_cost), selling = flt_v(row.selling_price) * rate;
+		return selling > 0 ? (selling - cost) / selling * 100 : (cost > 0 ? -100 : 0);
+	});
+	const margin = margins.length ? Number(Math.min(...margins).toFixed(9)) : 0;
+	if (flt_v(frm.doc.profit_margin) !== margin) return frm.set_value("profit_margin", margin);
 }

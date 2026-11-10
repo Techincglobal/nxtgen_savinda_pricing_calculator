@@ -145,8 +145,8 @@ class SavindaQuotation(Document):
 			if cn:
 				self.customer_name = cn
 		self._apply_common_material()
-		self._apply_lowest_profit_margin()
 		self._sync_item_currency()
+		self._apply_lowest_profit_margin()
 		self._fill_item_finishing_and_remark()
 
 	def _validate_print_price_basis(self):
@@ -209,44 +209,28 @@ class SavindaQuotation(Document):
 		crate = flt(self.conversion_rate) or 1
 		for it in (self.items or []):
 			it.currency = self.currency
-			base = flt(it.base_selling_price) or flt(it.selling_price)
+			base = (flt(it.selling_price) * crate if it.get("is_manually_set")
+				else flt(it.base_selling_price) or flt(it.selling_price))
 			it.base_selling_price = base
 			it.selling_price = base / crate
 			# Presentation only. Sales Orders continue to use selling_price per piece.
 			it.price_per_1000 = flt(it.selling_price * 1000, 4)
 
 	def _apply_lowest_profit_margin(self):
-		"""Header profit margin = the LOWEST profit margin among the quoted items'
-		Calculation Breakdowns (the most conservative margin across the quotation)."""
+		"""Lowest actual selling margin of the current quotation rows, in base currency."""
 		if not self.meta.has_field("profit_margin"):
 			return
 		margins = []
-		for it in (self.items or []):
-			if it.get("custom_costing_bundle"):
-				from nxtgen_savinda_pricing_calculator.api.costing_bundle import price_bundle
-				if it.custom_costing_bundle != self.cost_sheet:
-					frappe.throw("Quotation bundle must match its Cost Sheet.")
-				result = price_bundle(frappe.get_doc("Cost Sheet", it.custom_costing_bundle), it.qty)
-				it.unit_cost = result["unit_cost"]
-				if not it.is_manually_set:
-					it.base_selling_price = result["rate"]
-				if flt(it.base_selling_price) <= 0:
-					frappe.throw("Bundle quotations require a positive selling price.")
-				margins.append(result["profit_margin"])
-				if flt(it.base_selling_price) > 0:
-					margins.append((flt(it.base_selling_price) - result["unit_cost"]) / flt(it.base_selling_price) * 100)
+		for row in self.items or []:
+			# Ignore an empty newly-added row, but never ignore a priced item at zero.
+			if not any(row.get(k) for k in ("item_name", "cost_item", "finish_good", "custom_costing_bundle", "unit_cost", "selling_price")):
 				continue
-			if not it.calculation_breakdown:
-				continue
-			pm = frappe.db.get_value(
-				"Calculation Breakdown", it.calculation_breakdown, "profit_margin"
-			)
-			if pm is not None:
-				margins.append(flt(pm))
-		if margins:
-			# Float columns persist nine decimal places. Keep repeated validation
-			# stable when a submitted quotation is marked Won/Lost.
-			self.profit_margin = flt(min(margins), 9)
+			cost = flt(row.get("unit_cost"))
+			selling = flt(row.get("selling_price")) * (flt(self.conversion_rate) or 1)
+			# A zero/negative selling price has no finite selling margin. Use -100
+			# for positive cost so the approval gate cannot treat it as profitable.
+			margins.append((selling - cost) / selling * 100 if selling > 0 else (-100 if cost > 0 else 0))
+		self.profit_margin = flt(min(margins), 9) if margins else 0
 
 	def _fetch_creation_exchange_rate(self):
 		"""Resolve currency before any normal or bundle quotation prices are populated."""

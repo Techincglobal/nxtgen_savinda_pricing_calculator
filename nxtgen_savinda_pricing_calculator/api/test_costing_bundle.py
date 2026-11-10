@@ -54,7 +54,7 @@ class TestCostingBundle(unittest.TestCase):
 	def test_quotation_margin_matches_persisted_precision_on_repeat_validation(self):
 		q = frappe.get_doc({"doctype": "Savinda Quotation", "cost_sheet": "TEST-BUNDLE",
 			"profit_margin": 17.018969158, "items": [{"custom_costing_bundle": "TEST-BUNDLE",
-				"qty": 1000, "base_selling_price": 100, "is_manually_set": 1}]})
+				"qty": 1000, "unit_cost": 82.98103084153047, "selling_price": 100, "base_selling_price": 100, "is_manually_set": 1}]})
 		with patch.object(frappe, "get_doc", return_value=self.sheet()), patch.object(bundle,
 			"price_bundle", return_value={"unit_cost": 82.98103084153047, "rate": 100, "profit_margin": 20}):
 			q._apply_lowest_profit_margin()
