@@ -302,6 +302,29 @@ def get_bom_context(source_type, source_name):
 					"cost_item":             (frappe.db.get_value("Item", fg, "custom_cost_item") or ci or ""),
 				})
 
+		# A row's direct FG link does not include separately created variants.
+		# Include the Product Libraries linked to this quotation as additional FGs.
+		for library in frappe.get_all("Product Library", filters={"quotation_no": source_name},
+			fields=["name", "fg_item", "cost_item", "calculation_breakdown", "pricing_quotation_item"],
+			order_by="creation asc"):
+			fg = library.get("fg_item")
+			if not fg or fg in seen:
+				continue
+			item = frappe.db.get_value("Item", fg, ["item_name", "custom_cost_item"], as_dict=True)
+			if not item:
+				continue
+			ci = library.get("cost_item") or item.get("custom_cost_item") or ""
+			row = next((r for r in sq.items if r.name == library.get("pricing_quotation_item")), None)
+			if row is None:
+				row = next((r for r in sq.items if ci and r.get("cost_item") == ci), None)
+			cb = library.get("calculation_breakdown") or (row.get("calculation_breakdown") if row else "") or _find_cb_for_fg(fg)
+			qty = flt(row.qty) if row else (flt(frappe.db.get_value("Calculation Breakdown", cb, "item_qty")) if cb else 0)
+			if not qty and ci:
+				qty = flt(frappe.db.get_value("cost Item", ci, "item_qty"))
+			seen.add(fg)
+			fg_items.append({"item_code": fg, "item_name": item.get("item_name") or fg,
+				"qty": qty, "calculation_breakdown": cb, "cost_item": ci})
+
 	return {
 		"fg_items":    fg_items,
 		"customer":    customer,
