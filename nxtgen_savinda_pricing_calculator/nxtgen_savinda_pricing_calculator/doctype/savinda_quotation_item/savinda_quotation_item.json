@@ -22,8 +22,8 @@
   "unit_cost",
   "column_break_3",
   "selling_price",
-  "price_per_1000",
   "base_selling_price",
+  "price_per_1000",
   "currency",
   "is_manually_set",
   "section_break_packing",
@@ -168,11 +168,14 @@
    "description": "Display rate per 1,000 units. Stored selling price and downstream order rates remain per single unit."
   },
   {
-   "description": "Company-base rate (LKR) from costing \u2014 the anchor. Transaction rate = this / conversion rate.",
+   "description": "LKR selling price used for margin calculation. Updated when the quotation-currency selling price is manually changed.",
    "fieldname": "base_selling_price",
    "fieldtype": "Currency",
-   "label": "Selling Price (Company Currency)",
-   "read_only": 1
+   "label": "Selling Price (LKR)",
+   "read_only": 1,
+   "precision": "6",
+   "in_list_view": 1,
+   "columns": 2
   },
   {
    "fetch_from": "parent.currency",

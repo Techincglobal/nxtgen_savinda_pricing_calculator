@@ -266,7 +266,8 @@
    "fieldname": "profit_margin",
    "fieldtype": "Float",
    "label": "Profit Margin",
-   "read_only": 1
+   "read_only": 1,
+   "description": "Lowest selling margin across items: (Selling Price LKR - Unit Cost LKR) / Selling Price LKR \u00d7 100. This is margin on selling price, not markup on cost."
   },
   {
    "allow_on_submit": 1,

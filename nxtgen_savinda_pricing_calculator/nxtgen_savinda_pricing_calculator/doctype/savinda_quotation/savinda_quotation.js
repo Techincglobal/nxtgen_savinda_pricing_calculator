@@ -373,7 +373,7 @@ function _reprice_items(frm) {
 	var crate = flt_v(frm.doc.conversion_rate) || 1;
 	(frm.doc.items || []).forEach(function (row) {
 		row.currency = frm.doc.currency;
-		var base = flt_v(row.base_selling_price) || flt_v(row.selling_price);
+		var base = row.base_selling_price != null ? flt_v(row.base_selling_price) : flt_v(row.selling_price);
 		row.base_selling_price = base;
 		row.selling_price = base / crate;
 		row.price_per_1000 = Math.round(row.selling_price * 1000 * 10000) / 10000;
@@ -1368,7 +1368,8 @@ function _recalculate_quotation_margin(frm) {
 	const margins = (frm.doc.items || []).filter(row =>
 		["item_name", "cost_item", "finish_good", "custom_costing_bundle", "unit_cost", "selling_price"].some(key => row[key])
 	).map(row => {
-		const cost = flt_v(row.unit_cost), selling = flt_v(row.selling_price) * rate;
+		const cost = flt_v(row.unit_cost), selling = row.base_selling_price != null
+			? flt_v(row.base_selling_price) : flt_v(row.selling_price) * rate;
 		return selling > 0 ? (selling - cost) / selling * 100 : (cost > 0 ? -100 : 0);
 	});
 	const margin = margins.length ? Number(Math.min(...margins).toFixed(9)) : 0;

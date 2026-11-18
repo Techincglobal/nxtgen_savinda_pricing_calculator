@@ -203,14 +203,16 @@ class SavindaQuotation(Document):
 		base_selling_price (company base, LKR) is the anchor produced by costing; the shown
 		selling_price is that base converted to the quotation currency:
 		    selling_price = base_selling_price / conversion_rate
-		Legacy rows (created before base_selling_price existed) hold the base value in
-		selling_price, so we backfill base from it. This also re-derives the transaction rate
-		whenever the currency / conversion_rate changes."""
+		If the base value is absent, derive it from the transaction rate. Preserve the
+		base across rounded display values; manual edits update it at the selected rate."""
 		crate = flt(self.conversion_rate) or 1
 		for it in (self.items or []):
 			it.currency = self.currency
-			base = (flt(it.selling_price) * crate if it.get("is_manually_set")
-				else flt(it.base_selling_price) or flt(it.selling_price))
+			base = flt(it.base_selling_price) if it.get("base_selling_price") is not None else flt(it.selling_price) * crate
+			# Preserve the LKR anchor when saving a rounded display price again.
+			# A genuinely edited transaction rate must still update the anchor.
+			if it.get("is_manually_set") and flt(it.selling_price, 4) != flt(base / crate, 4):
+				base = flt(it.selling_price) * crate
 			it.base_selling_price = base
 			it.selling_price = base / crate
 			# Presentation only. Sales Orders continue to use selling_price per piece.
@@ -226,7 +228,8 @@ class SavindaQuotation(Document):
 			if not any(row.get(k) for k in ("item_name", "cost_item", "finish_good", "custom_costing_bundle", "unit_cost", "selling_price")):
 				continue
 			cost = flt(row.get("unit_cost"))
-			selling = flt(row.get("selling_price")) * (flt(self.conversion_rate) or 1)
+			selling = (flt(row.get("base_selling_price")) if row.get("base_selling_price") is not None
+				else flt(row.get("selling_price")) * (flt(self.conversion_rate) or 1))
 			# A zero/negative selling price has no finite selling margin. Use -100
 			# for positive cost so the approval gate cannot treat it as profitable.
 			margins.append((selling - cost) / selling * 100 if selling > 0 else (-100 if cost > 0 else 0))

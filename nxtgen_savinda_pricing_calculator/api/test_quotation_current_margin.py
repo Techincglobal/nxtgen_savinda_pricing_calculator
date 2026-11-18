@@ -45,3 +45,23 @@ class TestCurrentQuotationMargin(unittest.TestCase):
         doc=self.doc([dict(item_name='Bundle',custom_costing_bundle='CS',unit_cost=80,selling_price=100)])
         SavindaQuotation._apply_lowest_profit_margin(doc)
         self.assertEqual(doc.profit_margin,20)
+
+    def test_usd_rounded_rate_uses_lkr_anchor_without_save_drift(self):
+        for manual in (0, 1):
+            doc=self.doc([dict(item_name='USD item',unit_cost=35.2724,selling_price=.083,
+                               base_selling_price=27.971,is_manually_set=manual)],337.06)
+            SavindaQuotation._sync_item_currency(doc)
+            SavindaQuotation._apply_lowest_profit_margin(doc)
+            self.assertEqual(doc.items[0].base_selling_price,27.971)
+            self.assertAlmostEqual(doc.profit_margin,(27.971-35.2724)/27.971*100,places=8)
+            doc.items[0].selling_price=round(doc.items[0].selling_price,4)
+            SavindaQuotation._sync_item_currency(doc)
+            self.assertEqual(doc.items[0].base_selling_price,27.971)
+
+    def test_manual_usd_edit_updates_lkr_margin(self):
+        doc=self.doc([dict(item_name='USD item',unit_cost=24,selling_price=.1,
+                           base_selling_price=27.971,is_manually_set=1)],300)
+        SavindaQuotation._sync_item_currency(doc)
+        SavindaQuotation._apply_lowest_profit_margin(doc)
+        self.assertEqual(doc.items[0].base_selling_price,30)
+        self.assertEqual(doc.profit_margin,20)
