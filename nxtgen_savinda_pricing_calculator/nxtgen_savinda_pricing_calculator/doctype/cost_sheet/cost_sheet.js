@@ -776,6 +776,12 @@ function show_add_calc_popup(frm, cdt, cdn, item_name) {
 				{
 					fieldtype: "Link", fieldname: "base_material",
 					label: "Base Material (Item)", options: "Item",
+					get_query: function () {
+						return { filters: {
+							item_group: ["descendants of (inclusive)", "Raw Material"],
+							disabled: 0,
+						} };
+					},
 					depends_on: "eval:doc.material_type !== 'Custom'",
 					mandatory_depends_on: "eval:doc.material_type !== 'Custom'",
 				},
