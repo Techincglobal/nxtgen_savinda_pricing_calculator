@@ -982,10 +982,11 @@ def get_offset_inks():
     )
 
 
-def _calc_spec_ink_cost(spec_name, machine_assignment, form, sheet, cycles):
+def _calc_spec_ink_cost(spec_name, machine_assignment, form, sheet):
     """Calculate ink costs for all inks assigned to a printing spec.
-    Formula: qty_kg = cut_sheet_area × req_cut_sheets × consumption_per_sqinch × (pct/100) × cycles
+    Formula: qty_kg = cut_sheet_area × req_cut_sheets × consumption_per_sqinch × (pct/100)
     Uses req_cut_sheets (net + wastage) because ink is consumed on every sheet run through the press.
+    Machine cycles affect machine time only, not ink consumption.
     """
     inks = machine_assignment.get("inks", [])
     if not inks:
@@ -1011,7 +1012,7 @@ def _calc_spec_ink_cost(spec_name, machine_assignment, form, sheet, cycles):
         except Exception:
             continue
 
-        ink_qty  = cut_sheet_area * cut_sheet_qty * consumption * ink_pct * cycles
+        ink_qty  = cut_sheet_area * cut_sheet_qty * consumption * ink_pct
         ink_cost = round(ink_qty * price_per_kg, 2)
 
         if min_qty_v and ink_qty < min_qty_v:
@@ -1599,9 +1600,8 @@ def _process_spec(spec, form, sheet, item_qty, no_of_colors, material_rate,
             pricing_t = (form.get("pricing_type") or "Offset").strip()
             show_inks = cint(m_data.get("is_printing_machine")) or cint(m_data.get("allow_ink_assignment", 0))
             if pricing_t == "Offset" and show_inks and machine_assignment.get("inks"):
-                cycles = max(cint(machine_assignment.get("cycles", 1)), 1)
                 ink_rows, ink_cost = _calc_spec_ink_cost(
-                    spec.get("spec_name", ""), machine_assignment, form, sheet, cycles
+                    spec.get("spec_name", ""), machine_assignment, form, sheet
                 )
                 for ir in ink_rows:
                     ir["section"] = section

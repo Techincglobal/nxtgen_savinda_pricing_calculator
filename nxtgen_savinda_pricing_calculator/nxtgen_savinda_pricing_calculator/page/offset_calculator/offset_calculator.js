@@ -1718,7 +1718,7 @@ function oc_mount_app(el) {
         <div class="oc-field">
           <label class="oc-sublbl">Machine Cycles</label>
           <input type="number" v-model.number="inkDialogState.cycles" min="1" class="oc-inp" placeholder="Number of cycles" />
-          <div class="oc-hint">Multiplies make-ready and production time.</div>
+          <div class="oc-hint">Multiplies make-ready and production time. Does not multiply ink quantity.</div>
         </div>
         </template>
 
