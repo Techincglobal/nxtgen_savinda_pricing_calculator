@@ -944,6 +944,8 @@ def _get_config():
             "offset_wastage_min":    cint(doc.offset_wastage_min) or 500,
             "req_qty_decimals":      (cint(doc.req_qty_decimals) if getattr(doc, "req_qty_decimals", None) not in (None, "") else 2),
             "flexo_wastage":         rows,
+            "no_color": flt(doc.get("no_color")) if doc.get("no_color") not in (None, "") else 10,
+            "has_color": flt(doc.get("has_color")) if doc.get("has_color") not in (None, "") else 24,
             "flexo_minimum_wastage": {cint(r.max_colors): flt(r.get("minimum_wastage_length")) for r in (doc.flexo_wastage or [])},
         }
     except Exception:
@@ -951,6 +953,7 @@ def _get_config():
             "sscl_rate": 0.025, "vat_rate": 0.18, "default_profit_margin": 15.0,
             "offset_wastage_pct": 0.05, "offset_wastage_min": 500,
             "req_qty_decimals": 2,
+            "no_color": 10, "has_color": 24,
             "flexo_minimum_wastage": {0: 0, 1: 100, 2: 100, 3: 250, 4: 250, 5: 250, 6: 250, 99: 250},
             "flexo_wastage": [
                 (0, 5, 0.04), (1, 100, 0.06), (2, 100, 0.07),
@@ -1263,6 +1266,12 @@ def _flexo_wastage_settings(cfg, colors):
     return band[1], band[2], max(0, flt((cfg.get("flexo_minimum_wastage") or {}).get(band[0])))
 
 
+def _flexo_printable_margin(cfg, colors):
+    key, fallback = ("no_color", 10) if cint(colors) == 0 else ("has_color", 24)
+    value = cfg.get(key)
+    return flt(value) if value not in (None, "") else fallback
+
+
 def _calc_flexo(form, wastage_override_pct=None):
     reel_width   = flt(form.get("reel_width_mm", 0))
     prod_w       = flt(form.get("product_width_mm", 0))
@@ -1279,7 +1288,8 @@ def _calc_flexo(form, wastage_override_pct=None):
             "material_wastage_width", "setup_metrage", "wastage_pct",
         ]}
 
-    printable_margin = 10 if no_of_colors == 0 else 24
+    _cfg = _get_config()
+    printable_margin = _flexo_printable_margin(_cfg, no_of_colors)
     ups = max(int((reel_width - printable_margin) / (prod_w + margin)), 1)
     material_wastage_width = reel_width - (ups * (prod_w + margin) + printable_margin)
     stickers_per_reel = item_qty / ups
@@ -1291,7 +1301,6 @@ def _calc_flexo(form, wastage_override_pct=None):
     reel_width_m = reel_width / 1000
     reel_area_net = reel_length * reel_width_m
 
-    _cfg = _get_config()
     setup_m, wastage_pct, minimum_wastage = _flexo_wastage_settings(_cfg, no_of_colors)
 
     # A ticked "Wastage Overwrite" spec replaces the table wastage % (highest

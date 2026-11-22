@@ -1,37 +1,159 @@
 {
+ "actions": [],
+ "creation": "2026-10-27 00:00:34.391735",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "section_tax", "sscl_rate", "column_break_1", "vat_rate",
-  "section_calc", "default_profit_margin", "column_break_calc", "req_qty_decimals",
-  "section_offset", "offset_wastage_pct", "column_break_2", "offset_wastage_min",
-  "section_flexo", "flexo_wastage"
+  "offset_tab",
+  "section_tax",
+  "sscl_rate",
+  "column_break_1",
+  "vat_rate",
+  "section_calc",
+  "default_profit_margin",
+  "column_break_calc",
+  "req_qty_decimals",
+  "section_offset",
+  "offset_wastage_pct",
+  "column_break_2",
+  "offset_wastage_min",
+  "flexo_tab",
+  "printable_margin_section",
+  "no_color",
+  "column_break_rskt",
+  "has_color",
+  "section_flexo",
+  "flexo_wastage"
  ],
  "fields": [
-  {"fieldname": "section_tax", "fieldtype": "Section Break", "label": "Tax Rates"},
-  {"default": "2.5", "fieldname": "sscl_rate", "fieldtype": "Float", "label": "SSCL Rate (%)"},
-  {"fieldname": "column_break_1", "fieldtype": "Column Break"},
-  {"default": "18", "fieldname": "vat_rate", "fieldtype": "Float", "label": "VAT Rate (%)"},
-  {"fieldname": "section_calc", "fieldtype": "Section Break", "label": "Calculation Defaults"},
-  {"default": "15", "fieldname": "default_profit_margin", "fieldtype": "Float", "label": "Default Profit Margin (%)"},
-  {"fieldname": "column_break_calc", "fieldtype": "Column Break"},
-  {"default": "2", "fieldname": "req_qty_decimals", "fieldtype": "Int", "label": "Required Qty Decimals", "description": "Number of decimal places to round the Required Qty column to in the cost breakdown. Default 2."},
-  {"fieldname": "section_offset", "fieldtype": "Section Break", "label": "Offset Sheet Wastage"},
-  {"default": "5", "fieldname": "offset_wastage_pct", "fieldtype": "Float", "label": "Wastage % of Cut Sheet Qty", "description": "e.g. 5 = 5%"},
-  {"fieldname": "column_break_2", "fieldtype": "Column Break"},
-  {"default": "500", "fieldname": "offset_wastage_min", "fieldtype": "Int", "label": "Minimum Wastage (sheets)"},
-  {"fieldname": "section_flexo", "fieldtype": "Section Break", "label": "Flexo Reel Wastage Table"},
-  {"fieldname": "flexo_wastage", "fieldtype": "Table", "label": "Wastage by Color Count", "options": "Costing Config Wastage"}
+  {
+   "fieldname": "section_tax",
+   "fieldtype": "Section Break",
+   "label": "Tax Rates"
+  },
+  {
+   "default": "2.5",
+   "fieldname": "sscl_rate",
+   "fieldtype": "Float",
+   "label": "SSCL Rate (%)"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "18",
+   "fieldname": "vat_rate",
+   "fieldtype": "Float",
+   "label": "VAT Rate (%)"
+  },
+  {
+   "fieldname": "section_calc",
+   "fieldtype": "Section Break",
+   "label": "Calculation Defaults"
+  },
+  {
+   "default": "15",
+   "fieldname": "default_profit_margin",
+   "fieldtype": "Float",
+   "label": "Default Profit Margin (%)"
+  },
+  {
+   "fieldname": "column_break_calc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "2",
+   "description": "Number of decimal places to round the Required Qty column to in the cost breakdown. Default 2.",
+   "fieldname": "req_qty_decimals",
+   "fieldtype": "Int",
+   "label": "Required Qty Decimals"
+  },
+  {
+   "fieldname": "section_offset",
+   "fieldtype": "Section Break",
+   "label": "Offset Sheet Wastage"
+  },
+  {
+   "default": "5",
+   "description": "e.g. 5 = 5%",
+   "fieldname": "offset_wastage_pct",
+   "fieldtype": "Float",
+   "label": "Wastage % of Cut Sheet Qty"
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "500",
+   "fieldname": "offset_wastage_min",
+   "fieldtype": "Int",
+   "label": "Minimum Wastage (sheets)"
+  },
+  {
+   "fieldname": "section_flexo",
+   "fieldtype": "Section Break",
+   "label": "Flexo Reel Wastage Table"
+  },
+  {
+   "fieldname": "flexo_wastage",
+   "fieldtype": "Table",
+   "label": "Wastage by Color Count",
+   "options": "Costing Config Wastage"
+  },
+  {
+   "fieldname": "offset_tab",
+   "fieldtype": "Tab Break",
+   "label": "Offset "
+  },
+  {
+   "fieldname": "flexo_tab",
+   "fieldtype": "Tab Break",
+   "label": "Flexo"
+  },
+  {
+   "fieldname": "printable_margin_section",
+   "fieldtype": "Section Break",
+   "label": "Printable Margin "
+  },
+  {
+   "fieldname": "no_color",
+   "fieldtype": "Float",
+   "label": "No Color"
+  },
+  {
+   "fieldname": "column_break_rskt",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "has_color",
+   "fieldtype": "Float",
+   "label": "Has Color"
+  }
  ],
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
+ "modified": "2026-11-22 23:03:36.661951",
+ "modified_by": "Administrator",
  "module": "Nxtgen Savinda Pricing Calculator",
  "name": "Costing Configuration",
  "owner": "Administrator",
  "permissions": [
-  {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager", "share": 1, "write": 1}
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
  ],
+ "row_format": "Dynamic",
  "sort_field": "modified",
- "sort_order": "DESC"
+ "sort_order": "DESC",
+ "states": []
 }

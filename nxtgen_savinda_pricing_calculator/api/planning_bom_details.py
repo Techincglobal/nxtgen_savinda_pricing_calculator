@@ -7,7 +7,7 @@ from frappe.utils import cint, flt
 
 from nxtgen_savinda_pricing_calculator.api import job_ticket
 from nxtgen_savinda_pricing_calculator.api.bom_builder import _library_bom_inputs, _library_sheet_size
-from nxtgen_savinda_pricing_calculator.api.offset_calculator import _get_config, _flexo_wastage_settings
+from nxtgen_savinda_pricing_calculator.api.offset_calculator import _get_config, _flexo_wastage_settings, _flexo_printable_margin
 
 
 def _base_material(bom, preferred=None):
@@ -94,8 +94,9 @@ def planning_row_details(fg_item, bom_no, quantity, pricing_type="Offset", plann
 	ups = cint(bom.get("custom_no_of_ups")) if bom else 0
 	colors = cint(form.get("no_of_colors"))
 	pitch_width = flt(form.get("product_width_mm")) + flt(form.get("product_margin_mm", 4))
+	cfg = _get_config()
 	if not ups and width > 0 and flt(form.get("product_width_mm")) > 0 and pitch_width > 0:
-		ups = max(int((width - (10 if colors == 0 else 24)) /
+		ups = max(int((width - _flexo_printable_margin(cfg, colors)) /
 			pitch_width), 1)
 	source_qty = (flt(bom.get("custom_base_item_qty")) if bom else 0) or flt(cb.get("item_qty") or form.get("item_qty"))
 	saved_length = flt(bom.get("custom_reel_length_m")) if bom else 0
@@ -106,7 +107,7 @@ def planning_row_details(fg_item, bom_no, quantity, pricing_type="Offset", plann
 		original_qty = flt(cb.get("item_qty") or form.get("item_qty"))
 		length = manual * qty / original_qty if manual and original_qty else (
 			qty / ups * (flt(form.get("product_length_mm")) + flt(form.get("product_gap_mm", 3))) / 1000 if ups and flt(form.get("product_length_mm")) > 0 else 0)
-	setup, pct, minimum = _flexo_wastage_settings(_get_config(), colors)
+	setup, pct, minimum = _flexo_wastage_settings(cfg, colors)
 	gross_length = flt(bom.get("custom_required_reel_length_m")) if bom else 0
 	# A minimum allowance is fixed metres, not a percentage to scale with order qty.
 	if saved_length and gross_length >= saved_length + setup and gross_length - saved_length > minimum:
