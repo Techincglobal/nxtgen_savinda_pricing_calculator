@@ -2038,26 +2038,6 @@ function oc_mount_app(el) {
         </div>
       </div>
 
-      <!-- ══ FINISHING (display-only labels for the Quotation; no cost impact) ══ -->
-      <div class="oc-divider"></div>
-      <div class="oc-divider-label">Finishing (shown on Quotation)</div>
-      <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
-        <select v-model="finishingPick"
-                style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;background:#fff">
-          <option value="">— Select a finishing —</option>
-          <option v-for="f in allFinishings" :key="f" :value="f" :disabled="selectedFinishings.indexOf(f) !== -1">{{ f }}</option>
-        </select>
-        <button type="button" class="btn btn-xs btn-default" style="white-space:nowrap" @click="addFinishing" :disabled="!finishingPick">+ Add</button>
-      </div>
-      <div v-if="selectedFinishings.length" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
-        <span v-for="f in selectedFinishings" :key="f"
-              style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:14px;font-size:12px;color:#3730a3">
-          {{ f }}
-          <a href="#" @click.prevent="removeFinishing(f)" title="Remove" style="color:#6366f1;font-weight:700;text-decoration:none;line-height:1">×</a>
-        </span>
-      </div>
-      <div v-else style="font-size:11.5px;color:#9ca3af;margin-bottom:6px">No finishing selected — the quotation will show only the colour statement.</div>
-
       <!-- ══ ADDITIONAL COST ITEMS (checkboxes) ══ -->
       <div class="oc-divider"></div>
       <div class="oc-divider-label">Additional Cost Items</div>
@@ -2214,11 +2194,32 @@ function oc_mount_app(el) {
       <div v-if="!manualCosts.length" class="oc-hint" style="margin-top:3px">Add ad-hoc costs (delivery, handling, etc.). Pick a type: Production / Material / Preparation.</div>
 
     </div>
-	<div class="" style="padding:12px 16px;border-top:1px solid #e5e7eb; background:#f9fafb">
+    <div class="oc-finishing-fixed">
+      <!-- ══ FINISHING (display-only labels for the Quotation; no cost impact) ══ -->
+      <div class="oc-divider-label">Finishing (shown on Quotation)</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+        <select v-model="finishingPick"
+                style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;background:#fff">
+          <option value="">— Select a finishing —</option>
+          <option v-for="f in allFinishings" :key="f" :value="f" :disabled="selectedFinishings.indexOf(f) !== -1">{{ f }}</option>
+        </select>
+        <button type="button" class="btn btn-xs btn-default" style="white-space:nowrap" @click="addFinishing" :disabled="!finishingPick">+ Add</button>
+      </div>
+      <div v-if="selectedFinishings.length" class="oc-finishing-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+        <span v-for="f in selectedFinishings" :key="f"
+              style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:14px;font-size:12px;color:#3730a3">
+          {{ f }}
+          <a href="#" @click.prevent="removeFinishing(f)" title="Remove" style="color:#6366f1;font-weight:700;text-decoration:none;line-height:1">×</a>
+        </span>
+      </div>
+      <div v-else style="font-size:11.5px;color:#9ca3af;margin-bottom:6px">No finishing selected — the quotation will show only the colour statement.</div>
+
+    </div>
+	<div class="oc-compact-footer">
 	
 	<div class="oc-field">
     <label class="oc-lbl">Remark</label>
-    <textarea v-model="form.remarks" rows="3" class="oc-inp" style="height:auto;padding:7px 9px;resize:vertical" :disabled="viewOnly" placeholder="Enter remarks for this calculation"></textarea>
+    <textarea v-model="form.remarks" rows="1" class="oc-inp" style="height:34px;min-height:34px;max-height:72px;padding:5px 8px;resize:vertical" :disabled="viewOnly" placeholder="Enter remarks for this calculation"></textarea>
 	</div>
 	<div class="oc-divider-label">Profit & Extra Costs</div>
 	<div class="oc-2col">
@@ -2380,7 +2381,12 @@ function oc_mount_app(el) {
                 </tr>
                 <tr v-for="(row, ri) in grp.rows" :key="grp.group + '-' + ri + '-' + row.spec_name + '-' + row.cost_fact" :class="row.is_auto ? 'oc-auto-row' : ''">
                   <td>{{ row.spec_name }}<span v-if="row.is_auto" class="oc-auto-tag">auto</span></td>
-                  <td>{{ row.display_name || row.cost_fact }}</td>
+                  <td>
+                    {{ row.display_name || row.cost_fact }}
+                    <div v-if="row.attribute_values && row.attribute_values.ink && row.attribute_values.percentage != null && row.attribute_values.percentage !== ''" style="font-size:12px;color:#526579;margin-top:2px">
+                      Usage: {{ row.attribute_values.percentage }}%
+                    </div>
+                  </td>
                   <td class="oc-grp">{{ row.cost_group }}</td>
                   <td>
                     <span v-if="row.selected_item_name && row.selected_item_name !== row.selected_item">
@@ -2457,6 +2463,15 @@ function oc_inject_styles() {
 .oc-pt{font-weight:700;font-size:13px;color:var(--text-color,#1f272e)}
 .oc-badge{font-size:10px;font-weight:700;background:#2c7be5;color:#fff;border-radius:4px;padding:2px 7px;letter-spacing:.05em}
 .oc-pb{padding:12px 14px;overflow-y:auto;overflow-x:hidden;flex:1;min-height:0}
+/* Keep quotation finishings visible outside the independently scrolling inputs. */
+.oc-finishing-fixed{flex-shrink:0;padding:6px 14px;border-top:1px solid #e5e7eb;background:#fff}
+.oc-finishing-fixed .oc-divider-label{margin:0 0 5px;padding-bottom:3px}
+.oc-finishing-fixed select{min-width:0}
+.oc-finishing-chips{max-height:14vh;overflow-y:auto}
+.oc-compact-footer{flex-shrink:0;padding:6px 14px;border-top:1px solid #e5e7eb;background:#f9fafb}
+.oc-compact-footer .oc-field{margin-bottom:4px}
+.oc-compact-footer .oc-divider-label{margin:3px 0 4px;padding-bottom:2px}
+.oc-compact-footer .oc-inp{height:28px}
 .oc-field{margin-bottom:10px}
 .oc-lbl{display:block;font-size:10.5px;font-weight:700;color:var(--text-muted,#6b7280);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em}
 .oc-lbl-blue{color:#2c7be5}
