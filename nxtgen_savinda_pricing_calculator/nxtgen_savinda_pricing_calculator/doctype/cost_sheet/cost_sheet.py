@@ -77,6 +77,22 @@ class CostSheet(Document):
 				indicator="orange",
 			)
 
+	def before_cancel(self):
+		"""Block cancellation while any draft or submitted quotation uses this costing."""
+		quotations = frappe.get_all(
+			"Savinda Quotation",
+			filters={"cost_sheet": self.name, "docstatus": ["<", 2]},
+			pluck="name",
+			order_by="name asc",
+		)
+		if quotations:
+			frappe.throw(
+				"Cannot cancel this Cost Sheet because it is linked to active Savinda Quotation(s): "
+				+ ", ".join(frappe.utils.escape_html(name) for name in quotations)
+				+ ". Cancel the linked quotations first. For a draft quotation, remove its link or delete the draft first.",
+				title="Active Quotation Linked",
+			)
+
 	def on_cancel(self):
 		"""Auto-cancel all submitted Calculation Breakdowns linked through Cost Items."""
 		cancelled = []
